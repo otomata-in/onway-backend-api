@@ -1,0 +1,352 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  BUYER
+  VENDOR
+  ADMIN
+}
+
+enum EnquiryStatus {
+  PENDING
+  COMPLETED
+  MISSED
+  CANCELLED
+}
+
+enum BookingStatus {
+  EN_ROUTE
+  SELLER_NEARBY
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum StockLevel {
+  GOOD
+  MEDIUM
+  LOW
+}
+
+enum NotificationType {
+  VENDOR_LIVE
+  ORDER_ARRIVING
+  ORDER_DELIVERED
+  PROMO
+  SYSTEM
+}
+
+model User {
+  id           String        @id @default(uuid())
+  phone        String        @unique
+  role         Role          @default(BUYER)
+  fcmToken     String?
+  isVerified   Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  buyerProfile  BuyerProfile?
+  vendorProfile VendorProfile?
+  twilioLogs    TwilioOtpLog[]
+
+  @@map("users")
+}
+
+model TwilioOtpLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  phone     String
+  otpCode   String
+  isUsed    Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("twilio_otp_logs")
+}
+
+model BuyerProfile {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  fullName          String
+  email             String?
+  avatarUrl         String?
+  latitude          Float?
+  longitude         Float?
+  pushNotifications Boolean  @default(true)
+  darkMode          Boolean  @default(false)
+  language          String   @default("English")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addresses      BuyerAddress[]
+  bookings       Booking[]
+  favorites      BuyerFavorite[]
+  dailyTrackings DailyTracking[]
+  notifications  Notification[]
+  reviews        VendorReview[]
+  orders         OrderEnquiry[]
+
+  @@map("buyer_profiles")
+}
+
+model BuyerAddress {
+  id                   String   @id @default(uuid())
+  buyerId              String
+  title                String
+  addressLine          String
+  deliveryInstructions String?
+  latitude             Float
+  longitude            Float
+  isDefault            Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  buyer BuyerProfile @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+
+  @@map("buyer_addresses")
+}
+
+model BuyerFavorite {
+  id        String   @id @default(uuid())
+  buyerId   String
+  vendorId  String
+  createdAt DateTime @default(now())
+
+  buyer  BuyerProfile  @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  vendor VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([buyerId, vendorId])
+  @@map("buyer_favorites")
+}
+
+model DailyTracking {
+  id            String  @id @default(uuid())
+  buyerId       String
+  vendorId      String
+  notifyOnReach Boolean @default(true)
+  ringOnReach   Boolean @default(true)
+  dailyTracking Boolean @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  buyer  BuyerProfile  @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  vendor VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([buyerId, vendorId])
+  @@map("daily_trackings")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  buyerId   String
+  title     String
+  body      String
+  type      NotificationType @default(SYSTEM)
+  icon      String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  buyer BuyerProfile @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model VendorProfile {
+  id                 String  @id @default(uuid())
+  userId             String  @unique
+  businessName       String
+  vehicleNumber      String  @unique
+  vehicleImagePath   String?
+  category           String  @default("Organic Vegetables")
+  operatingHours     String  @default("7:00 AM - 7:00 PM Daily")
+  rating             Float   @default(4.8)
+  isLiveBroadcasting Boolean @default(false)
+  isDeliveryMode     Boolean @default(false)
+  currentLatitude    Float   @default(9.9790)
+  currentLongitude   Float   @default(76.2760)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products       InventoryProduct[]
+  sellingRoutes  SellingRoute[]
+  enquiries      OrderEnquiry[]
+  liveLocations  LiveVendorLocation[]
+  reviews        VendorReview[]
+  favoritedBy    BuyerFavorite[]
+  trackedBy      DailyTracking[]
+  bookings       Booking[]
+
+  @@map("vendor_profiles")
+}
+
+model InventoryProduct {
+  id         String     @id @default(uuid())
+  vendorId   String
+  name       String
+  category   String
+  price      Float
+  unit       String     @default("kg")
+  inStock    Boolean    @default(true)
+  stockLevel StockLevel @default(GOOD)
+  imagePath  String
+  isDeleted  Boolean    @default(false)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  vendor       VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  orderItems   OrderItem[]
+  bookingItems BookingItem[]
+
+  @@map("inventory_products")
+}
+
+model SellingRoute {
+  id              String  @id @default(uuid())
+  vendorId        String
+  name            String
+  description     String?
+  isActive        Boolean @default(false)
+  totalDistanceKm Float   @default(0.0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  vendor    VendorProfile   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  waypoints RouteWaypoint[]
+  enquiries OrderEnquiry[]
+
+  @@map("selling_routes")
+}
+
+model RouteWaypoint {
+  id            String  @id @default(uuid())
+  routeId       String
+  name          String
+  sequenceOrder Int
+  latitude      Float
+  longitude     Float
+  isStart       Boolean @default(false)
+  isEnd         Boolean @default(false)
+  createdAt     DateTime @default(now())
+
+  route     SellingRoute  @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  enquiries OrderEnquiry[]
+
+  @@map("route_waypoints")
+}
+
+model LiveVendorLocation {
+  id        String   @id @default(uuid())
+  vendorId  String
+  latitude  Float
+  longitude Float
+  heading   Float?   @default(0.0)
+  speed     Float?   @default(0.0)
+  timestamp DateTime @default(now())
+
+  vendor VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@map("live_vendor_locations")
+}
+
+model OrderEnquiry {
+  id             String        @id @default(uuid())
+  enquiryNumber  String        @unique
+  buyerId        String
+  vendorId       String
+  routeId        String?
+  waypointId     String?
+  buyerName      String
+  buyerPhone     String
+  deliveryLat    Float
+  deliveryLng    Float
+  distanceMeters Int           @default(100)
+  status         EnquiryStatus @default(PENDING)
+  totalAmount    Float
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  buyer    BuyerProfile   @relation(fields: [buyerId], references: [id])
+  vendor   VendorProfile  @relation(fields: [vendorId], references: [id])
+  route    SellingRoute?  @relation(fields: [routeId], references: [id])
+  waypoint RouteWaypoint? @relation(fields: [waypointId], references: [id])
+  items    OrderItem[]
+
+  @@map("order_enquiries")
+}
+
+model OrderItem {
+  id          String  @id @default(uuid())
+  enquiryId   String
+  productId   String?
+  productName String
+  quantity    Float   @default(1.0)
+  unitPrice   Float
+  totalPrice  Float
+
+  enquiry OrderEnquiry      @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  product InventoryProduct? @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+model Booking {
+  id             String        @id @default(uuid())
+  bookingNumber  String        @unique
+  buyerId        String
+  vendorId       String
+  status         BookingStatus @default(EN_ROUTE)
+  totalAmount    Float
+  notifyOnReach  Boolean       @default(true)
+  ringOnReach    Boolean       @default(true)
+  dailyTracking  Boolean       @default(false)
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  buyer  BuyerProfile  @relation(fields: [buyerId], references: [id])
+  vendor VendorProfile @relation(fields: [vendorId], references: [id])
+  items  BookingItem[]
+
+  @@map("bookings")
+}
+
+model BookingItem {
+  id          String @id @default(uuid())
+  bookingId   String
+  productId   String?
+  productName String
+  quantity    Float  @default(1.0)
+  unitPrice   Float
+  totalPrice  Float
+
+  booking Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  product InventoryProduct? @relation(fields: [productId], references: [id])
+
+  @@map("booking_items")
+}
+
+model VendorReview {
+  id        String   @id @default(uuid())
+  buyerId   String
+  vendorId  String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  buyer  BuyerProfile  @relation(fields: [buyerId], references: [id])
+  vendor VendorProfile @relation(fields: [vendorId], references: [id])
+
+  @@map("vendor_reviews")
+}

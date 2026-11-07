@@ -1,0 +1,576 @@
+{
+  "info": {
+    "name": "OnWay Market API",
+    "description": "Complete API collection for the OnWay hyperlocal marketplace.\n\n## OTP Authentication (Twilio Verify)\nThis API uses **Twilio Verify v2** for OTP-based authentication.\n- Twilio sends a **5-digit** SMS OTP to the provided mobile number.\n- For the test number `9876543210`, OTP is mocked (use `12345`).\n\n## Setup\n1. Run `Send OTP` with a real Indian mobile number\n2. Check your phone for the 5-digit OTP SMS\n3. Run `Verify OTP` with the received OTP → token is auto-saved\n4. All authenticated requests use the saved token\n\n## Test Flow\nAuth → Profile → Register Seller → Add Items → Go Active → Nearby Vendors → Create Order → Accept Order\n\n## Swagger Docs\nOpen `{{base_url}}/api-docs` in your browser for interactive API documentation.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000", "description": "Base URL — change to your AWS IP for production (e.g. http://15.135.113.69:3000)" },
+    { "key": "auth_token", "value": "", "description": "Auto-saved from Verify OTP response" },
+    { "key": "vendor_id", "value": "1", "description": "Auto-saved from Register Seller response" },
+    { "key": "item_id", "value": "1", "description": "Auto-saved from Add Item response" },
+    { "key": "order_id", "value": "1", "description": "Auto-saved from Create Order response" },
+    { "key": "route_id", "value": "1", "description": "Auto-saved from Create Route response" },
+    { "key": "test_mobile", "value": "9876543210", "description": "Test mobile number (mocked OTP: 12345)" },
+    { "key": "test_lat", "value": "12.9716" },
+    { "key": "test_lng", "value": "77.5946" }
+  ],
+  "item": [
+    {
+      "name": "🏥 Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/"
+          }
+        },
+        {
+          "name": "Swagger Docs (browser)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api-docs",
+            "description": "Open this URL in your browser for interactive API docs"
+          }
+        },
+        {
+          "name": "Swagger JSON",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api-docs.json",
+            "description": "Raw OpenAPI 3.0 specification in JSON"
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔐 Auth (Twilio Verify)",
+      "description": "OTP-based authentication using Twilio Verify v2.\n- Send OTP → Twilio sends a 5-digit SMS\n- Verify OTP → Returns auth token\n- For test mobile `9876543210`, use mock OTP `12345`",
+      "item": [
+        {
+          "name": "Send OTP",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('OTP sent', () => pm.response.to.have.status(200));"] } }],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/send-otp",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobile\": \"{{test_mobile}}\"\n}"
+            },
+            "auth": { "type": "noauth" },
+            "description": "Sends a 5-digit OTP via Twilio SMS to the provided Indian mobile number.\nFor test number 9876543210, OTP is mocked — use 12345 to verify."
+          }
+        },
+        {
+          "name": "Send OTP (Real Phone)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/send-otp",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobile\": \"8848793417\"\n}"
+            },
+            "auth": { "type": "noauth" },
+            "description": "Sends a real SMS OTP to the specified phone number via Twilio. Check your phone for the 5-digit code."
+          }
+        },
+        {
+          "name": "Verify OTP",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.token) {",
+            "  pm.collectionVariables.set('auth_token', res.data.token);",
+            "  console.log('✅ Token saved:', res.data.token.substring(0, 20) + '...');",
+            "}",
+            "pm.test('OTP verified', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/verify-otp",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobile\": \"{{test_mobile}}\",\n  \"otp\": \"12345\"\n}"
+            },
+            "auth": { "type": "noauth" },
+            "description": "Verifies the 5-digit OTP received via SMS.\nFor test mobile 9876543210, use OTP: 12345.\nFor real numbers, enter the code from the SMS.\nOn success, the auth token is auto-saved to collection variables."
+          }
+        },
+        {
+          "name": "Verify OTP (Real Phone)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.token) {",
+            "  pm.collectionVariables.set('auth_token', res.data.token);",
+            "  console.log('✅ Token saved:', res.data.token.substring(0, 20) + '...');",
+            "}"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/verify-otp",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobile\": \"8848793417\",\n  \"otp\": \"REPLACE_WITH_SMS_CODE\"\n}"
+            },
+            "auth": { "type": "noauth" },
+            "description": "Verify the real OTP received on your phone. Replace REPLACE_WITH_SMS_CODE with the 5-digit code from the SMS."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/logout",
+            "description": "Invalidates the current auth token. Requires authentication."
+          }
+        }
+      ]
+    },
+    {
+      "name": "👤 User Profile",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/me"
+          }
+        },
+        {
+          "name": "Update My Location",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/me/location",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 12.9716,\n  \"lng\": 77.5946\n}"
+            }
+          }
+        },
+        {
+          "name": "Save FCM Token",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/users/fcm-token",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"fcm_test_token_abc123xyz789\"\n}"
+            },
+            "description": "Save Firebase Cloud Messaging token for push notifications."
+          }
+        }
+      ]
+    },
+    {
+      "name": "🏪 Seller",
+      "item": [
+        {
+          "name": "Register as Seller",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.vendor) {",
+            "  pm.collectionVariables.set('vendor_id', res.data.vendor.id);",
+            "}"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/seller/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicle_name\": \"Mango Cart\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Dashboard",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/seller/dashboard"
+          }
+        },
+        {
+          "name": "Toggle Status — Go Active",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/vendors/status",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Toggle Status — Go Offline",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/vendors/status",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Vendor Location",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/vendors/location",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 12.9352,\n  \"lng\": 77.6245\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📦 Inventory",
+      "item": [
+        {
+          "name": "Add Item — Mangoes",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.id) {",
+            "  pm.collectionVariables.set('item_id', res.data.id);",
+            "}"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/seller/items",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Fresh Alphonso Mangoes\",\n  \"price\": 250.00,\n  \"quantity\": 50,\n  \"is_available\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Add Item — Coconut Water",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/seller/items",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Fresh Coconut Water\",\n  \"price\": 40.00,\n  \"quantity\": 30\n}"
+            }
+          }
+        },
+        {
+          "name": "Get My Items",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/seller/items"
+          }
+        },
+        {
+          "name": "Update Item",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/seller/items/{{item_id}}",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 280.00,\n  \"quantity\": 45\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Item",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/seller/items/{{item_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "🗺️ Routes",
+      "item": [
+        {
+          "name": "Create Route — Morning",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.id) {",
+            "  pm.collectionVariables.set('route_id', res.data.id);",
+            "}"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/seller/routes",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Morning Route - Koramangala\",\n  \"points\": [\n    { \"lat\": 12.9352, \"lng\": 77.6245, \"sequence\": 0 },\n    { \"lat\": 12.9380, \"lng\": 77.6260, \"sequence\": 1 },\n    { \"lat\": 12.9400, \"lng\": 77.6290, \"sequence\": 2 },\n    { \"lat\": 12.9420, \"lng\": 77.6310, \"sequence\": 3 }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Route — Evening",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/seller/routes",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Evening Route - Indiranagar\",\n  \"points\": [\n    { \"lat\": 12.9784, \"lng\": 77.6408, \"sequence\": 0 },\n    { \"lat\": 12.9800, \"lng\": 77.6420, \"sequence\": 1 },\n    { \"lat\": 12.9820, \"lng\": 77.6450, \"sequence\": 2 }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Get All Routes",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/seller/routes"
+          }
+        },
+        {
+          "name": "Get Active Route",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/seller/routes/active"
+          }
+        },
+        {
+          "name": "Activate Route",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/seller/routes/{{route_id}}/activate"
+          }
+        },
+        {
+          "name": "Update Route",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/seller/routes/{{route_id}}",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Morning Route - Updated\",\n  \"points\": [\n    { \"lat\": 12.9352, \"lng\": 77.6245, \"sequence\": 0 },\n    { \"lat\": 12.9400, \"lng\": 77.6290, \"sequence\": 1 }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Route",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/seller/routes/{{route_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔍 Vendor Discovery (Buyer)",
+      "item": [
+        {
+          "name": "Find Nearby Vendors",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/vendors/nearby?lat=12.9716&lng=77.5946&radius=5",
+              "host": ["{{base_url}}"],
+              "path": ["vendors", "nearby"],
+              "query": [
+                { "key": "lat", "value": "12.9716" },
+                { "key": "lng", "value": "77.5946" },
+                { "key": "radius", "value": "5" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Vendor Details",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/vendors/{{vendor_id}}"
+          }
+        },
+        {
+          "name": "Get Vendor Items",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/vendors/{{vendor_id}}/items"
+          }
+        },
+        {
+          "name": "Get Vendor Route",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/vendors/{{vendor_id}}/route"
+          }
+        },
+        {
+          "name": "Get Vendor ETA",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/vendors/{{vendor_id}}/eta?lat=12.9800&lng=77.6400",
+              "host": ["{{base_url}}"],
+              "path": ["vendors", "{{vendor_id}}", "eta"],
+              "query": [
+                { "key": "lat", "value": "12.9800" },
+                { "key": "lng", "value": "77.6400" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Toggle Favorite Vendor",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/vendors/{{vendor_id}}/favorite"
+          }
+        },
+        {
+          "name": "Get My Favorites",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/vendors/favorites"
+          }
+        }
+      ]
+    },
+    {
+      "name": "🛒 Orders (Buyer)",
+      "item": [
+        {
+          "name": "Create Order",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.id) {",
+            "  pm.collectionVariables.set('order_id', res.data.id);",
+            "  console.log('✅ Order ID saved:', res.data.id);",
+            "}"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/orders",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vendor_id\": {{vendor_id}},\n  \"buyer_lat\": 12.9716,\n  \"buyer_lng\": 77.5946,\n  \"items\": [\n    { \"item_id\": {{item_id}}, \"qty\": 2 }\n  ]\n}"
+            },
+            "description": "Note: buyer and seller must be different users. You cannot order from your own vendor."
+          }
+        },
+        {
+          "name": "Get My Orders",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/orders?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["orders"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get My Orders (filtered by status)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/orders?status=requested",
+              "host": ["{{base_url}}"],
+              "path": ["orders"],
+              "query": [
+                { "key": "status", "value": "requested" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Order Details",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/orders/{{order_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "📋 Orders (Seller)",
+      "item": [
+        {
+          "name": "Get Seller Orders",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/seller/orders?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["seller", "orders"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Seller Orders (requested only)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/seller/orders?status=requested",
+              "host": ["{{base_url}}"],
+              "path": ["seller", "orders"],
+              "query": [
+                { "key": "status", "value": "requested" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Accept Order",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/orders/{{order_id}}/accept"
+          }
+        },
+        {
+          "name": "Reject Order",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/orders/{{order_id}}/reject"
+          }
+        },
+        {
+          "name": "Fulfill Order",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/orders/{{order_id}}/fulfill"
+          }
+        }
+      ]
+    },
+    {
+      "name": "⚙️ Admin",
+      "item": [
+        {
+          "name": "Get Active Vendors",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/admin/active-vendors"
+          }
+        }
+      ]
+    }
+  ]
+}

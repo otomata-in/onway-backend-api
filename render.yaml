@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: onway-api
+    runtime: node
+    plan: free
+    region: ohio
+    branch: develop
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: postgresql://neondb_owner:npg_u3d5KxODFobB@ep-noisy-bar-be1d5ayd-pooler.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require
+      - key: DATABASE_URL_UNPOOLED
+        value: postgresql://neondb_owner:npg_u3d5KxODFobB@ep-noisy-bar-be1d5ayd.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require
+      - key: JWT_SECRET
+        value: onway_market_secret_jwt_key_2026
+      - key: PORT
+        value: 10000
+

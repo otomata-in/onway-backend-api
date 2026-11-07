@@ -1,0 +1,9 @@
+node_modules
+.git
+.env
+onway_flutter_app
+onway_vendor
+docs
+tests
+*.log
+

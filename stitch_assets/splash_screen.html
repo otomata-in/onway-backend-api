@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=block" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        try {
+            tailwind.config = {
+                darkMode: "class",
+                theme: {
+                    extend: {
+                        "colors": {
+                            "tertiary-container": "#a2afa7",
+                            "on-primary-fixed": "#002109",
+                            "on-surface-variant": "#3d4a3d",
+                            "on-primary": "#ffffff",
+                            "secondary": "#006d30",
+                            "surface-container-high": "#e2e7ff",
+                            "on-secondary-container": "#007233",
+                            "inverse-primary": "#4ae176",
+                            "on-secondary-fixed": "#00210a",
+                            "surface-tint": "#006e2f",
+                            "primary": "#006e2f",
+                            "on-tertiary": "#ffffff",
+                            "primary-container": "#22c55e",
+                            "on-tertiary-container": "#37433c",
+                            "surface-variant": "#dae2fd",
+                            "surface-container": "#eaedff",
+                            "primary-fixed": "#6bff8f",
+                            "tertiary-fixed-dim": "#bdcac1",
+                            "on-tertiary-fixed": "#131e19",
+                            "on-background": "#131b2e",
+                            "on-secondary": "#ffffff",
+                            "inverse-on-surface": "#eef0ff",
+                            "tertiary": "#55615a",
+                            "on-secondary-fixed-variant": "#005323",
+                            "on-primary-container": "#004b1e",
+                            "on-primary-fixed-variant": "#005321",
+                            "surface-bright": "#faf8ff",
+                            "on-tertiary-fixed-variant": "#3e4943",
+                            "outline": "#6d7b6c",
+                            "error": "#ba1a1a",
+                            "on-error-container": "#93000a",
+                            "surface-container-highest": "#dae2fd",
+                            "surface": "#faf8ff",
+                            "inverse-surface": "#283044",
+                            "tertiary-fixed": "#d9e6dd",
+                            "secondary-fixed": "#95f8a7",
+                            "secondary-fixed-dim": "#79db8d",
+                            "outline-variant": "#bccbb9",
+                            "secondary-container": "#92f5a4",
+                            "surface-container-lowest": "#ffffff",
+                            "surface-container-low": "#f2f3ff",
+                            "on-surface": "#131b2e",
+                            "surface-dim": "#d2d9f4",
+                            "error-container": "#ffdad6",
+                            "background": "#faf8ff",
+                            "on-error": "#ffffff",
+                            "primary-fixed-dim": "#4ae176"
+                        },
+                        "borderRadius": {
+                            "DEFAULT": "0.25rem",
+                            "lg": "0.5rem",
+                            "xl": "0.75rem",
+                            "full": "9999px"
+                        },
+                        "spacing": {
+                            "margin-desktop": "48px",
+                            "unit": "4px",
+                            "margin-mobile": "16px",
+                            "stack-lg": "32px",
+                            "stack-sm": "8px",
+                            "stack-md": "16px",
+                            "gutter": "24px"
+                        },
+                        "fontFamily": {
+                            "label-sm": ["Plus Jakarta Sans"],
+                            "label-md": ["Plus Jakarta Sans"],
+                            "body-md": ["Plus Jakarta Sans"],
+                            "body-lg": ["Plus Jakarta Sans"],
+                            "headline-lg-mobile": ["Plus Jakarta Sans"],
+                            "headline-lg": ["Plus Jakarta Sans"],
+                            "headline-md": ["Plus Jakarta Sans"],
+                            "display-lg": ["Plus Jakarta Sans"]
+                        },
+                        "fontSize": {
+                            "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                            "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }],
+                            "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                            "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                            "headline-lg-mobile": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                            "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                            "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                            "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800" }]
+                        }
+                    }
+                }
+            }
+        } catch (_e) {}
+    </script>
+</head>
+<body class="bg-surface-bright text-on-surface h-screen w-full flex flex-col items-center justify-center overflow-hidden">
+<main class="flex flex-col items-center justify-center fade-in-up w-full">
+<!-- Main Logo Image with Loading Ring -->
+<div class="relative mb-stack-lg w-64 h-64 flex items-center justify-center">
+<!-- WebGL Shader Canvas (Orbital Loading) -->
+<div class="absolute inset-0 z-10 pointer-events-none">
+<!-- STITCH_SHADER_START:ANIMATION_116 class="absolute inset-0 w-full h-full" -->
+<div class="absolute inset-0 w-full h-full" style="display:block;">
+<canvas id="shader-canvas-ANIMATION_116" style="display:block;width:100%;height:100%"></canvas>
+<script>
+(function() {
+  const canvas = document.getElementById('shader-canvas-ANIMATION_116');
+
+  // Sync the WebGL drawing-buffer size with the CSS-driven layout size.
+  // This fires on initial layout and whenever the element is resized.
+  function syncSize() {
+    const w = canvas.clientWidth  || 1280;
+    const h = canvas.clientHeight || 720;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width  = w;
+      canvas.height = h;
+    }
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(syncSize).observe(canvas);
+  }
+  syncSize();
+
+  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  if (!gl) return;
+  const vs = `attribute vec2 a_position;
+varying vec2 v_texCoord;
+void main() {
+  v_texCoord = a_position * 0.5 + 0.5;
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}`;
+  const fs = `precision highp float;
+
+varying vec2 v_texCoord;
+uniform float u_time;
+uniform vec2 u_resolution;
+
+// High-quality pseudo-random function
+float hash(float n) { 
+    return fract(sin(n) * 43758.5453123); 
+}
+
+void main() {
+    // Correctly handle resolution and aspect ratio for pixel-perfect circles
+    vec2 uv = (v_texCoord - 0.5) * 2.0;
+    float aspect = u_resolution.x / u_resolution.y;
+    uv.x *= aspect;
+
+    // Brand Colors (OnWay Market Green) - Converted to vec3
+    vec3 primaryGreen = vec3(0.133, 0.773, 0.369); // #22c55e
+    vec3 darkGreen = vec3(0.082, 0.502, 0.239);    // #15803d
+    vec3 guideColor = vec3(0.898, 0.925, 0.906);   // #E5ECE7
+    
+    // Base radius for the main orbital paths
+    float baseRadius = 0.85;
+    
+    vec3 finalColor = vec3(0.0);
+    float finalAlpha = 0.0;
+    
+    // Fixed number of lines for stability
+    const int NUM_LINES = 4;
+    
+    // Anti-aliasing width (1.5 pixels)
+    float aa = 1.5 / u_resolution.y;
+
+    for (int i = 0; i < NUM_LINES; i++) {
+        float fi = float(i);
+        
+        // Randomized yet deterministic properties per line
+        float speed = (0.7 + hash(fi * 1.5) * 1.2) * (hash(fi + 0.3) > 0.5 ? 1.0 : -1.0);
+        float offset = hash(fi * 8.2) * 6.28318;
+        float radius = baseRadius + (hash(fi * 3.7) - 0.5) * 0.18;
+        float thickness = 0.006 + hash(fi * 5.4) * 0.012;
+        float arcLength = 3.14159 * (0.25 + hash(fi * 4.2) * 0.5); 
+        
+        // Current movement position
+        float currentAngle = u_time * speed + offset;
+        
+        // Distance from pixel to orbital center
+        float dist = length(uv);
+        float angle = atan(uv.y, uv.x);
+        
+        // Smooth line mask along the radius
+        float distFromPath = abs(dist - radius);
+        float radialMask = smoothstep(thickness + aa, thickness, distFromPath);
+        
+        // Angle difference for arc and trail
+        float angleDiff = mod(currentAngle - angle, 6.28318);
+        if (speed < 0.0) {
+            angleDiff = mod(angle - currentAngle, 6.28318);
+        }
+        
+        // Head capsule (crisp)
+        float headHalfWidth = 0.08;
+        float headMask = smoothstep(headHalfWidth + 0.01, headHalfWidth, abs(angleDiff)) * radialMask;
+        
+        // Tapered Trail
+        float trailLength = arcLength;
+        float trailFactor = smoothstep(trailLength, 0.0, angleDiff) * radialMask;
+        
+        // Color blending
+        vec3 lineColor = mix(primaryGreen, darkGreen, hash(fi * 11.3));
+        float combinedMask = max(headMask, trailFactor * 0.6);
+        
+        finalColor = mix(finalColor, lineColor, combinedMask);
+        finalAlpha = max(finalAlpha, combinedMask);
+    }
+    
+    // Subtle background guide path for "Live Tracking" aesthetic
+    float guideThickness = 0.008;
+    float guideMask = smoothstep(guideThickness + aa, guideThickness, abs(length(uv) - baseRadius)) * 0.12;
+    
+    // Combine layers with the background guide
+    finalColor = mix(finalColor, guideColor, guideMask * (1.0 - finalAlpha));
+    finalAlpha = max(finalAlpha, guideMask);
+    
+    gl_FragColor = vec4(finalColor, finalAlpha);
+}`;
+  function cs(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    return s;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, cs(gl.VERTEX_SHADER, vs));
+  gl.attachShader(prog, cs(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(prog);
+  gl.useProgram(prog);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  const pos = gl.getAttribLocation(prog, 'a_position');
+  gl.enableVertexAttribArray(pos);
+  gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+  const uTime = gl.getUniformLocation(prog, 'u_time');
+  const uRes = gl.getUniformLocation(prog, 'u_resolution');
+  const uMouse = gl.getUniformLocation(prog, 'u_mouse');
+
+  // u_mouse is in pixel coordinates matching u_resolution (ShaderToy convention).
+  // Shaders that need normalized coords should use: u_mouse / u_resolution.
+  let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+  window.addEventListener('mousemove', (event) => {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width && rect.height) {
+      const nx = (event.clientX - rect.left) / rect.width;
+      const ny = 1.0 - (event.clientY - rect.top) / rect.height;
+      mouse.x = nx * canvas.width;
+      mouse.y = ny * canvas.height;
+    }
+  });
+
+  function render(t) {
+    if (typeof ResizeObserver === 'undefined') syncSize();
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    if (uTime) gl.uniform1f(uTime, t * 0.001);
+    if (uRes) gl.uniform2f(uRes, canvas.width, canvas.height);
+    if (uMouse) gl.uniform2f(uMouse, mouse.x, mouse.y);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    requestAnimationFrame(render);
+  }
+  render(0);
+})();
+</script>
+</div>
+<!-- STITCH_SHADER_END:ANIMATION_116 -->
+</div>
+<!-- Central Logo Area -->
+<div class="relative w-48 h-48 rounded-full shadow-[0_20px_40px_rgba(0,110,47,0.08)] bg-white flex items-center justify-center p-6 border border-surface-dim/20 overflow-hidden z-20">
+<img alt="OnWay Market Premium Logo" class="w-full h-full object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBsGYVm5G_mX5CI8oaHvppww2UDjeZvYr_XUxsJxUo_OP3rCmU16DITvFxmhIzpCDgVd3vrYWlBMnKXfw_qy2BXlgYqn1dowDAW2ZiHN50D_ww9Qi6YYM08ZyTLD5S8X1l0IqZNfXtTHLJ35h-kSCkZLtZBeX-KI8C0Vz64oOA_4mxXJrNDbiMALR79lwb-O3LqDkNwg3sdaSmVpzyNEWJ_2or5exsioumewOAJDQGPoYBt4DuDgCdUXllmwLjdiEdlcg"/>
+</div>
+</div>
+<!-- Brand Name (Fallback/Reinforcement) -->
+<h1 class="font-display-lg text-display-lg text-primary tracking-tight font-bold">OnWay Market</h1>
+<p class="font-body-md text-body-md text-on-surface-variant mt-stack-sm text-center max-w-xs">Freshness, delivered efficiently.</p>
+</main>
+<script src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.1.1/model-viewer.min.js" type="module"></script>
+<script>
+    class WebGLShaderElement extends HTMLElement {
+        constructor() {
+            super();
+            this.attachShadow({ mode: 'open' });
+            this.canvas = document.createElement('canvas');
+            this.canvas.style.width = '100%';
+            this.canvas.style.height = '100%';
+            this.shadowRoot.appendChild(this.canvas);
+            this.gl = this.canvas.getContext('webgl') || this.canvas.getContext('experimental-webgl');
+            this.animationId = null;
+        }
+
+        connectedCallback() {
+            this.loadShader();
+            const resizeObserver = new ResizeObserver(() => this.resize());
+            resizeObserver.observe(this);
+            this.resize();
+        }
+
+        disconnectedCallback() {
+            if (this.animationId) cancelAnimationFrame(this.animationId);
+        }
+
+        async loadShader() {
+            const src = this.getAttribute('src');
+            if (!src) return;
+
+            // In a real environment, we'd fetch. For this prompt, the src IS the shader code.
+            const fsSource = src;
+            
+            const vsSource = `
+                attribute vec2 a_position;
+                varying vec2 v_texCoord;
+                void main() {
+                    v_texCoord = a_position * 0.5 + 0.5;
+                    gl_Position = vec4(a_position, 0.0, 1.0);
+                }
+            `;
+
+            if (!this.gl) return;
+            const gl = this.gl;
+
+            function compileShader(gl, type, source) {
+                const shader = gl.createShader(type);
+                gl.shaderSource(shader, source);
+                gl.compileShader(shader);
+                if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                    console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+                    gl.deleteShader(shader);
+                    return null;
+                }
+                return shader;
+            }
+
+            const vertexShader = compileShader(gl, gl.VERTEX_SHADER, vsSource);
+            const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fsSource);
+
+            if (!vertexShader || !fragmentShader) return;
+
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Program link error:', gl.getProgramInfoLog(program));
+                return;
+            }
+
+            gl.useProgram(program);
+
+            const positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                -1.0, -1.0,
+                 1.0, -1.0,
+                -1.0,  1.0,
+                 1.0,  1.0,
+            ]), gl.STATIC_DRAW);
+
+            const positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+            gl.enableVertexAttribArray(positionAttributeLocation);
+            gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+
+            const timeUniformLocation = gl.getUniformLocation(program, "u_time");
+            const resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
+
+            const render = (time) => {
+                gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+                gl.clearColor(0, 0, 0, 0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                gl.uniform1f(timeUniformLocation, time * 0.001);
+                gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
+
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+                this.animationId = requestAnimationFrame(render);
+            };
+
+            this.animationId = requestAnimationFrame(render);
+        }
+
+        resize() {
+            const displayWidth = this.clientWidth;
+            const displayHeight = this.clientHeight;
+
+            if (this.canvas.width !== displayWidth || this.canvas.height !== displayHeight) {
+                this.canvas.width = displayWidth;
+                this.canvas.height = displayHeight;
+            }
+        }
+    }
+    customElements.define('webgl-shader', WebGLShaderElement);
+</script>
+</body></html>

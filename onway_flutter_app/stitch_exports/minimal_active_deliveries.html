@@ -1,0 +1,313 @@
+<!DOCTYPE html><html lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Active Deliveries</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
+<style data-purpose="theme-configuration">
+    :root {
+      --font-outfit: 'Outfit', sans-serif;
+      --color-primary: #006e2f;
+      --color-primary-light: #e6f0eb;
+      --color-surface: #fbf8fe;
+      --color-surface-dim: #FAF8FF;
+      --color-surface-container: #f0ecf4;
+      --color-text-main: #1a1c19;
+      --color-text-muted: #424940;
+      --color-border: #e2e3dd;
+      --color-success: #1eb956;
+      --color-success-light: #e8f8ee;
+    }
+    body {
+      font-family: var(--font-outfit);
+      background-color: #FFFFFF;
+      color: var(--color-text-main);
+      -webkit-font-smoothing: antialiased;
+    }
+  </style>
+<style data-purpose="custom-utilities">
+    .rounded-24 { border-radius: 24px; } /* Custom larger rounding */
+    .shadow-card { box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+    .nav-shadow { box-shadow: 0 -4px 20px rgba(0,0,0,0.05); }
+    
+    /* Progress Bar Custom Styles */
+    .progress-track {
+      height: 6px;
+      background-color: #e2e3dd;
+      border-radius: 999px;
+      position: relative;
+    }
+    .progress-fill {
+      height: 100%;
+      background-color: var(--color-primary);
+      border-radius: 999px;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    .progress-thumb {
+      width: 32px;
+      height: 32px;
+      background-color: white;
+      border: 2px solid var(--color-primary);
+      border-radius: 50%;
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-primary);
+    }
+    .progress-thumb-primary {
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+    }
+  </style>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" class=""></head>
+<body class="flex justify-center items-start min-h-screen">
+<!-- Mobile Container -->
+<div class="w-full max-w-[428px] min-h-screen bg-[#FFFFFF] relative pb-28 overflow-hidden shadow-2xl">
+<!-- Status Bar Area (Mock) -->
+<div class="h-12 w-full flex justify-between items-center px-6 text-sm font-medium text-gray-800">
+<span class="">2:36</span>
+<div class="flex items-center gap-2">
+<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"></path></svg>
+<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.36-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"></path></svg>
+<span class="">94%</span>
+</div>
+</div>
+<!-- BEGIN: MainHeader -->
+<header class="px-6 pt-2 pb-6 flex items-start justify-between bg-[#FFFFFF]">
+<div class="flex items-start gap-4">
+<button class="mt-2 text-gray-700 hover:text-black">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</button>
+<div>
+<h1 class="text-[28px] font-bold text-[#006e2f] leading-tight tracking-tight">Daily Tracking</h1>
+<p class="text-sm text-gray-500 font-medium">Track your incoming orders</p>
+</div>
+</div>
+<button class="w-12 h-12 bg-[#f0ecf4] rounded-full flex items-center justify-center text-[#006e2f]"><span class="material-symbols-outlined">receipt_long</span></button>
+</header>
+<!-- END: MainHeader -->
+<!-- BEGIN: MainContent -->
+<main class="px-5 space-y-4 pb-8">
+<!-- Card 1: Green Valley Hub -->
+<article class="bg-white rounded-24 p-5 shadow-card border border-gray-50" data-purpose="delivery-card"><!-- Vendor Info Header -->
+<div class="flex justify-between items-start mb-6">
+<div class="flex items-center gap-3">
+<div>
+<h2 class="text-[18px] font-bold text-[#1a1c19] leading-snug">Green Valley Hub</h2>
+<p class="text-[14px] text-gray-400 font-medium mt-0.5">Organic Produce</p>
+</div>
+</div>
+<div class="flex items-center gap-2"><div class="flex items-center gap-1.5 text-[13px] text-gray-500 font-medium mr-2"><svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" stroke-linecap="round" stroke-linejoin="round"></path><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round"></path></svg>1.2 km away</div>
+</div>
+</div>
+<!-- Progress Bar and Badge Row -->
+<div class="flex items-center gap-4 mb-6 px-1">
+<div class="progress-track flex-1">
+<div class="progress-fill" style="width: 80%;"></div>
+<div class="progress-thumb" style="left: 80%;">
+<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"></path></svg>
+</div>
+<div class="absolute left-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-[#006e2f] rounded-full"></div>
+</div>
+<div class="bg-[#e8f8ee] text-[#1eb956] px-3 py-1.5 rounded-full flex items-center gap-1.5 font-semibold justify-center text-[9px] whitespace-nowrap">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+Arriving in 5 mins
+</div>
+</div>
+<hr class="border-gray-100 mb-4">
+<!-- Delivery Details -->
+<div class="flex justify-between text-[13px] text-gray-500 font-medium mb-5"><div class="flex items-center w-full overflow-x-auto pb-1 gap-2">
+  <div class="flex items-center gap-1 text-[8px] border border-[#e2e3dd] px-1 py-1 rounded-full whitespace-nowrap flex-shrink-0">
+    <span class="material-symbols-outlined text-[16px] text-gray-400">notifications</span>
+    Notify on reach</div>
+  <div class="flex items-center gap-1 text-[8px] border border-[#e2e3dd] px-1 py-1 rounded-full whitespace-nowrap flex-shrink-0">
+    <span class="material-symbols-outlined text-[16px] text-gray-400">calendar_today</span>
+    Daily Tracking</div>
+  <div class="flex items-center gap-1.5 text-[8px] border border-[#006e2f]/20 bg-gradient-to-br from-[#e8f8ee] to-white text-[#006e2f] px-2 py-1 rounded-full whitespace-nowrap font-semibold flex-shrink-0 shadow-sm">
+    <span class="material-symbols-outlined text-[16px] text-[#006e2f]">notifications_active</span>
+    Ring on Reach</div>
+</div></div>
+<!-- Action Buttons -->
+<div class="flex gap-3"><button class="flex-1 bg-[#1eb956] text-white py-3 px-1 rounded-xl font-medium flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[18px]">location_on</span>View Map</button><button class="flex-1 bg-white text-[#1a1c19] border border-[#e2e3dd] py-3 px-1 rounded-xl font-medium flex items-center justify-center gap-2"><svg class="w-4 h-4 text-[#1eb956]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" stroke-linecap="round" stroke-linejoin="round"></path></svg>Contact</button></div></article>
+<!-- Card 2: Artisan Bakes -->
+
+<!-- Card 3: The Daily Knead -->
+
+
+<!-- Card 4: Artisan Greens -->
+
+
+<!-- Card 5: Bento Bites -->
+<!-- Card 2: The Daily Knead -->
+<article class="bg-white rounded-24 p-5 shadow-card border border-gray-50" data-purpose="delivery-card">
+  <div class="flex justify-between items-start mb-6">
+    <div class="flex items-center gap-3">
+      <div>
+        <h2 class="text-[18px] font-bold text-[#1a1c19] leading-snug">The Daily Knead</h2>
+        <p class="text-[14px] text-gray-400 font-medium mt-0.5">Bakery &amp; Pastries</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1.5 text-[13px] text-gray-500 font-medium mr-2">
+        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" stroke-linecap="round" stroke-linejoin="round"></path><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round"></path></svg>2.1 km away
+      </div>
+    </div>
+  </div>
+  <div class="flex items-center gap-4 mb-6 px-1">
+    <div class="progress-track flex-1">
+      <div class="progress-fill" style="width: 45%;"></div>
+      <div class="progress-thumb" style="left: 45%;">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"></path></svg>
+      </div>
+      <div class="absolute left-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-[#006e2f] rounded-full"></div>
+    </div>
+    <div class="bg-[#e8f8ee] text-[#1eb956] px-3 py-1.5 rounded-full flex items-center gap-1.5 font-semibold justify-center text-[9px] whitespace-nowrap">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      Arriving in 12 mins
+    </div>
+  </div>
+  <hr class="border-gray-100 mb-4">
+  <div class="flex justify-between text-[13px] text-gray-500 font-medium mb-5">
+    <div class="flex items-center w-full overflow-x-auto pb-1 gap-2">
+      <div class="flex items-center gap-1 text-[8px] border border-[#e2e3dd] px-1 py-1 rounded-full whitespace-nowrap flex-shrink-0">
+        <span class="material-symbols-outlined text-[16px] text-gray-400">notifications</span>Notify on reach
+      </div>
+      <div class="flex items-center gap-1 text-[8px] border border-[#e2e3dd] px-1 py-1 rounded-full whitespace-nowrap flex-shrink-0">
+        <span class="material-symbols-outlined text-[16px] text-gray-400">calendar_today</span>Daily Tracking
+      </div>
+      <div class="flex items-center gap-1.5 text-[8px] border border-[#006e2f]/20 bg-gradient-to-br from-[#e8f8ee] to-white text-[#006e2f] px-2 py-1 rounded-full whitespace-nowrap font-semibold flex-shrink-0 shadow-sm">
+        <span class="material-symbols-outlined text-[16px] text-[#006e2f]">notifications_active</span>Ring on Reach
+      </div>
+    </div>
+  </div>
+  <div class="flex gap-3">
+    <button class="flex-1 bg-[#1eb956] text-white py-3 px-1 rounded-xl font-medium flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[18px]">location_on</span>View Map</button>
+    <button class="flex-1 bg-white text-[#1a1c19] border border-[#e2e3dd] py-3 px-1 rounded-xl font-medium flex items-center justify-center gap-2"><svg class="w-4 h-4 text-[#1eb956]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" stroke-linecap="round" stroke-linejoin="round"></path></svg>Contact</button>
+  </div>
+</article>
+
+<!-- Card 3: Artisan Greens -->
+<article class="bg-white rounded-24 p-5 shadow-card border border-gray-50" data-purpose="delivery-card">
+  <div class="flex justify-between items-start mb-6">
+    <div class="flex items-center gap-3">
+      <div>
+        <h2 class="text-[18px] font-bold text-[#1a1c19] leading-snug">Artisan Greens</h2>
+        <p class="text-[14px] text-gray-400 font-medium mt-0.5">Organic Salads</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1.5 text-[13px] text-gray-500 font-medium mr-2">
+        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" stroke-linecap="round" stroke-linejoin="round"></path><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round"></path></svg>0.8 km away
+      </div>
+    </div>
+  </div>
+  <div class="flex items-center gap-4 mb-6 px-1">
+    <div class="progress-track flex-1">
+      <div class="progress-fill" style="width: 30%;"></div>
+      <div class="progress-thumb" style="left: 30%;">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"></path></svg>
+      </div>
+      <div class="absolute left-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-[#006e2f] rounded-full"></div>
+    </div>
+    <div class="bg-[#e8f8ee] text-[#1eb956] px-3 py-1.5 rounded-full flex items-center gap-1.5 font-semibold justify-center text-[9px] whitespace-nowrap">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      Arriving in 18 mins
+    </div>
+  </div>
+  <hr class="border-gray-100 mb-4">
+  <div class="flex justify-between text-[13px] text-gray-500 font-medium mb-5">
+    <div class="flex items-center w-full overflow-x-auto pb-1 gap-2">
+      <div class="flex items-center gap-1 text-[8px] border border-[#e2e3dd] px-1 py-1 rounded-full whitespace-nowrap flex-shrink-0">
+        <span class="material-symbols-outlined text-[16px] text-gray-400">notifications</span>Notify on reach
+      </div>
+      <div class="flex items-center gap-1 text-[8px] border border-[#e2e3dd] px-1 py-1 rounded-full whitespace-nowrap flex-shrink-0">
+        <span class="material-symbols-outlined text-[16px] text-gray-400">calendar_today</span>Daily Tracking
+      </div>
+      <div class="flex items-center gap-1.5 text-[8px] border border-[#006e2f]/20 bg-gradient-to-br from-[#e8f8ee] to-white text-[#006e2f] px-2 py-1 rounded-full whitespace-nowrap font-semibold flex-shrink-0 shadow-sm">
+        <span class="material-symbols-outlined text-[16px] text-[#006e2f]">notifications_active</span>Ring on Reach
+      </div>
+    </div>
+  </div>
+  <div class="flex gap-3">
+    <button class="flex-1 bg-[#1eb956] text-white py-3 px-1 rounded-xl font-medium flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[18px]">location_on</span>View Map</button>
+    <button class="flex-1 bg-white text-[#1a1c19] border border-[#e2e3dd] py-3 px-1 rounded-xl font-medium flex items-center justify-center gap-2"><svg class="w-4 h-4 text-[#1eb956]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" stroke-linecap="round" stroke-linejoin="round"></path></svg>Contact</button>
+  </div>
+</article>
+
+<!-- Card 4: Bento Bites -->
+<article class="bg-white rounded-24 p-5 shadow-card border border-gray-50" data-purpose="delivery-card">
+  <div class="flex justify-between items-start mb-6">
+    <div class="flex items-center gap-3">
+      <div>
+        <h2 class="text-[18px] font-bold text-[#1a1c19] leading-snug">Bento Bites</h2>
+        <p class="text-[14px] text-gray-400 font-medium mt-0.5">Japanese Deli</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1.5 text-[13px] text-gray-500 font-medium mr-2">
+        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" stroke-linecap="round" stroke-linejoin="round"></path><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round"></path></svg>3.4 km away
+      </div>
+    </div>
+  </div>
+  <div class="flex items-center gap-4 mb-6 px-1">
+    <div class="progress-track flex-1">
+      <div class="progress-fill" style="width: 15%;"></div>
+      <div class="progress-thumb" style="left: 15%;">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"></path></svg>
+      </div>
+      <div class="absolute left-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-[#006e2f] rounded-full"></div>
+    </div>
+    <div class="bg-[#e8f8ee] text-[#1eb956] px-3 py-1.5 rounded-full flex items-center gap-1.5 font-semibold justify-center text-[9px] whitespace-nowrap">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      Arriving in 25 mins
+    </div>
+  </div>
+  <hr class="border-gray-100 mb-4">
+  <div class="flex justify-between text-[13px] text-gray-500 font-medium mb-5">
+    <div class="flex items-center w-full overflow-x-auto pb-1 gap-2">
+      <div class="flex items-center gap-1 text-[8px] border border-[#e2e3dd] px-1 py-1 rounded-full whitespace-nowrap flex-shrink-0">
+        <span class="material-symbols-outlined text-[16px] text-gray-400">notifications</span>Notify on reach
+      </div>
+      <div class="flex items-center gap-1 text-[8px] border border-[#e2e3dd] px-1 py-1 rounded-full whitespace-nowrap flex-shrink-0">
+        <span class="material-symbols-outlined text-[16px] text-gray-400">calendar_today</span>Daily Tracking
+      </div>
+      <div class="flex items-center gap-1.5 text-[8px] border border-[#006e2f]/20 bg-gradient-to-br from-[#e8f8ee] to-white text-[#006e2f] px-2 py-1 rounded-full whitespace-nowrap font-semibold flex-shrink-0 shadow-sm">
+        <span class="material-symbols-outlined text-[16px] text-[#006e2f]">notifications_active</span>Ring on Reach
+      </div>
+    </div>
+  </div>
+  <div class="flex gap-3">
+    <button class="flex-1 bg-[#1eb956] text-white py-3 px-1 rounded-xl font-medium flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[18px]">location_on</span>View Map</button>
+    <button class="flex-1 bg-white text-[#1a1c19] border border-[#e2e3dd] py-3 px-1 rounded-xl font-medium flex items-center justify-center gap-2"><svg class="w-4 h-4 text-[#1eb956]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" stroke-linecap="round" stroke-linejoin="round"></path></svg>Contact</button>
+  </div>
+</article></main>
+<!-- END: MainContent -->
+<!-- BEGIN: BottomNavigation -->
+<div class="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-[380px]">
+<nav class="bg-[#fcfcfa] rounded-full px-6 py-3 flex justify-between items-center shadow-[0_8px_30px_rgb(0,0,0,0.08)]">
+<a class="p-3 text-gray-400 hover:text-[#006e2f] transition-colors" href="#">
+<svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"></path></svg>
+</a>
+<a class="p-3 text-gray-400 hover:text-[#006e2f] transition-colors" href="#">
+<svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
+</a>
+<a class="p-3 text-gray-400 hover:text-[#006e2f] transition-colors" href="#">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</a>
+<!-- Active Nav Item -->
+<a class="bg-[#006e2f] text-white p-3 rounded-full shadow-lg shadow-green-500/30" href="#"><span class="material-symbols-outlined text-[24px]">receipt_long</span></a>
+<a class="p-3 text-gray-400 hover:text-[#006e2f] transition-colors" href="#">
+<svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path></svg>
+</a>
+</nav>
+</div>
+<!-- END: BottomNavigation -->
+</div>
+
+
+</body></html>

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>OnWay Market - Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "outline": "#6d7b6c",
+                    "on-surface": "#131b2e",
+                    "surface-tint": "#006e2f",
+                    "on-secondary-fixed": "#00210a",
+                    "error": "#ba1a1a",
+                    "primary-container": "#22c55e",
+                    "surface-container-low": "#f2f3ff",
+                    "on-error": "#ffffff",
+                    "tertiary-fixed-dim": "#bdcac1",
+                    "surface-variant": "#dae2fd",
+                    "on-background": "#131b2e",
+                    "inverse-on-surface": "#eef0ff",
+                    "on-primary-fixed": "#002109",
+                    "surface-bright": "#faf8ff",
+                    "background": "#faf8ff",
+                    "tertiary-container": "#a2afa7",
+                    "primary-fixed-dim": "#4ae176",
+                    "primary": "#006e2f",
+                    "on-tertiary-fixed-variant": "#3e4943",
+                    "on-secondary": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "secondary-fixed-dim": "#79db8d",
+                    "on-primary-container": "#004b1e",
+                    "surface-dim": "#d2d9f4",
+                    "on-secondary-fixed-variant": "#005323",
+                    "tertiary": "#55615a",
+                    "secondary": "#006d30",
+                    "on-tertiary-fixed": "#131e19",
+                    "on-secondary-container": "#007233",
+                    "on-primary": "#ffffff",
+                    "inverse-primary": "#4ae176",
+                    "on-tertiary": "#ffffff",
+                    "secondary-fixed": "#95f8a7",
+                    "on-surface-variant": "#3d4a3d",
+                    "surface-container-highest": "#dae2fd",
+                    "surface-container": "#eaedff",
+                    "on-error-container": "#93000a",
+                    "surface-container-high": "#e2e7ff",
+                    "outline-variant": "#bccbb9",
+                    "inverse-surface": "#283044",
+                    "primary-fixed": "#6bff8f",
+                    "secondary-container": "#92f5a4",
+                    "tertiary-fixed": "#d9e6dd",
+                    "surface": "#faf8ff",
+                    "on-primary-fixed-variant": "#005321",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary-container": "#37433c"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "stack-sm": "8px",
+                    "stack-lg": "32px",
+                    "margin-mobile": "16px",
+                    "gutter": "24px",
+                    "stack-md": "16px",
+                    "unit": "4px",
+                    "margin-desktop": "48px"
+            },
+            "fontFamily": {
+                    "label-md": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "headline-lg-mobile": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "body-lg": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "display-lg": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "label-sm": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "headline-lg": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "headline-md": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "body-md": [
+                            "Plus Jakarta Sans"
+                    ]
+            },
+            "fontSize": {
+                    "label-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "letterSpacing": "0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-lg-mobile": [
+                            "28px",
+                            {
+                                    "lineHeight": "36px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "display-lg": [
+                            "48px",
+                            {
+                                    "lineHeight": "56px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "800"
+                            }
+                    ],
+                    "label-sm": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "headline-md": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.on-background');
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 8px 32px 0 rgba(34, 197, 94, 0.05);
+        }
+
+        .input-glow:focus-within {
+            box-shadow: 0 0 0 2px theme('colors.primary-container'), 0 4px 12px rgba(34, 197, 94, 0.2);
+            border-color: transparent;
+        }
+
+        .btn-gradient {
+            background: linear-gradient(135deg, theme('colors.primary-container'), theme('colors.secondary'));
+        }
+
+        /* Orbital Animation Styles */
+        .orbital-container {
+            position: relative;
+            width: 240px;
+            height: 240px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .orbit-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 1px dashed theme('colors.primary-container');
+            opacity: 0.3;
+            animation: spin 20s linear infinite;
+        }
+        
+        .orbit-ring-2 {
+            position: absolute;
+            width: 130%;
+            height: 130%;
+            border-radius: 50%;
+            border: 1px solid theme('colors.surface-variant');
+            opacity: 0.5;
+            animation: spin 30s linear infinite reverse;
+        }
+
+        .comet {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background-color: theme('colors.primary-container');
+            border-radius: 50%;
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 0 10px theme('colors.primary-container'), 0 0 20px theme('colors.primary-container');
+        }
+
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Entrance Animations */
+        .fade-in-up {
+            opacity: 0;
+            animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .delay-100 { animation-delay: 0.1s; }
+        .delay-200 { animation-delay: 0.2s; }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Floating Background */
+        .float-bg {
+            animation: floatBg 20s ease-in-out infinite;
+        }
+        @keyframes floatBg {
+            0%, 100% { transform: translateY(0) scale(1.05); }
+            50% { transform: translateY(-20px) scale(1.05); }
+        }
+
+        /* Button Pulse */
+        .btn-pulse {
+            animation: btnPulse 2s infinite;
+        }
+        @keyframes btnPulse {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-between relative overflow-hidden font-body-md selection:bg-primary-container selection:text-on-primary">
+<!-- Background Animation Layer -->
+<div class="absolute inset-0 z-0 opacity-40 pointer-events-none float-bg"><svg class="w-full h-full" viewbox="0 0 800 800" xmlns="http://www.w3.org/2000/svg"><path class="text-primary/10" d="M0 100h800M0 300h800M0 500h800M0 700h800M100 0v800M300 0v800M500 0v800M700 0v800" fill="none" stroke="currentColor" stroke-width="0.5"></path><path class="text-primary/5" d="M50 0l100 100M250 0l200 200M450 0l300 300M0 150l150 150M0 350l350 350M0 550l250 250" fill="none" stroke="currentColor" stroke-width="0.5"></path></svg></div>
+<!-- Main Content Canvas (Top & Mid Section) -->
+<main class="flex-1 w-full max-w-md mx-auto flex flex-col items-center justify-center px-margin-mobile z-10 relative mt-stack-lg">
+<!-- Top Section: Logo & Orbital Animation -->
+<div class="mb-stack-lg flex flex-col items-center relative">
+<div class="orbital-container mb-stack-md fade-in-up">
+<div class="orbit-ring">
+<div class="comet"></div>
+</div>
+<div class="orbit-ring-2"></div>
+<!-- Central Logo -->
+<div class="relative z-10 w-48 h-48 rounded-full bg-surface shadow-xl flex items-center justify-center overflow-hidden border-4 border-surface p-4">
+<img alt="OnWay Market Logo" class="object-contain w-full h-full drop-shadow-md" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAEsJcutN6wcp0O4-QzMGhQ5DRyX7u_R8ofydsO5MFNff17QKALEQLjdv3JF2Ypc76CkhwNxPnv7Z315_wsSAbSRRk_KCjMR1AJlonAEfNpONvLnx37O7Er-3a8tuzYMljt08vn199k-phCU7NjRYsp0R3PGhuY09khEI9R9i1o0-LqIWEB-l-JKSieukUoHFjhYpfQ7tZhQzMB9eRbjYeIiuDZom2XEQyX4WFq7lbV4CGRc-NSIIR8PleZqmlPWwbeQQ"/>
+</div>
+</div>
+<div class="text-center mt-stack-sm space-y-unit fade-in-up delay-100">
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Welcome to OnWay</h1>
+<p class="font-body-md text-body-md text-outline">Fresh groceries delivered fast.</p>
+</div>
+</div>
+<!-- Mid-Section: Login Form -->
+<div class="w-full max-w-[360px] rounded-[24px] p-gutter relative z-20 shadow-xl flex flex-col items-center text-center glass-panel fade-in-up delay-200">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mb-unit">Login / Sign Up</h2>
+<p class="font-body-md text-body-md text-outline mb-stack-lg">Enter your mobile number</p>
+<div class="w-full space-y-stack-md">
+<!-- Mobile Input Field -->
+<div class="flex items-center bg-surface-container-lowest rounded-xl border border-surface-variant p-4 space-x-3 shadow-sm input-glow transition-all duration-300">
+<div class="flex items-center space-x-2 pr-3 border-r border-surface-variant">
+<span class="text-xl">🇮🇳</span>
+<span class="font-label-md text-label-md text-on-surface">+91</span>
+</div>
+<input class="flex-1 bg-transparent border-none focus:ring-0 font-body-lg text-body-lg text-on-surface placeholder:text-outline/50 p-0" placeholder="Mobile Number" type="tel"/>
+<span class="material-symbols-outlined text-outline opacity-40">description</span>
+</div>
+<!-- Send OTP Button -->
+<button class="w-full btn-gradient btn-pulse text-on-primary font-label-md text-label-md py-3 px-4 rounded-full shadow-lg hover:shadow-xl hover:scale-[0.95] active:scale-[0.95] transition-all duration-300 flex items-center justify-between group" style="background: linear-gradient(to right, rgb(34, 197, 94), rgb(21, 128, 61));">
+<span class="flex-1 text-center ml-8">Send OTP</span>
+<div class="bg-white/20 rounded-full p-2 flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-[20px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</div>
+</button>
+<!-- Footer Text -->
+<div class="flex items-center justify-center space-x-2 pt-2">
+<span class="material-symbols-outlined text-on-surface text-[18px]">check_circle</span>
+<span class="font-label-sm text-label-sm text-on-surface">Secure &amp; Fast Login with OTP</span>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Spacing for mobile safe area -->
+<div class="h-12 w-full"></div>
+<script>
+        // Simple input formatting for demonstration (US format)
+        const phoneInput = document.getElementById('mobile');
+        if(phoneInput) {
+            phoneInput.addEventListener('input', function (e) {
+                let x = e.target.value.replace(/\D/g, '').match(/(\d{0,3})(\d{0,3})(\d{0,4})/);
+                e.target.value = !x[2] ? x[1] : '(' + x[1] + ') ' + x[2] + (x[3] ? '-' + x[3] : '');
+            });
+        }
+    </script>
+</body></html>

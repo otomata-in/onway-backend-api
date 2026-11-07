@@ -1,0 +1,570 @@
+<!DOCTYPE html><html class="light" lang="en" style="width: 390px; height: 1427px; overflow: hidden; position: relative;"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+<title>OnWay Market</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-lowest": "#ffffff",
+                        "outline-variant": "#bccbb9",
+                        "outline": "#6d7b6c",
+                        "error": "#ba1a1a",
+                        "background": "#faf8ff",
+                        "on-secondary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "on-background": "#131b2e",
+                        "on-primary": "#ffffff",
+                        "primary-fixed-dim": "#4ae176",
+                        "surface-tint": "#006e2f",
+                        "on-error": "#ffffff",
+                        "tertiary-fixed": "#d9e6dd",
+                        "surface-bright": "#faf8ff",
+                        "on-secondary-fixed": "#00210a",
+                        "secondary-fixed": "#95f8a7",
+                        "secondary-fixed-dim": "#79db8d",
+                        "surface-container": "#eaedff",
+                        "primary-fixed": "#6bff8f",
+                        "error-container": "#ffdad6",
+                        "inverse-on-surface": "#eef0ff",
+                        "surface-container-highest": "#dae2fd",
+                        "on-tertiary-fixed-variant": "#3e4943",
+                        "on-primary-fixed": "#002109",
+                        "on-primary-fixed-variant": "#005321",
+                        "primary-container": "#22c55e",
+                        "on-tertiary-container": "#37433c",
+                        "surface-variant": "#dae2fd",
+                        "surface": "#faf8ff",
+                        "on-surface-variant": "#3d4a3d",
+                        "on-secondary-fixed-variant": "#005323",
+                        "on-tertiary": "#ffffff",
+                        "inverse-primary": "#4ae176",
+                        "secondary-container": "#92f5a4",
+                        "surface-container-low": "#f2f3ff",
+                        "surface-container-high": "#e2e7ff",
+                        "primary": "#006e2f",
+                        "tertiary-fixed-dim": "#bdcac1",
+                        "tertiary-container": "#a2afa7",
+                        "on-secondary-container": "#007233",
+                        "surface-dim": "#d2d9f4",
+                        "secondary": "#006d30",
+                        "on-tertiary-fixed": "#131e19",
+                        "on-surface": "#131b2e",
+                        "tertiary": "#55615a",
+                        "inverse-surface": "#283044",
+                        "on-primary-container": "#004b1e",
+                        "onway-bg": "#F8FAF8",
+                        "onway-primary": "#1A8940",
+                        "onway-secondary": "#33B864"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "2xl": "1rem",
+                        "3xl": "1.5rem",
+                        "4xl": "1.75rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "gutter": "24px",
+                        "stack-md": "16px",
+                        "margin-desktop": "48px",
+                        "stack-sm": "8px",
+                        "unit": "4px",
+                        "stack-lg": "32px",
+                        "margin-mobile": "16px",
+                        "safe": "env(safe-area-inset-bottom)"
+                    },
+                    fontFamily: {
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "display-lg": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "label-sm": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"],
+                        "sans": ["Plus Jakarta Sans", "sans-serif"]
+                    },
+                    fontSize: {
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(26, 137, 64, 0.08)',
+                        'float': '0 8px 30px rgba(0,0,0,0.06)',
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #F8FAF8;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .shimmer {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+        }
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .pulse-ring {
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            80%, 100% { transform: scale(2.5); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="text-on-surface antialiased md:pb-0 pb-32">
+<!-- Top App Bar (Web & Mobile) -->
+<header class="fixed top-0 w-full z-50 bg-white/70 backdrop-blur-xl border-b border-white/20 shadow-sm transition-all duration-300">
+<div class="flex justify-between items-center px-margin-mobile md:px-margin-desktop py-unit h-16 w-full max-w-7xl mx-auto"><div class="flex items-center gap-3 flex-shrink-0"></div><div class="flex-1 flex justify-start px-4 pl-8 -mr-10"> <button class="flex items-center gap-2 bg-surface-container-low/80 backdrop-blur-md border border-surface-container-high px-4 py-2 rounded-full hover:bg-surface-container-high transition-all shadow-sm group"><span class="material-symbols-outlined text-primary text-[20px]" style="font-variation-settings: 'FILL' 1;">location_on</span><span class="text-label-md font-bold text-primary">123 Green St</span><span class="material-symbols-outlined text-outline text-[18px] group-hover:translate-y-0.5 transition-transform">keyboard_arrow_down</span></button> </div><div class="h-10 w-10 bg-primary/10 rounded-xl flex items-center justify-center"><span class="material-symbols-outlined text-primary">local_shipping</span></div><div class="flex items-center gap-2 flex-shrink-0"><button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant bg-surface-container-low/50 hover:bg-primary/10 hover:text-primary transition-all relative"><span class="material-symbols-outlined text-[22px]">notifications</span><span class="absolute top-2.5 right-2.5 w-2 h-2 bg-error rounded-full border-2 border-white"></span></button><button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant bg-surface-container-low/50 hover:bg-primary/10 hover:text-primary transition-all"><span class="material-symbols-outlined text-[22px]">settings</span></button></div></div>
+<!-- Desktop Nav Items (Hidden on mobile) -->
+<div class="hidden md:flex w-full max-w-7xl mx-auto px-margin-desktop pb-2 gap-8">
+<a class="text-primary font-label-md flex items-center gap-1 border-b-2 border-primary pb-1" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">home</span>
+                 Home
+             </a>
+<a class="text-on-surface-variant hover:text-primary transition-colors font-label-md flex items-center gap-1 pb-1" href="#">
+<span class="material-symbols-outlined text-[20px]">category</span>
+                 Categories
+             </a>
+<a class="text-on-surface-variant hover:text-primary transition-colors font-label-md flex items-center gap-1 pb-1" href="#">
+<span class="material-symbols-outlined text-[20px]">receipt_long</span>
+                 Orders
+             </a>
+<a class="text-on-surface-variant hover:text-primary transition-colors font-label-md flex items-center gap-1 pb-1" href="#">
+<span class="material-symbols-outlined text-[20px]">person</span>
+                 Account
+             </a>
+</div>
+</header>
+<main class="pt-[80px] md:pt-[120px] max-w-7xl mx-auto">
+<!-- Search Section -->
+<section class="px-margin-mobile md:px-margin-desktop pt-4 pb-2">
+<div class="bg-surface-container-lowest rounded-lg p-4 shadow-soft border border-surface-container-high flex items-center gap-4 cursor-pointer hover:bg-surface-container-low transition-colors group">
+<div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">local_shipping</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-center mb-1">
+<h3 class="font-label-md text-on-surface truncate">Vendor is on the way</h3>
+<span class="material-symbols-outlined text-outline text-[20px] group-hover:translate-x-1 transition-transform">chevron_right</span>
+</div>
+<div class="flex items-center gap-2 text-label-sm text-on-surface-variant mb-3">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+<span class="">Arriving in 8 mins • 1.2 km away</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full relative w-[65%]">
+<div class="absolute inset-0 shimmer"></div>
+</div>
+</div>
+</div>
+</div>
+</section><section class="px-margin-mobile md:px-margin-desktop py-stack-sm">
+<div class="bg-white h-[56px] rounded-[28px] shadow-soft flex items-center px-4 w-full border border-surface-container-high focus-within:border-primary-container focus-within:ring-2 focus-within:ring-primary-container/20 transition-all">
+<span class="material-symbols-outlined text-outline ml-2">search</span>
+<input class="flex-1 bg-transparent border-none focus:ring-0 text-body-md text-on-surface placeholder:text-outline-variant px-3 h-full outline-none w-full" placeholder="Search fresh food, vendors..." type="text">
+<div class="h-8 w-[1px] bg-surface-container-high mx-2"></div>
+<button class="w-10 h-10 rounded-full hover:bg-surface-container-low flex items-center justify-center text-primary transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">tune</span>
+</button>
+</div>
+</section>
+<!-- Interactive Map (Hero) -->
+<section class="py-stack-md">
+<div class="px-margin-mobile md:px-margin-desktop flex justify-between items-end mb-stack-sm">
+<h2 class="font-headline-md text-headline-md text-on-surface">Categories</h2>
+<a class="text-label-md text-primary font-semibold hover:underline flex items-center" href="#">More<span class="material-symbols-outlined text-[18px] ml-1">arrow_forward</span>
+</a>
+</div>
+<div class="flex overflow-x-auto hide-scrollbar px-margin-mobile md:px-margin-desktop gap-3 pb-4"><button class="flex-shrink-0 bg-white border border-surface-container-high text-on-surface rounded-full flex items-center shadow-sm hover:border-primary/50 transition-colors px-3 py-1.5 gap-1">
+<span class="text-[14px]">🛍️</span>
+<span class="text-label-sm">All</span>
+</button>
+<button class="flex-shrink-0 bg-primary text-white rounded-full flex items-center shadow-soft hover:bg-onway-primary transition-colors px-3 py-1.5 gap-1">
+<span class="text-[14px]">🐟</span>
+<span class="text-label-sm">Fish</span>
+</button>
+<button class="flex-shrink-0 bg-white border border-surface-container-high text-on-surface rounded-full flex items-center shadow-sm hover:border-primary/50 transition-colors px-3 py-1.5 gap-1">
+<span class="text-[14px]">🥬</span>
+<span class="text-label-sm">Vegetables</span>
+</button>
+<button class="flex-shrink-0 bg-white border border-surface-container-high text-on-surface rounded-full flex items-center shadow-sm hover:border-primary/50 transition-colors px-3 py-1.5 gap-1">
+<span class="text-[14px]">🍎</span>
+<span class="text-label-sm">Fruits</span>
+</button>
+<button class="flex-shrink-0 bg-white border border-surface-container-high text-on-surface rounded-full flex items-center shadow-sm hover:border-primary/50 transition-colors px-3 py-1.5 gap-1">
+<span class="text-[14px]">🥩</span>
+<span class="text-label-sm">Meat</span>
+</button>
+<button class="flex-shrink-0 bg-white border border-surface-container-high text-on-surface rounded-full flex items-center shadow-sm hover:border-primary/50 transition-colors px-3 py-1.5 gap-1">
+<span class="text-[14px]">🍞</span>
+<span class="text-label-sm">Bakery</span>
+</button>
+</div>
+</section><section class="px-margin-mobile md:px-margin-desktop py-stack-md">
+<div class="relative w-full h-[320px] md:h-[480px] rounded-[32px] overflow-hidden shadow-float bg-surface-container-low border border-surface-container-high/50">
+<!-- Map Background (Placeholder for illustration) -->
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-1000 hover:scale-105" data-alt="A highly detailed, stylized, isometric vector illustration of a vibrant, clean city neighborhood map. Soft, modern color palette featuring pastel greens, warm grays, and crisp whites. High-key lighting suggesting a sunny morning. The style is premium UI, approachable, and playful yet professional." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBn7PcHkmqK22MKb1nIGSSXJoudiIMfOfmn7gyEoh75bOXWiTj0CUW2ad4M7qUGqsGkprBH_rdHZ_YcrD8u3yT8ZJHg7iQRPGOv-8MY2u2JpOd0VIslugp7mMI_QixaJ8JbVeq5W5p1bWWuv_SF4EKXG3UCxryEzmmx-qtKB3xAjo7Z2STeAAJzhvTIjHltbtVqV9FXgDaGO8dq-8AKPoLgV9xsBfIBwKOO-FZ-RV5IKA4_k1kuHMiIAoTLGLj9-5T8XA')">
+</div>
+<!-- Map Gradient Overlay for readability -->
+<div class="absolute inset-0 bg-gradient-to-t from-white/40 via-transparent to-white/20 pointer-events-none"></div>
+<!-- Floating UI: LIVE Badge -->
+<div class="absolute top-2 left-4 glass-panel rounded-full px-2 py-1 flex items-center gap-1 shadow-sm">
+<div class="relative flex h-1.5 w-1.5">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-container opacity-75"></span>
+<span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary-container"></span>
+</div>
+<span class="font-bold text-on-surface tracking-wide uppercase text-[8px]">Scanning Area...</span>
+</div>
+<!-- Floating UI: Filters Chip -->
+<button class="absolute right-4 bg-white shadow-soft rounded-full px-4 py-2 flex items-center gap-2 hover:scale-105 transition-transform top-2">
+<span class="material-symbols-outlined text-[18px] text-primary">filter_list</span>
+<span class="text-label-sm font-semibold text-on-surface">Filters</span>
+</button>
+<!-- Marker: My Home -->
+<div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer z-10">
+<div class="bg-primary text-white rounded-lg px-3 py-1 mb-1 text-label-sm shadow-md font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-2 group-hover:translate-y-0">My Home</div>
+<div class="relative">
+<div class="absolute -inset-4 bg-primary/20 rounded-full pulse-ring"></div>
+<div class="w-10 h-10 bg-white rounded-full shadow-lg border-2 border-primary flex items-center justify-center relative z-10">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">home</span>
+</div>
+<div class="w-1.5 h-1.5 bg-primary rounded-full absolute -bottom-2 left-1/2 transform -translate-x-1/2"></div>
+</div>
+</div>
+<!-- Marker: Vendor 1 (Fish Van) -->
+<div class="absolute top-[15%] left-[18%] flex flex-col items-center group cursor-pointer hover:z-20 transition-all duration-300 transform hover:scale-105">
+<div class="glass-panel rounded-xl mb-2 shadow-lg flex items-center gap-2 w-max opacity-90 group-hover:opacity-100 transform translate-y-1 group-hover:-translate-y-1 transition-all py-1 scale-90 px-1">
+<div class="rounded-full bg-blue-100 flex items-center justify-center text-[14px] w-4 h-4">🐟</div>
+<div class="flex flex-col">
+<span class="font-bold text-on-surface text-[10px]">Ocean Catch</span>
+<span class="text-[10px] font-medium text-primary">2 mins away</span>
+</div>
+</div>
+<div class="w-12 h-12 bg-white rounded-full shadow-md border border-surface-container flex items-center justify-center overflow-hidden scale-75">
+<img class="w-8 h-8 object-contain" data-alt="A clean, minimalist 3D rendering of a modern, cute delivery van painted in fresh blue and white colors, top-down isometric angle. The style is premium toy-like, smooth surfaces, soft lighting, solid white background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAhnFXyfyMvVHWNauJO6RQKHT2ZVa2a1qSZ37lrQakXb4Ek7NHVQoq-j4KqXunA93O5LRyyWtC5bAqlGHtdrq30QXH61hGBLpM4ukjvpxlpzmLD4tHI5nHyjYpEbOJkIB-WCMHpd4wfgftZKnWFR9B12LTZscXXh5PZ0bweQ6QlcYSMqnf-3STXNLC6Qt6wQTO7SXaunVvTJIoX_7pPwUuGWu9FUW1ONjTXoCYTagJs-p4qNuonVzk1">
+</div>
+</div>
+<!-- Marker: Vendor 2 (Veggie Truck) -->
+<!-- Re-center button -->
+<!-- Vendor Marker 3: Bakery -->
+<!-- Vendor Marker 4: Meat -->
+<div class="absolute top-[10%] flex flex-col items-center group cursor-pointer hover:z-20 transition-all duration-300 transform hover:scale-105">
+<div class="glass-panel rounded-xl mb-2 shadow-lg flex items-center gap-2 w-max opacity-90 group-hover:opacity-100 transform translate-y-1 group-hover:-translate-y-1 transition-all py-1 scale-90 px-1">
+<div class="rounded-full bg-red-100 flex items-center justify-center text-[14px] w-4 h-4">🥩</div>
+<div class="flex flex-col">
+<span class="font-bold text-on-surface text-[10px]">Prime Cuts</span>
+<span class="text-[10px] font-medium text-primary">3 mins away</span>
+</div>
+</div>
+<div class="w-10 h-10 bg-white rounded-full shadow-md border border-surface-container flex items-center justify-center overflow-hidden scale-75">
+<span class="material-symbols-outlined text-primary text-[20px]">delivery_dining</span>
+</div>
+</div>
+<!-- Vendor Marker 5: Dairy -->
+<div class="absolute right-[10%] flex flex-col items-center group cursor-pointer hover:z-20 transition-all duration-300 transform hover:scale-105 top-[70%]">
+<div class="glass-panel rounded-xl mb-2 shadow-lg flex items-center gap-2 w-max opacity-90 group-hover:opacity-100 transform translate-y-1 group-hover:-translate-y-1 transition-all py-1 scale-90 px-1">
+<div class="rounded-full bg-blue-50 flex items-center justify-center text-[14px] w-4 h-4">🥛</div>
+<div class="flex flex-col">
+<span class="font-bold text-on-surface text-[10px]">Dairy Fresh</span>
+<span class="text-[10px] font-medium text-primary">600m away</span>
+</div>
+</div>
+<div class="w-10 h-10 bg-white rounded-full shadow-md border border-surface-container flex items-center justify-center overflow-hidden scale-75">
+<span class="material-symbols-outlined text-primary text-[20px]">local_shipping</span>
+</div>
+</div>
+<!-- Vendor Marker 6: Fruit -->
+<div class="absolute top-[40%] right-[5%] flex flex-col items-center group cursor-pointer hover:z-20 transition-all duration-300 transform hover:scale-105">
+<div class="glass-panel rounded-xl mb-2 shadow-lg flex items-center gap-2 w-max opacity-90 group-hover:opacity-100 transform translate-y-1 group-hover:-translate-y-1 transition-all py-1 scale-90 px-1">
+<div class="rounded-full bg-yellow-100 flex items-center justify-center text-[14px] w-4 h-4">🍎</div>
+<div class="flex flex-col">
+<span class="font-bold text-on-surface text-[10px]">Fruit Basket</span>
+<span class="text-[10px] font-medium text-primary">4 mins away</span>
+</div>
+</div>
+<div class="w-10 h-10 bg-white rounded-full shadow-md border border-surface-container flex items-center justify-center overflow-hidden scale-75">
+<span class="material-symbols-outlined text-primary text-[20px]">delivery_dining</span>
+</div>
+</div>
+<!-- Vendor Marker 7: Organic -->
+<!-- Vendor Marker 8: Seafood -->
+<!-- Vendor Marker 9: Deli -->
+<div class="absolute left-[45%] flex flex-col items-center group cursor-pointer hover:z-20 transition-all duration-300 transform hover:scale-105 top-[65%]">
+<div class="glass-panel rounded-xl mb-2 shadow-lg flex items-center gap-2 w-max opacity-90 group-hover:opacity-100 transform translate-y-1 group-hover:-translate-y-1 transition-all py-1 scale-90 px-1">
+<div class="rounded-full bg-purple-100 flex items-center justify-center text-[14px] w-4 h-4">🧀</div>
+<div class="flex flex-col">
+<span class="font-bold text-on-surface text-[10px]">The Deli Van</span>
+<span class="text-[10px] font-medium text-primary">6 mins away</span>
+</div>
+</div>
+<div class="w-10 h-10 bg-white rounded-full shadow-md border border-surface-container flex items-center justify-center overflow-hidden scale-75">
+<span class="material-symbols-outlined text-primary text-[20px]">local_shipping</span>
+</div>
+</div><!-- Marker: Artisan Bakes -->
+<div class="absolute top-[20%] left-[75%] flex flex-col items-center group cursor-pointer hover:z-20 transition-all duration-300 transform hover:scale-105">
+<div class="glass-panel rounded-xl mb-2 shadow-lg flex items-center gap-2 w-max opacity-90 group-hover:opacity-100 transform translate-y-1 group-hover:-translate-y-1 transition-all py-1 scale-90 px-1">
+<div class="rounded-full bg-yellow-100 flex items-center justify-center text-[14px] w-4 h-4">🥖</div>
+<div class="flex flex-col">
+<span class="font-bold text-on-surface text-[10px]">Artisan Bakes</span>
+<span class="text-[10px] font-medium text-primary">400m away</span>
+</div>
+</div>
+<div class="w-10 h-10 bg-white rounded-full shadow-md border border-surface-container flex items-center justify-center overflow-hidden scale-75">
+<span class="material-symbols-outlined text-primary text-[20px]">delivery_dining</span>
+</div>
+</div>
+<!-- Marker: Green Grocer -->
+<div class="absolute top-[55%] left-[15%] flex flex-col items-center group cursor-pointer hover:z-20 transition-all duration-300 transform hover:scale-105">
+<div class="glass-panel rounded-xl mb-2 shadow-lg flex items-center gap-2 w-max opacity-90 group-hover:opacity-100 transform translate-y-1 group-hover:-translate-y-1 transition-all py-1 scale-90 px-1">
+<div class="rounded-full bg-green-100 flex items-center justify-center text-[14px] w-4 h-4">🥦</div>
+<div class="flex flex-col">
+<span class="font-bold text-on-surface text-[10px]">Green Grocer</span>
+<span class="text-[10px] font-medium text-primary">800m away</span>
+</div>
+</div>
+<div class="w-10 h-10 bg-white rounded-full shadow-md border border-surface-container flex items-center justify-center overflow-hidden scale-75">
+<span class="material-symbols-outlined text-primary text-[20px]">local_shipping</span>
+</div>
+</div>
+<!-- Marker: Honey Pot -->
+<!-- Marker: Egg Basket -->
+<!-- Marker: Poultry Plus -->
+<!-- Marker: Pretzel Point -->
+<!-- Marker: Pizza Express -->
+<div class="absolute top-[5%] left-[40%] flex flex-col items-center group cursor-pointer hover:z-20 transition-all duration-300 transform hover:scale-105">
+<div class="glass-panel rounded-xl mb-2 shadow-lg flex items-center gap-2 w-max opacity-90 group-hover:opacity-100 transform translate-y-1 group-hover:-translate-y-1 transition-all py-1 scale-90 px-1">
+<div class="rounded-full bg-red-100 flex items-center justify-center text-[14px] w-4 h-4">🍕</div>
+<div class="flex flex-col">
+<span class="font-bold text-on-surface text-[10px]">Nutts Corner<br></span>
+<span class="text-[10px] font-medium text-primary">10 mins away</span>
+</div>
+</div>
+<div class="w-10 h-10 bg-white rounded-full shadow-md border border-surface-container flex items-center justify-center overflow-hidden scale-75">
+<span class="material-symbols-outlined text-primary text-[20px]">local_shipping</span>
+</div>
+</div>
+<!-- Marker: Ice Cream Parlor -->
+<div class="absolute bottom-[25%] left-[5%] flex flex-col items-center group cursor-pointer hover:z-20 transition-all duration-300 transform hover:scale-105">
+<div class="glass-panel rounded-xl mb-2 shadow-lg flex items-center gap-2 w-max opacity-90 group-hover:opacity-100 transform translate-y-1 group-hover:-translate-y-1 transition-all py-1 scale-90 px-1">
+<div class="rounded-full bg-blue-50 flex items-center justify-center text-[14px] w-4 h-4">🍦</div>
+<div class="flex flex-col">
+<span class="font-bold text-on-surface text-[10px]">Ice Cream Parlor</span>
+<span class="text-[10px] font-medium text-primary">1.2km away</span>
+</div>
+</div>
+<div class="w-10 h-10 bg-white rounded-full shadow-md border border-surface-container flex items-center justify-center overflow-hidden scale-75">
+<span class="material-symbols-outlined text-primary text-[20px]">delivery_dining</span>
+</div>
+</div>
+<!-- Marker: Berry Patch -->
+<!-- Marker: Nutty Corner -->
+<!-- Marker: Spice Route -->
+<div class="absolute top-[25%] left-[55%] flex flex-col items-center group cursor-pointer hover:z-20 transition-all duration-300 transform hover:scale-105">
+<div class="glass-panel rounded-xl mb-2 shadow-lg flex items-center gap-2 w-max opacity-90 group-hover:opacity-100 transform translate-y-1 group-hover:-translate-y-1 transition-all py-1 scale-90 px-1">
+<div class="rounded-full bg-red-50 flex items-center justify-center text-[14px] w-4 h-4">🌶️</div>
+<div class="flex flex-col">
+<span class="font-bold text-on-surface text-[10px]">Spice Route</span>
+<span class="text-[10px] font-medium text-primary">2km away</span>
+</div>
+</div>
+<div class="w-10 h-10 bg-white rounded-full shadow-md border border-surface-container flex items-center justify-center overflow-hidden scale-75">
+<span class="material-symbols-outlined text-primary text-[20px]">local_shipping</span>
+</div>
+</div>
+<!-- Marker: Coffee Cart -->
+</div>
+</section>
+<!-- Categories Section -->
+<!-- Nearby Vendors Section -->
+<section class="px-margin-mobile md:px-margin-desktop py-stack-md">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-stack-md"><span class="text-primary">Fish</span> Vendors Nearby</h2>
+<div class="max-h-[600px] overflow-y-auto hide-scrollbar pr-2">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+<!-- Vendor Card 1: Ocean Catch -->
+<div class="bg-white rounded-[24px] p-4 shadow-soft border border-surface-container-low hover:shadow-float transition-shadow duration-300 flex flex-col group relative overflow-hidden">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+<div class="flex items-start gap-4 mb-4 relative z-10">
+<div class="w-20 h-20 rounded-2xl bg-surface-container-low overflow-hidden flex-shrink-0 relative border border-surface-container">
+<img alt="Ocean Catch" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCUJl05OvGceD87gBkMFRdQ3esWSD1Sqcz-Gv8JGtLRiojHrOPR0tf44k56bEl8WCll6kuGt-mQ7mo9Obs5EieqdEzjDKxufLiz7KRcjQE-skxCF4svzXXvwloFB-TQZoyo9OEoe7Ey_ZRaLnGEnLBY35CKWl80KNjRylSxJKNWXZkXfjyrjN1bg9jXVxc8tiY_ei0Hl2bjkkMIVCIGhQNo3v704QgfU13LChJjPYD7zPAX6OkSm5m3">
+<div class="absolute top-1 left-1 bg-surface/90 backdrop-blur rounded px-1.5 py-0.5 text-[10px] font-bold flex items-center gap-1 shadow-sm">
+<div class="w-1.5 h-1.5 bg-primary-container rounded-full animate-pulse"></div>
+            LIVE
+          </div>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-headline-sm text-lg font-bold text-on-surface">Ocean Catch</h3>
+<p class="text-label-sm text-outline mb-1">Fresh Fish &amp; Seafood</p>
+</div>
+<div class="bg-tertiary-fixed rounded-full px-2 py-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-on-tertiary-fixed-variant" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="text-label-sm font-bold text-on-tertiary-fixed-variant">4.8</span>
+</div>
+</div>
+<div class="flex items-center gap-3 mt-2">
+<div class="flex items-center gap-1 text-primary bg-primary/10 px-2 py-1 rounded-md">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+<span class="text-label-sm font-bold">2 mins</span>
+</div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[14px]">location_on</span>
+<span class="text-label-sm">0.3 km</span>
+</div>
+</div>
+</div>
+</div>
+<button class="w-full mt-auto bg-gradient-to-r from-onway-primary to-onway-secondary text-white font-label-md rounded-[20px] py-3.5 shadow-md hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all flex justify-center items-center gap-2 relative overflow-hidden group-hover:from-primary group-hover:to-onway-primary">
+<span class="absolute inset-0 shimmer opacity-0 group-hover:opacity-100 transition-opacity"></span>
+<span class="relative z-10 flex items-center gap-2">
+          View &amp; Request
+          <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</span>
+</button>
+</div>
+<!-- Vendor Card 2: Green Valley Farms -->
+<div class="bg-white rounded-[24px] p-4 shadow-soft border border-surface-container-low hover:shadow-float transition-shadow duration-300 flex flex-col group relative overflow-hidden">
+<div class="flex items-start gap-4 mb-4 relative z-10">
+<div class="w-20 h-20 rounded-2xl bg-surface-container-low overflow-hidden flex-shrink-0 relative border border-surface-container">
+<img alt="Green Valley Farms" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBnLCYAHfntr3cQInEJRlNTvKfm0Yo6Krq7tyrwBH_Tboz0LKMMF30u2i0cvthFujg-6LG519pUjPax9ImcFIJ0oG9dujK_aW4j7YWoJeBicQVoyAsvqw8T5og3Rn7fX5Gg9Rf-WcsVR0Pcrl2z85jrvHVwKwh87KtZHUTg5DB9-Z31gX7iCPXmQurU2-E-Fwo5AU9pDnCcAXlfG7qaYGfeTxCmEIDeIRxG7YigmTvOHQE64ppItc5g">
+<div class="absolute top-1 left-1 bg-surface/90 backdrop-blur rounded px-1.5 py-0.5 text-[10px] font-bold flex items-center gap-1 shadow-sm">
+<div class="w-1.5 h-1.5 bg-primary-container rounded-full animate-pulse"></div>
+            LIVE
+          </div>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-headline-sm text-lg font-bold text-on-surface">Green Valley Farms</h3>
+<p class="text-label-sm text-outline mb-1">Organic Veggies &amp; Fruits</p>
+</div>
+<div class="bg-tertiary-fixed rounded-full px-2 py-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-on-tertiary-fixed-variant" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="text-label-sm font-bold text-on-tertiary-fixed-variant">4.9</span>
+</div>
+</div>
+<div class="flex items-center gap-3 mt-2">
+<div class="flex items-center gap-1 text-primary bg-primary/10 px-2 py-1 rounded-md">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+<span class="text-label-sm font-bold">5 mins</span>
+</div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[14px]">location_on</span>
+<span class="text-label-sm">1.2 km</span>
+</div>
+</div>
+</div>
+</div>
+<button class="w-full mt-auto border-2 border-primary text-primary font-label-md rounded-[20px] py-3 hover:bg-primary/5 active:bg-primary/10 transition-colors flex justify-center items-center gap-2">
+        View &amp; Request
+      </button>
+</div>
+<!-- Vendor Card 3: Blue Wave -->
+<div class="bg-white rounded-[24px] p-4 shadow-soft border border-surface-container-low hover:shadow-float transition-shadow duration-300 flex flex-col group relative overflow-hidden">
+<div class="flex items-start gap-4 mb-4 relative z-10">
+<div class="w-20 h-20 rounded-2xl bg-surface-container-low overflow-hidden flex-shrink-0 relative border border-surface-container">
+<img alt="Blue Wave" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCUJl05OvGceD87gBkMFRdQ3esWSD1Sqcz-Gv8JGtLRiojHrOPR0tf44k56bEl8WCll6kuGt-mQ7mo9Obs5EieqdEzjDKxufLiz7KRcjQE-skxCF4svzXXvwloFB-TQZoyo9OEoe7Ey_ZRaLnGEnLBY35CKWl80KNjRylSxJKNWXZkXfjyrjN1bg9jXVxc8tiY_ei0Hl2bjkkMIVCIGhQNo3v704QgfU13LChJjPYD7zPAX6OkSm5m3">
+<div class="absolute top-1 left-1 bg-surface/90 backdrop-blur rounded px-1.5 py-0.5 text-[10px] font-bold flex items-center gap-1 shadow-sm">
+<div class="w-1.5 h-1.5 bg-primary-container rounded-full animate-pulse"></div>
+            LIVE
+          </div>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-headline-sm text-lg font-bold text-on-surface">Blue Wave</h3>
+<p class="text-label-sm text-outline mb-1">Premium Seafood</p>
+</div>
+<div class="bg-tertiary-fixed rounded-full px-2 py-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-on-tertiary-fixed-variant" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="text-label-sm font-bold text-on-tertiary-fixed-variant">4.7</span>
+</div>
+</div>
+<div class="flex items-center gap-3 mt-2">
+<div class="flex items-center gap-1 text-primary bg-primary/10 px-2 py-1 rounded-md">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+<span class="text-label-sm font-bold">8 mins</span>
+</div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[14px]">location_on</span>
+<span class="text-label-sm">2.5 km</span>
+</div>
+</div>
+</div>
+</div>
+<button class="w-full mt-auto border-2 border-primary text-primary font-label-md rounded-[20px] py-3 hover:bg-primary/5 active:bg-primary/10 transition-colors flex justify-center items-center gap-2">
+        View &amp; Request
+      </button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-white/70 backdrop-blur-xl border border-white/40 shadow-2xl flex justify-around items-center h-16 w-[90%] max-w-[320px] md:hidden rounded-full px-4"><!-- Home (Active) -->
+<button class="flex items-center justify-center w-10 h-10 rounded-full bg-primary text-white shadow-lg transition-all duration-300">
+  <span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">home</span>
+</button>
+<!-- Favorite -->
+<button class="flex items-center justify-center w-10 h-10 rounded-full text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-all duration-300">
+  <span class="material-symbols-outlined text-[24px]">favorite</span>
+</button>
+<!-- Search -->
+<button class="flex items-center justify-center w-10 h-10 rounded-full text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-all duration-300">
+  <span class="material-symbols-outlined text-[24px]">search</span>
+</button>
+<!-- Bookings -->
+<button class="flex items-center justify-center w-10 h-10 rounded-full text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-all duration-300">
+  <span class="material-symbols-outlined text-[24px]">receipt_long</span>
+</button>
+<!-- Account -->
+<button class="flex items-center justify-center w-10 h-10 rounded-full text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-all duration-300">
+  <span class="material-symbols-outlined text-[24px]">person</span>
+</button></nav>
+
+
+
+
+</body></html>

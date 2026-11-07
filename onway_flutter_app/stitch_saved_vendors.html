@@ -1,0 +1,243 @@
+<!DOCTYPE html><html lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Saved Vendors</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-low": "#f2f3ff",
+                        "error-container": "#ffdad6",
+                        "surface-container-high": "#e2e7ff",
+                        "surface-container": "#eaedff",
+                        "primary-container": "#22c55e",
+                        "inverse-primary": "#4ae176",
+                        "primary-fixed-dim": "#4ae176",
+                        "tertiary": "#55615a",
+                        "primary-fixed": "#6bff8f",
+                        "surface-container-highest": "#dae2fd",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-container": "#92f5a4",
+                        "on-error": "#ffffff",
+                        "surface-variant": "#dae2fd",
+                        "primary": "#006e2f",
+                        "on-tertiary-container": "#37433c",
+                        "background": "#faf8ff",
+                        "on-primary": "#ffffff",
+                        "surface-bright": "#faf8ff",
+                        "on-tertiary-fixed-variant": "#3e4943",
+                        "on-surface-variant": "#3d4a3d",
+                        "on-secondary-fixed": "#00210a",
+                        "on-tertiary": "#ffffff",
+                        "surface-dim": "#d2d9f4",
+                        "secondary-fixed": "#95f8a7",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-fixed": "#131e19",
+                        "surface-tint": "#006e2f",
+                        "on-primary-container": "#004b1e",
+                        "on-surface": "#131b2e",
+                        "tertiary-fixed": "#d9e6dd",
+                        "on-secondary-container": "#007233",
+                        "inverse-on-surface": "#eef0ff",
+                        "on-error-container": "#93000a",
+                        "outline-variant": "#bccbb9",
+                        "on-primary-fixed-variant": "#005321",
+                        "tertiary-container": "#a2afa7",
+                        "secondary": "#006d30",
+                        "surface": "#faf8ff",
+                        "inverse-surface": "#283044",
+                        "tertiary-fixed-dim": "#bdcac1",
+                        "on-secondary-fixed-variant": "#005323",
+                        "secondary-fixed-dim": "#79db8d",
+                        "on-primary-fixed": "#002109",
+                        "on-background": "#131b2e",
+                        "error": "#ba1a1a",
+                        "outline": "#6d7b6c"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-mobile": "16px",
+                        "gutter": "24px",
+                        "margin-desktop": "48px",
+                        "stack-sm": "8px",
+                        "stack-lg": "32px",
+                        "unit": "4px",
+                        "stack-md": "16px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "display-lg": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "label-sm": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glass-header {
+            background: rgba(250, 248, 255, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        .green-shadow {
+            box-shadow: 0 10px 25px -5px rgba(34, 197, 94, 0.08), 0 8px 10px -6px rgba(34, 197, 94, 0.04);
+        }
+        .btn-gradient {
+            background: linear-gradient(135deg, #22c55e 0%, #15803d 100%);
+        }
+        .pulse-badge {
+            animation: pulse-red 2s infinite;
+        }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+    </style>
+</head>
+<body class="bg-background min-h-screen text-on-background font-body-md md:hidden pb-32">
+<!-- TopAppBar -->
+<header class="glass-header sticky top-0 w-full z-50 shadow-sm flex flex-col px-margin-mobile pt-12 pb-4">
+<div class="flex items-center justify-between w-full mb-2"><div class="font-headline-md text-headline-md font-bold text-primary">Favorites</div>
+<div class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-highest cursor-pointer active:scale-95 transition-transform duration-200 hover:opacity-80 transition-opacity" id="view-toggle">
+<span class="material-symbols-outlined text-primary" data-icon="grid_view">grid_view</span>
+</div></div>
+<div class="mt-4">
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Saved Vendors</h1>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Your favorite local sellers</p>
+</div>
+</header>
+<!-- Main Content -->
+<main class="px-margin-mobile py-stack-md flex flex-col gap-stack-md view-mode-list" id="vendor-list">
+<!-- Vendor Card 1 -->
+<article class="bg-surface-container-lowest rounded-[24px] p-4 border border-outline-variant/30 green-shadow flex flex-col gap-4">
+<div class="relative w-full h-48 rounded-xl overflow-hidden">
+<img alt="Green Valley Farms Produce" class="w-full h-full object-cover" data-alt="A beautifully arranged display of vibrant, fresh organic vegetables at a sunny farmer's market stand. Crisp greens, bright red tomatoes, and warm natural sunlight creating a fresh, farm-to-table aesthetic in a modern light-mode context." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQ3MCw7ehrrf9EQlvb0a-V4v31G5Rz0fm1cTRdqIocz-EsGSqK9dN3k-3VbfEo1CHEYkE4iq5veAe0eEtXQD6pVDjxnOMs2JlSnZMthMngcubYSFfJgMNQsiJaol_gN5C-5B60Vl9fvSRKNzqM2bVQCuAxGrajp8OLmqiTjJaYfkKEJUIOVJErkzaYIpmkh3IJvBPV7tu6JBa5-6_qMrAe5f6Gb9HbUdA_eHE6QzeN8U4qkwF6VCec">
+<div class="absolute top-3 left-3 bg-error text-on-error font-label-sm text-label-sm px-2 py-1 rounded-full pulse-badge flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-white"></span> LIVE
+                </div>
+</div>
+<div class="flex flex-col gap-2">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Green Valley Farms</h2>
+<p class="font-body-md text-body-md text-outline">Organic Produce &amp; Herbs</p>
+</div>
+<div class="flex items-center gap-2 mt-1">
+<div class="flex items-center gap-1 bg-tertiary-fixed text-on-tertiary-container px-2.5 py-1 rounded-full font-label-md text-label-md">
+<span class="material-symbols-outlined text-[16px] text-primary" data-icon="star" data-weight="fill" style="font-variation-settings: 'FILL' 1;">star</span>
+                        4.8
+                    </div>
+<div class="flex items-center gap-1 bg-surface-container-high text-on-surface-variant px-2.5 py-1 rounded-full font-label-md text-label-md">
+<span class="material-symbols-outlined text-[16px]" data-icon="location_on">location_on</span>
+                        1.2 km
+                    </div>
+</div>
+</div>
+<div class="flex items-center gap-3 mt-2">
+<button class="w-12 h-12 rounded-full btn-gradient flex items-center justify-center text-on-primary shadow-md active:scale-95 transition-transform duration-200">
+<span class="material-symbols-outlined" data-icon="favorite" data-weight="fill" style="font-variation-settings: 'FILL' 1;">favorite</span>
+</button>
+<button class="flex-1 h-12 rounded-full border-2 border-primary text-primary font-label-md text-label-md flex items-center justify-center active:scale-95 transition-transform duration-200 hover:bg-primary/5">
+                    View Shop
+                </button>
+</div>
+</article>
+<!-- Vendor Card 2 -->
+<article class="bg-surface-container-lowest rounded-[24px] p-4 border border-outline-variant/30 green-shadow flex flex-col gap-4">
+<div class="relative w-full h-48 rounded-xl overflow-hidden">
+<img alt="Sunrise Bakery" class="w-full h-full object-cover" data-alt="Artisanal sourdough bread loaves and fresh pastries beautifully displayed on a wooden counter in a bright, modern bakery. Soft natural light, high key white backdrop, emphasizing a clean, warm, and inviting culinary aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuADsKIEYJTYePpk6x4lTvMHvGsj6n4zjxte2Hy69D2UIxpN4wjhRicTy5_XH0_R3FSshYKIgPYfIoSDwJ9b04FnGwwJDSAyCr1QvbR45SR8UFTGG7gDuYBouF5tlrg9-1sAtx8gxEkpOY_RnHCzV7qzp6zdTYEk5sTRtZO6Vr1gbvRJ3ZCOZZfGMYgDyvNybhO4nSYY4v_SGV3Bkn-WrzXlz0mtFksz6M93ipSGLqBYY5gSYwVTiaKD">
+</div>
+<div class="flex flex-col gap-2">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Sunrise Bakery</h2>
+<p class="font-body-md text-body-md text-outline">Artisanal Bread &amp; Pastries</p>
+</div>
+<div class="flex items-center gap-2 mt-1">
+<div class="flex items-center gap-1 bg-tertiary-fixed text-on-tertiary-container px-2.5 py-1 rounded-full font-label-md text-label-md">
+<span class="material-symbols-outlined text-[16px] text-primary" data-icon="star" data-weight="fill" style="font-variation-settings: 'FILL' 1;">star</span>
+                        4.9
+                    </div>
+<div class="flex items-center gap-1 bg-surface-container-high text-on-surface-variant px-2.5 py-1 rounded-full font-label-md text-label-md">
+<span class="material-symbols-outlined text-[16px]" data-icon="location_on">location_on</span>
+                        3.5 km
+                    </div>
+</div>
+</div>
+<div class="flex items-center gap-3 mt-2">
+<button class="w-12 h-12 rounded-full btn-gradient flex items-center justify-center text-on-primary shadow-md active:scale-95 transition-transform duration-200">
+<span class="material-symbols-outlined" data-icon="favorite" data-weight="fill" style="font-variation-settings: 'FILL' 1;">favorite</span>
+</button>
+<button class="flex-1 h-12 rounded-full border-2 border-primary text-primary font-label-md text-label-md flex items-center justify-center active:scale-95 transition-transform duration-200 hover:bg-primary/5">
+                    View Shop
+                </button>
+</div>
+</article>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-32px)] rounded-full max-w-md z-50 flex justify-around items-center px-4 bg-surface-container/70 backdrop-blur-2xl shadow-lg py-2">
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-5 py-2 hover:bg-surface-container-high/50 rounded-full transition-colors active:scale-90 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="home">home</span>
+<span class="font-label-sm text-label-sm">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-5 py-2 hover:bg-surface-container-high/50 transition-colors active:scale-90 transition-transform duration-200 shadow-[0_0_15px_rgba(34,197,94,0.4)]" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="favorite" data-weight="fill" style="font-variation-settings: 'FILL' 1;">favorite</span>
+<span class="font-label-sm text-label-sm">Favorites</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-5 py-2 hover:bg-surface-container-high/50 rounded-full transition-colors active:scale-90 transition-transform duration-200 relative" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="shopping_bag">shopping_bag</span>
+<span class="font-label-sm text-label-sm">Orders</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-5 py-2 hover:bg-surface-container-high/50 rounded-full transition-colors active:scale-90 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="person">person</span>
+<span class="font-label-sm text-label-sm">Account</span>
+</a>
+</nav>
+
+
+<script>
+(function() {
+  const toggleBtn = document.getElementById('view-toggle');
+  const vendorList = document.getElementById('vendor-list');
+  const icon = toggleBtn.querySelector('.material-symbols-outlined');
+
+  toggleBtn.addEventListener('click', () => {
+    const isList = vendorList.classList.contains('view-mode-list');
+    
+    if (isList) {
+      vendorList.classList.remove('view-mode-list', 'flex-col');
+      vendorList.classList.add('view-mode-grid', 'grid', 'grid-cols-2', 'gap-4');
+      icon.textContent = 'view_list';
+    } else {
+      vendorList.classList.remove('view-mode-grid', 'grid', 'grid-cols-2', 'gap-4');
+      vendorList.classList.add('view-mode-list', 'flex-col');
+      icon.textContent = 'grid_view';
+    }
+  });
+})();
+</script></body></html>

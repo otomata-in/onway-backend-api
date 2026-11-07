@@ -1,0 +1,285 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>ZipFoo - Profile Setup</title>
+<!-- Google Fonts: Outfit -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&amp;display=swap" rel="stylesheet">
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-highest": "#e3dfff",
+                        "on-primary-container": "#ede0ff",
+                        "surface-variant": "#e3dfff",
+                        "inverse-on-surface": "#f3eeff",
+                        "secondary-container": "#dcd5fd",
+                        "primary-fixed-dim": "#d2bbff",
+                        "tertiary-fixed": "#ffd6fd",
+                        "inverse-surface": "#2d2a5b",
+                        "error-container": "#ffdad6",
+                        "on-primary": "#ffffff",
+                        "surface-tint": "#732ee4",
+                        "tertiary-fixed-dim": "#fbabff",
+                        "primary-fixed": "#eaddff",
+                        "outline-variant": "#ccc3d8",
+                        "tertiary-container": "#af09c7",
+                        "surface-bright": "#fcf8ff",
+                        "surface-container-low": "#f6f2ff",
+                        "on-secondary-container": "#605b7d",
+                        "on-error-container": "#93000a",
+                        "on-tertiary": "#ffffff",
+                        "secondary": "#5f5a7c",
+                        "tertiary": "#89009d",
+                        "background": "#fcf8ff",
+                        "on-surface-variant": "#4a4455",
+                        "on-background": "#181445",
+                        "on-secondary-fixed": "#1b1735",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed-variant": "#474363",
+                        "on-tertiary-fixed-variant": "#7c008e",
+                        "on-primary-fixed": "#25005a",
+                        "secondary-fixed-dim": "#c8c2e9",
+                        "on-surface": "#181445",
+                        "on-primary-fixed-variant": "#5a00c6",
+                        "on-tertiary-fixed": "#36003e",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-high": "#e9e5ff",
+                        "on-error": "#ffffff",
+                        "surface-dim": "#dad6ff",
+                        "inverse-primary": "#d2bbff",
+                        "primary-container": "#7c3aed",
+                        "surface-container": "#efebff",
+                        "secondary-fixed": "#e5deff",
+                        "primary": "#630ed4",
+                        "outline": "#7b7487",
+                        "on-tertiary-container": "#ffdbfc",
+                        "error": "#ba1a1a",
+                        "surface": "#fcf8ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "sm": "8px",
+                        "xl": "32px",
+                        "margin-mobile": "20px",
+                        "xs": "4px",
+                        "gutter": "24px",
+                        "md": "16px",
+                        "max-width": "1280px",
+                        "margin-desktop": "64px",
+                        "xxl": "48px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "display-lg-mobile": ["Outfit"],
+                        "body-lg": ["Outfit"],
+                        "display-lg": ["Outfit"],
+                        "body-md": ["Outfit"],
+                        "label-lg": ["Outfit"],
+                        "headline-md": ["Outfit"],
+                        "label-sm": ["Outfit"],
+                        "headline-lg": ["Outfit"]
+                    },
+                    "fontSize": {
+                        "display-lg-mobile": ["36px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "display-lg": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "label-lg": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "label-sm": ["12px", {"lineHeight": "1.2", "fontWeight": "500"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.2", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-input {
+            background: rgba(221, 214, 254, 0.1);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(221, 214, 254, 0.2);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-input:focus-within {
+            background: rgba(221, 214, 254, 0.15);
+            border-color: #7C3AED;
+            box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.1);
+        }
+        .deep-shadow {
+            box-shadow: 0 10px 30px -5px rgba(124, 58, 237, 0.25);
+        }
+        .primary-glow {
+            box-shadow: 0 8px 24px -6px rgba(124, 58, 237, 0.5);
+        }
+        .bg-radial-gradient {
+            background: radial-gradient(circle at top right, rgba(124, 58, 237, 0.15), transparent 60%),
+                        radial-gradient(circle at bottom left, rgba(137, 0, 157, 0.1), transparent 50%);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-on-background min-h-screen text-surface-container-lowest selection:bg-primary-container selection:text-white overflow-x-hidden">
+<!-- Subtle Atmospheric Background Blur -->
+<div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+<img alt="Background" class="w-full h-full object-cover opacity-40" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAgV-PV7kliR7W6RD6E1E6yvftZ_ovGNC7bY-rcRR1h1WG35mcBQQzzmUwx6KBn7B2amp__ZgC4_gJooOhMN5wfaEom2fKBGGXlMBX39xyqKwIMk8e5R7Yqk4iGKFBoeiWxhQN0ro3VZByW1yMcTOZdJeqQIzJUkk7bocP5qIiae3q9XYkIWd_TxCrnSAgQU8qcjEvGeEKyVFfkE9yqx9cR8hQaF4vIyGPzjzvV3Mvzk_PtcTvW6P3a_yPV5L7WbHTFgTAiQLqEoC-0">
+<div class="absolute inset-0 bg-gradient-to-b from-on-background/20 via-transparent to-on-background"></div>
+</div>
+<div class="relative z-10 flex flex-col min-h-screen max-w-[600px] mx-auto px-margin-mobile pt-sm pb-xl">
+<!-- Header Section -->
+<header class="flex justify-between items-center py-md mt-sm">
+<button aria-label="Go back" class="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 active:scale-95 transition-all text-white border border-white/10">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<button aria-label="Skip setup" class="font-label-lg text-label-lg text-surface-container-highest/60 hover:text-white transition-colors">
+                Skip for now
+            </button>
+</header>
+<!-- Typography Branding Section -->
+<div class="mt-lg">
+<h1 class="font-display-lg-mobile text-display-lg-mobile text-white tracking-tight">
+                Let's get to know you!
+            </h1>
+<p class="font-body-md text-body-md text-surface-variant/80 mt-sm max-w-[280px]">
+                Complete your profile to personalize your ZipFoo experience.
+            </p>
+</div>
+<!-- Profile Photo Section -->
+<div class="mt-xxl flex flex-col items-center">
+<div class="relative group cursor-pointer">
+<div class="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-primary-container/20 p-1 flex items-center justify-center bg-gradient-to-tr from-surface-variant/10 to-surface-container/5 overflow-hidden">
+<div class="w-full h-full rounded-full bg-white/5 flex items-center justify-center overflow-hidden transition-transform group-hover:scale-105 duration-500">
+<span class="material-symbols-outlined text-[4rem] text-surface-variant/30 select-none">person</span>
+<!-- Hidden Image (Simulated Upload) -->
+<img class="hidden w-full h-full object-cover" data-alt="A professional, clean studio portrait of a friendly individual with soft, warm lighting against a blurred culinary background. The aesthetic is ultra-modern and high-end, featuring subtle violet highlights and a pristine, luxury tech feel that aligns perfectly with the ZipFoo brand identity." src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgcng9IjgiIGZpbGw9IiNlOGVhZWQiLz48cGF0aCBkPSJNMTcwIDEzMCBsMzAgNDAgbDIwLTE1IGw0MCA1NSBIMTQweiIgZmlsbD0iI2JkYzFjNiIvPjxjaXJjbGUgY3g9IjI1MCIgY3k9IjEyMCIgcj0iMTgiIGZpbGw9IiNiZGMxYzYiLz48L3N2Zz4=">
+</div>
+</div>
+<button aria-label="Upload photo" class="absolute bottom-1 right-1 w-10 h-10 bg-primary-container text-on-primary-container rounded-full flex items-center justify-center deep-shadow border-2 border-on-background active:scale-90 transition-transform hover:bg-primary duration-200">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">add_a_photo</span>
+</button>
+</div>
+<span class="font-label-sm text-label-sm text-primary-fixed-dim mt-md uppercase tracking-widest opacity-80">Profile Photo</span>
+</div>
+<!-- Form Fields Section -->
+<main class="mt-xxl space-y-lg flex-grow">
+<!-- Full Name Field -->
+<div class="space-y-sm">
+<label class="font-label-lg text-label-lg text-surface-container-highest/80 ml-1" for="full_name">Full Name <span class="text-primary-fixed-dim">*</span></label>
+<div class="glass-input relative flex items-center rounded-lg overflow-hidden h-14 px-md">
+<span class="material-symbols-outlined text-surface-variant/60 mr-sm">person</span>
+<input class="bg-transparent border-none focus:ring-0 w-full text-white font-body-md placeholder:text-surface-variant/30" id="full_name" placeholder="e.g. John Doe" required="" type="text">
+</div>
+</div>
+<!-- Email Field -->
+<div class="space-y-sm">
+<div class="flex justify-between items-center px-1">
+<label class="font-label-lg text-label-lg text-surface-container-highest/80" for="email">Email Address</label>
+<span class="font-label-sm text-label-sm text-surface-variant/40 italic">Optional</span>
+</div>
+<div class="glass-input relative flex items-center rounded-lg overflow-hidden h-14 px-md">
+<span class="material-symbols-outlined text-surface-variant/60 mr-sm">alternate_email</span>
+<input class="bg-transparent border-none focus:ring-0 w-full text-white font-body-md placeholder:text-surface-variant/30" id="email" placeholder="e.g. john@example.com" type="email">
+</div>
+</div>
+<!-- Cuisine Preference (Bonus Component for Visual Balance) -->
+<div class="pt-sm">
+<p class="font-label-lg text-label-lg text-surface-container-highest/80 ml-1 mb-md">Quick Interests</p>
+<div class="flex flex-wrap gap-sm">
+<button class="px-lg py-sm rounded-full bg-secondary-fixed/10 border border-secondary-fixed/20 text-secondary-fixed font-label-sm hover:bg-secondary-fixed/20 transition-all active:scale-95">Gourmet</button>
+<button class="px-lg py-sm rounded-full bg-primary-container/20 border border-primary-container text-on-primary-container font-label-sm">Vegan</button>
+<button class="px-lg py-sm rounded-full bg-secondary-fixed/10 border border-secondary-fixed/20 text-secondary-fixed font-label-sm hover:bg-secondary-fixed/20 transition-all active:scale-95">Desserts</button>
+<button class="px-lg py-sm rounded-full bg-secondary-fixed/10 border border-secondary-fixed/20 text-secondary-fixed font-label-sm hover:bg-secondary-fixed/20 transition-all active:scale-95">Asian Fusion</button>
+</div>
+</div>
+<!-- Location Section -->
+<div class="pt-sm space-y-lg">
+<!-- Current Location Button -->
+<div class="space-y-sm">
+<p class="font-label-lg text-label-lg text-surface-container-highest/80 ml-1">Location</p>
+<button class="flex items-center gap-sm px-md py-sm rounded-lg bg-primary-container/10 border border-primary-container/20 text-primary-fixed-dim hover:bg-primary-container/20 transition-all active:scale-95">
+<span class="material-symbols-outlined">my_location</span>
+<span class="font-label-lg">Use Current Location</span>
+</button>
+</div>
+<!-- Delivery Address Input -->
+<div class="space-y-sm">
+<label class="font-label-lg text-label-lg text-surface-container-highest/80 ml-1" for="delivery_address">Delivery Address</label>
+<div class="glass-input relative flex items-center rounded-lg overflow-hidden h-14 px-md">
+<span class="material-symbols-outlined text-surface-variant/60 mr-sm">location_on</span>
+<input class="bg-transparent border-none focus:ring-0 w-full text-white font-body-md placeholder:text-surface-variant/30" id="delivery_address" placeholder="e.g. 123 Culinary St, Food City" type="text">
+</div>
+</div>
+</div></main>
+<!-- Action Button Section -->
+<div class="mt-xxl pb-md">
+<button class="w-full h-16 bg-primary-container text-white font-headline-md rounded-lg flex items-center justify-center gap-sm primary-glow hover:bg-primary hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 relative overflow-hidden group">
+<!-- Subtle internal light sweep effect -->
+<div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out"></div>
+<span>Complete Setup</span>
+<span class="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+<p class="text-center font-label-sm text-label-sm text-surface-variant/40 mt-lg px-xl">
+                By tapping Complete Setup, you agree to our <a class="text-primary-fixed-dim underline" href="#">Privacy Policy</a> and <a class="text-primary-fixed-dim underline" href="#">Terms of Service</a>.
+            </p>
+</div>
+</div>
+<!-- Micro-interaction Script -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const inputs = document.querySelectorAll('input');
+            
+            inputs.forEach(input => {
+                input.addEventListener('focus', () => {
+                    const icon = input.previousElementSibling;
+                    if (icon) {
+                        icon.classList.add('text-primary-fixed-dim');
+                        icon.style.fontVariationSettings = "'FILL' 1";
+                    }
+                });
+                
+                input.addEventListener('blur', () => {
+                    const icon = input.previousElementSibling;
+                    if (icon) {
+                        icon.classList.remove('text-primary-fixed-dim');
+                        icon.style.fontVariationSettings = "'FILL' 0";
+                    }
+                });
+            });
+
+            // Simulated profile picture behavior
+            const pfpButton = document.querySelector('[aria-label="Upload photo"]');
+            pfpButton.addEventListener('click', () => {
+                const ripples = document.createElement('div');
+                ripples.className = 'absolute inset-0 bg-white/20 rounded-full animate-ping';
+                pfpButton.appendChild(ripples);
+                setTimeout(() => ripples.remove(), 600);
+                alert("Opening system gallery...");
+            });
+        });
+    </script>
+</body></html>
