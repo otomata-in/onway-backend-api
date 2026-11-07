@@ -70,6 +70,16 @@ app.get('/', (req, res) => {
   });
 });
 
+// Health check / root endpoint for Render & monitoring
+app.get(['/', '/health'], (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'OnWay API',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
+});
+
 // API Documentation (Swagger UI)
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   customCss: '.swagger-ui .topbar { display: none }',

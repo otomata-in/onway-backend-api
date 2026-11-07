@@ -21,13 +21,15 @@ async function startServer() {
     await prisma.$queryRaw`SELECT 1`;
     console.log('✅ Neon PostgreSQL (Prisma) connected successfully');
 
-    // Connect to Redis (optional — degrades gracefully)
-    try {
-      await redis.connect();
+    // Connect to Redis (optional — degrades gracefully without blocking startup)
+    Promise.race([
+      redis.connect(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+    ]).then(() => {
       console.log('✅ Redis connected successfully');
-    } catch (redisErr) {
+    }).catch(() => {
       console.warn('⚠️  Redis not available — running without cache. Location caching disabled.');
-    }
+    });
 
     // Initialize Firebase (FCM push notifications)
     initFirebase();
@@ -36,8 +38,8 @@ async function startServer() {
     const server = http.createServer(app);
     initSocket(server);
 
-    // Start listening
-    server.listen(PORT, () => {
+    // Start listening on 0.0.0.0 for cloud hosting
+    server.listen(PORT, '0.0.0.0', () => {
       console.log('');
       console.log('┌─────────────────────────────────────────┐');
       console.log(`│  🚀 OnWay API Server                    │`);
