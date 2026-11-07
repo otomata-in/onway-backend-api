@@ -8,9 +8,8 @@ class BuyerApiService {
   factory BuyerApiService() => _instance;
   BuyerApiService._internal();
 
-  /// Local development backend URL (Port 3001)
-  /// Use 192.168.0.194 for physical devices on same Wi-Fi, 10.0.2.2 for Android emulator, or localhost
-  String baseUrl = 'http://192.168.0.194:3001/api/v1';
+  /// Live Cloud Backend URL on Render
+  String baseUrl = 'https://onway-backend-api.onrender.com/api/v1';
 
   String? _jwtToken;
   SharedPreferences? _prefs;

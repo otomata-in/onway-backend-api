@@ -8,9 +8,8 @@ class VendorApiService {
   factory VendorApiService() => _instance;
   VendorApiService._internal();
 
-  /// Change this IP to match your development machine IP address when testing on a physical device.
-  /// Standard local machine fallback: 192.168.0.194, 10.0.2.2 (Android Emulator), or localhost
-  String baseUrl = 'http://192.168.0.194:3001/api/v1';
+  /// Live Cloud Backend URL on Render
+  String baseUrl = 'https://onway-backend-api.onrender.com/api/v1';
 
   String? _jwtToken;
   SharedPreferences? _prefs;
