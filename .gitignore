@@ -5,3 +5,4 @@ dist/
 .env
 firebase-service-account.json
 .neon
+.env.local
