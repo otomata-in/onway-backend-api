@@ -7,7 +7,6 @@ import '../../../../core/theme/app_colors.dart';
 import '../bloc/home_bloc.dart';
 import '../bloc/home_event.dart';
 import '../bloc/home_state.dart';
-import '../widgets/active_order_card.dart';
 import '../widgets/category_chips.dart';
 import '../widgets/home_app_bar.dart';
 import '../widgets/map_section.dart';
@@ -57,22 +56,6 @@ class _AdvancedMapPageState extends State<AdvancedMapPage> {
     return CustomScrollView(
       slivers: [
         const HomeAppBar(),
-        if (state.activeOrders.isNotEmpty)
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final order = state.activeOrders[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: ActiveOrderCard(order: order),
-                  );
-                },
-                childCount: state.activeOrders.length,
-              ),
-            ),
-          ),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
