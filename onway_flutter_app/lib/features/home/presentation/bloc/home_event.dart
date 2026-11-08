@@ -68,3 +68,11 @@ class HomeBookingCancelRequested extends HomeEvent {
   @override
   List<Object?> get props => [bookingId];
 }
+
+class HomeBookingCreated extends HomeEvent {
+  final ActiveOrderInfo order;
+  const HomeBookingCreated(this.order);
+
+  @override
+  List<Object?> get props => [order];
+}

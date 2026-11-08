@@ -14,6 +14,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<HomeSearchQueryChanged>(_onSearchQueryChanged);
     on<HomeLocationSelected>(_onLocationSelected);
     on<HomeBookingCancelRequested>(_onBookingCancelRequested);
+    on<HomeBookingCreated>(_onBookingCreated);
   }
 
   /// Emoji mapping for vendor categories
@@ -119,27 +120,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           }
         }
       } catch (_) {}
-
-      if (activeOrders.isEmpty && vendors.isNotEmpty) {
-        int idx = 1;
-        for (final v in vendors.take(2)) {
-          activeOrders.add(ActiveOrderInfo(
-            bookingId: 'demo_$idx',
-            vendorId: v.id,
-            vendorName: v.name,
-            category: v.category,
-            emoji: v.emoji,
-            eta: v.eta,
-            distance: v.distance,
-            progress: 0.75,
-            vendorLat: v.latitude,
-            vendorLng: v.longitude,
-            buyerLat: lat,
-            buyerLng: lng,
-          ));
-          idx++;
-        }
-      }
 
       emit(state.copyWith(
         status: HomeStatus.loaded,
@@ -252,6 +232,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         await _api.cancelBooking(event.bookingId);
       } catch (_) {}
     }
+  }
+
+  void _onBookingCreated(HomeBookingCreated event, Emitter<HomeState> emit) {
+    final updated = List<ActiveOrderInfo>.from(state.activeOrders);
+    updated.removeWhere((o) => o.bookingId == event.order.bookingId);
+    updated.insert(0, event.order);
+    emit(state.copyWith(activeOrders: updated));
   }
 
   static const _fallbackCategories = [

@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../core/network/api_service.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../bloc/home_bloc.dart';
+import '../bloc/home_event.dart';
 import '../bloc/home_state.dart';
 
 /// An auto-sliding, animated horizontal carousel displaying roving vendors
@@ -336,16 +340,67 @@ class _NearYouNowCarouselState extends State<NearYouNowCarousel> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {
+                      onPressed: () async {
                         Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Stop requested! ${vendor.name} has been alerted to halt.'),
-                            backgroundColor: const Color(0xFF198754),
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
+                        final targetVendorId = vendor.id.isNotEmpty ? vendor.id : vendor.name;
+                        final res = await BuyerApiService().createBooking(
+                          vendorId: targetVendorId,
+                          items: [
+                            {
+                              'productName': 'Stop & Halt Request (${vendor.category})',
+                              'quantity': 1.0,
+                              'unitPrice': 0.0,
+                              'totalPrice': 0.0,
+                            }
+                          ],
+                          totalAmount: 0.0,
+                          notifyOnReach: true,
+                          ringOnReach: true,
+                          notes: 'Halt requested from Near You Now carousel',
                         );
+
+                        if (context.mounted) {
+                          if (res['success'] == true) {
+                            final bData = res['data'] ?? {};
+                            final bId = bData['id']?.toString() ??
+                                bData['bookingNumber']?.toString() ??
+                                'BK-${DateTime.now().millisecondsSinceEpoch}';
+                            final orderInfo = ActiveOrderInfo(
+                              bookingId: bId,
+                              vendorId: vendor.id.isNotEmpty ? vendor.id : targetVendorId,
+                              vendorName: vendor.name,
+                              category: vendor.category,
+                              emoji: vendor.emoji,
+                              eta: vendor.eta,
+                              distance: vendor.distance,
+                              progress: 0.75,
+                              vendorLat: vendor.latitude,
+                              vendorLng: vendor.longitude,
+                              buyerLat: 10.698731,
+                              buyerLng: 76.091942,
+                            );
+
+                            context.read<HomeBloc>().add(HomeBookingCreated(orderInfo));
+                            context.read<HomeBloc>().add(const HomeLoadRequested());
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Stop requested! ${vendor.name} has been notified to halt.'),
+                                backgroundColor: const Color(0xFF198754),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(res['error'] ?? res['message'] ?? 'Failed to request stop.'),
+                                backgroundColor: const Color(0xFFDC2626),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            );
+                          }
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF198754),
@@ -365,3 +420,4 @@ class _NearYouNowCarouselState extends State<NearYouNowCarousel> {
     );
   }
 }
+

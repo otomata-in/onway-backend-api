@@ -90,18 +90,69 @@ class _BookingsPageState extends State<BookingsPage> {
         }).toList();
       }
 
+      // Merge active bookings from HomeBloc so in-memory and live state are always in sync
+      if (mounted) {
+        final homeActiveOrders = context.read<HomeBloc>().state.activeOrders;
+        for (final order in homeActiveOrders) {
+          if (!active.any((a) => a['bookingId'] == order.bookingId)) {
+            active.insert(0, {
+              'bookingId': order.bookingId,
+              'id': order.bookingId.startsWith('ONW')
+                  ? order.bookingId
+                  : '#ONW-${order.bookingId.substring(0, order.bookingId.length > 5 ? 5 : order.bookingId.length)}',
+              'vendorName': order.vendorName,
+              'category': order.category,
+              'imagePath': 'assets/images/vendor_green_valley.png',
+              'eta': order.eta,
+              'distance': order.distance,
+              'status': 'EN ROUTE',
+              'statusColor': const Color(0xFF16A34A),
+              'total': 0.0,
+              'itemsCount': 1,
+              'itemsText': 'Stop requested / Service booked',
+              'date': 'Today',
+              'rating': 4.9,
+              'notifyOnReach': true,
+              'ringOnReach': true,
+            });
+          }
+        }
+      }
+
       if (mounted) {
         setState(() {
-          _activeBookings = active.isNotEmpty ? active : _fallbackActiveBookings;
-          _historyBookings = history.isNotEmpty ? history : _fallbackHistoryBookings;
+          _activeBookings = active;
+          _historyBookings = history;
           _isLoading = false;
         });
       }
     } catch (_) {
       if (mounted) {
+        final fallbackList = <Map<String, dynamic>>[];
+        final homeActiveOrders = context.read<HomeBloc>().state.activeOrders;
+        for (final order in homeActiveOrders) {
+          fallbackList.add({
+            'bookingId': order.bookingId,
+            'id': '#ONW-00001',
+            'vendorName': order.vendorName,
+            'category': order.category,
+            'imagePath': 'assets/images/vendor_green_valley.png',
+            'eta': order.eta,
+            'distance': order.distance,
+            'status': 'EN ROUTE',
+            'statusColor': const Color(0xFF16A34A),
+            'total': 0.0,
+            'itemsCount': 1,
+            'itemsText': 'Stop requested / Service booked',
+            'date': 'Today',
+            'rating': 4.9,
+            'notifyOnReach': true,
+            'ringOnReach': true,
+          });
+        }
         setState(() {
-          _activeBookings = _fallbackActiveBookings;
-          _historyBookings = _fallbackHistoryBookings;
+          _activeBookings = fallbackList;
+          _historyBookings = [];
           _isLoading = false;
         });
       }
@@ -110,19 +161,32 @@ class _BookingsPageState extends State<BookingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAF8),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : CustomScrollView(
-              slivers: [
-                const HomeAppBar(),
-                _buildHeaderSection(),
-                _buildCategorySegmentedPicker(),
-                _buildBookingsList(),
-                const SliverToBoxAdapter(child: SizedBox(height: 120)),
-              ],
-            ),
+    return BlocListener<HomeBloc, HomeState>(
+      listenWhen: (prev, curr) =>
+          prev.activeOrders.length != curr.activeOrders.length ||
+          (prev.navIndex != curr.navIndex && curr.navIndex == 4),
+      listener: (context, state) {
+        _loadBookings();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAF8),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+            : RefreshIndicator(
+                color: AppColors.primary,
+                onRefresh: _loadBookings,
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    const HomeAppBar(),
+                    _buildHeaderSection(),
+                    _buildCategorySegmentedPicker(),
+                    _buildBookingsList(),
+                    const SliverToBoxAdapter(child: SizedBox(height: 120)),
+                  ],
+                ),
+              ),
+      ),
     );
   }
 
@@ -675,43 +739,4 @@ class _BookingsPageState extends State<BookingsPage> {
       ),
     );
   }
-
-  // Fallbacks
-  static final List<Map<String, dynamic>> _fallbackActiveBookings = [
-    {
-      'id': '#ONW-84920',
-      'vendorName': 'Green Valley Organic Farm',
-      'category': 'Produce',
-      'imagePath': 'assets/images/vendor_green_valley.png',
-      'eta': '8 mins',
-      'distance': '0.5 km',
-      'status': 'EN ROUTE',
-      'statusColor': const Color(0xFF16A34A),
-      'total': 14.46,
-      'itemsCount': 3,
-      'itemsText': 'Tomatoes (1kg), Carrots (500g), Spinach (2 bunches)',
-      'date': 'Today, 10:45 AM',
-      'rating': 4.8,
-      'notifyOnReach': true,
-      'ringOnReach': true,
-    },
-  ];
-
-  static final List<Map<String, dynamic>> _fallbackHistoryBookings = [
-    {
-      'id': '#ONW-73912',
-      'vendorName': 'Sunny Hills Dairy & Bakery',
-      'category': 'Dairy & Bakery',
-      'imagePath': 'assets/images/stitch_saved_vendor_1.png',
-      'status': 'COMPLETED',
-      'statusColor': const Color(0xFF16A34A),
-      'total': 19.20,
-      'itemsCount': 4,
-      'itemsText': 'Organic Milk (2L), Sourdough Bread, Fresh Butter',
-      'date': 'Yesterday, 4:30 PM',
-      'rating': 4.7,
-      'eta': 'Delivered',
-      'distance': '0.0 km',
-    },
-  ];
 }

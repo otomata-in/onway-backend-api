@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/network/api_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/standard_top_bar.dart';
+import '../../../home/presentation/bloc/home_bloc.dart';
+import '../../../home/presentation/bloc/home_event.dart';
 import '../../../home/presentation/bloc/home_state.dart';
 import 'booking_success_page.dart';
 
@@ -569,18 +572,16 @@ class _BookingPageState extends State<BookingPage> {
           ],
         ),
         child: ElevatedButton(
-          onPressed: items.isEmpty
-              ? () => _showEmptyCartPopup(context)
-              : () => _showConfirmationModal(context),
+          onPressed: () => _showConfirmationModal(context),
           style: ElevatedButton.styleFrom(
-            backgroundColor: items.isEmpty ? AppColors.outlineVariant : AppColors.primary,
+            backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             elevation: 0,
           ),
           child: Text(
-            'Confirm Booking',
+            items.isEmpty ? 'Request Stop & Book Visit' : 'Confirm Booking',
             style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold),
           ),
         ),
@@ -658,8 +659,12 @@ class _BookingPageState extends State<BookingPage> {
                         onPressed: () async {
                           Navigator.pop(dialogContext);
 
+                          final nav = Navigator.of(context);
+                          final messenger = ScaffoldMessenger.of(context);
+                          final homeBloc = context.read<HomeBloc>();
+
                           // Build booking items payload
-                          final bookingItems = items.map((item) {
+                          List<Map<String, dynamic>> bookingItems = items.map((item) {
                             final qty = (quantities[item.id] ?? 1).toDouble();
                             return {
                               'productId': item.id,
@@ -670,9 +675,23 @@ class _BookingPageState extends State<BookingPage> {
                             };
                           }).toList();
 
-                          // Call API to store in PostgreSQL database
-                          BuyerApiService().createBooking(
-                            vendorId: widget.vendorInfo.name, // vendor identifier
+                          if (bookingItems.isEmpty) {
+                            bookingItems = [
+                              {
+                                'productName': 'Visit & Service Request (${widget.vendorInfo.category})',
+                                'quantity': 1.0,
+                                'unitPrice': 0.0,
+                                'totalPrice': 0.0,
+                              }
+                            ];
+                          }
+
+                          final targetVendorId = widget.vendorInfo.id.isNotEmpty
+                              ? widget.vendorInfo.id
+                              : widget.vendorInfo.name;
+
+                          final response = await BuyerApiService().createBooking(
+                            vendorId: targetVendorId,
                             items: bookingItems,
                             totalAmount: _subtotal,
                             notifyOnReach: notifyOnReach,
@@ -680,13 +699,49 @@ class _BookingPageState extends State<BookingPage> {
                             dailyTracking: dailyTracking,
                           );
 
-                          if (mounted) {
-                            Navigator.pushReplacement(
-                              context,
+                          if (!mounted) return;
+
+                          if (response['success'] == true) {
+                            final bData = response['data'] ?? {};
+                            final bId = bData['id']?.toString() ??
+                                bData['bookingNumber']?.toString() ??
+                                'BK-${DateTime.now().millisecondsSinceEpoch}';
+                            final orderInfo = ActiveOrderInfo(
+                              bookingId: bId,
+                              vendorId: widget.vendorInfo.id.isNotEmpty
+                                  ? widget.vendorInfo.id
+                                  : targetVendorId,
+                              vendorName: widget.vendorInfo.name,
+                              category: widget.vendorInfo.category,
+                              emoji: widget.vendorInfo.emoji,
+                              eta: widget.vendorInfo.eta,
+                              distance: widget.vendorInfo.distance,
+                              progress: 0.75,
+                              vendorLat: widget.vendorInfo.latitude,
+                              vendorLng: widget.vendorInfo.longitude,
+                              buyerLat: 10.698731,
+                              buyerLng: 76.091942,
+                            );
+
+                            homeBloc.add(HomeBookingCreated(orderInfo));
+                            homeBloc.add(const HomeLoadRequested());
+
+                            nav.pushReplacement(
                               MaterialPageRoute(
                                 builder: (_) => BookingSuccessPage(
                                   vendorInfo: widget.vendorInfo,
                                 ),
+                              ),
+                            );
+                          } else {
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  response['error'] ?? response['message'] ?? 'Failed to place booking. Please try again.',
+                                ),
+                                backgroundColor: const Color(0xFFDC2626),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               ),
                             );
                           }

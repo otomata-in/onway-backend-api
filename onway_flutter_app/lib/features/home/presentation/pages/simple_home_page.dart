@@ -520,23 +520,25 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
 
   /// 6. Simplified Vendor Card for Non-Tech Users
   Widget _buildSimpleVendorCard(BuildContext context, VendorInfo vendor) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
+    return GestureDetector(
+      onTap: () => context.push('/retail-vendor', extra: vendor),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -682,8 +684,9 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   /// 7. Empty State
   Widget _buildEmptyState(BuildContext context) {
