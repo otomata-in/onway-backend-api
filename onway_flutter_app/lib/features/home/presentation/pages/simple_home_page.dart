@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../vendor_details/presentation/pages/scan_vendor_page.dart';
 import '../bloc/home_bloc.dart';
 import '../bloc/home_event.dart';
 import '../bloc/home_state.dart';
 import '../widgets/active_order_card.dart';
 import '../widgets/home_app_bar.dart';
 import '../widgets/near_you_now_carousel.dart';
+import 'category_vendors_page.dart';
 
 /// Simple Home Page — Designed for everyday, non-tech background buyers.
 /// Clean, card-based, high-contrast, with minimal technical jargon and large tap targets.
@@ -103,79 +104,12 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
                 child: _buildVisualCategoryGrid(context, state),
               ),
 
-              // 6. Today's Van Schedule
+              // 6. Your Regular Sellers Status
               SliverToBoxAdapter(
                 child: _buildTodaySchedule(context),
               ),
 
-              // 7. Nearby Street Vendors Header
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Sellers Near You',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.onSurface,
-                            ),
-                          ),
-                          Text(
-                            'Roving street vans & local carts',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 12,
-                              color: AppColors.outline,
-                            ),
-                          ),
-                        ],
-                      ),
-                      // Quick shortcut to map tab
-                      TextButton.icon(
-                        onPressed: () {
-                          // Switch to Tab 1 (Advanced Live Map)
-                          context.read<HomeBloc>().add(const HomeNavIndexChanged(1));
-                        },
-                        icon: const Icon(Icons.map_outlined, size: 18, color: AppColors.primary),
-                        label: Text(
-                          'View on Map',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // 8. Simple Non-Tech Vendor Cards
-              if (state.filteredVendors.isEmpty)
-                SliverToBoxAdapter(
-                  child: _buildEmptyState(context),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final vendor = state.filteredVendors[index];
-                        return _buildSimpleVendorCard(context, vendor);
-                      },
-                      childCount: state.filteredVendors.length,
-                    ),
-                  ),
-                ),
-
-              // 9. Senior / Beginner Assistance Banner
+              // 7. Senior / Beginner Assistance Banner
               SliverToBoxAdapter(
                 child: _buildHelpBanner(context),
               ),
@@ -242,37 +176,27 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
                 child: const Icon(Icons.cancel, size: 20, color: AppColors.outline),
               )
             else
-              // Voice search prompt
+              // QR Code scanner button for quick vendor scan
               GestureDetector(
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Row(
-                        children: [
-                          const Icon(Icons.mic, color: Colors.white),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Voice search listening... (Speak "Fish" or "Vegetables")',
-                              style: GoogleFonts.plusJakartaSans(),
-                            ),
-                          ),
-                        ],
-                      ),
-                      backgroundColor: AppColors.primary,
-                      duration: const Duration(seconds: 2),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ScanVendorPage(showBackButton: true),
                     ),
                   );
                 },
                 child: Container(
-                  padding: const EdgeInsets.all(6),
+                  padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
+                    color: AppColors.primary.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.mic_rounded, color: AppColors.primary, size: 20),
+                  child: const Icon(
+                    Icons.qr_code_scanner_rounded,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
                 ),
               ),
           ],
@@ -308,18 +232,14 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
                   color: AppColors.onSurface,
                 ),
               ),
-              if (state.selectedCategory != 'All')
-                GestureDetector(
-                  onTap: () => context.read<HomeBloc>().add(const HomeCategoryChanged('All')),
-                  child: Text(
-                    'Clear Filter',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                    ),
-                  ),
+              Text(
+                'Tap to explore sellers',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
                 ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -336,20 +256,25 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
             itemBuilder: (context, index) {
               final cat = categories[index];
               final catName = cat['name'] as String;
-              final isSelected = state.selectedCategory.toLowerCase() == catName.toLowerCase();
 
               return GestureDetector(
                 onTap: () {
-                  context.read<HomeBloc>().add(HomeCategoryChanged(catName));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CategoryVendorsPage(
+                        category: catName,
+                        categoryEmoji: cat['emoji'] as String,
+                        categoryColor: cat['color'] as Color,
+                      ),
+                    ),
+                  );
                 },
                 child: Container(
                   decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primary.withValues(alpha: 0.15) : cat['color'] as Color,
+                    color: cat['color'] as Color,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: isSelected ? AppColors.primary : Colors.transparent,
-                      width: 2,
-                    ),
+                    border: Border.all(color: Colors.transparent),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -364,7 +289,7 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
-                          color: isSelected ? AppColors.primary : AppColors.onSurface,
+                          color: AppColors.onSurface,
                         ),
                       ),
                       Text(
@@ -408,10 +333,10 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
           children: [
             Row(
               children: [
-                const Icon(Icons.schedule_rounded, color: AppColors.primary, size: 20),
+                const Icon(Icons.verified_user_outlined, color: AppColors.primary, size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  "Today's Van Schedule",
+                  "Your Regular Sellers Status",
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
@@ -426,7 +351,7 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    'Perumbilavu Route',
+                    'Daily Tracked Route',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -439,8 +364,8 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
             const SizedBox(height: 14),
             _buildScheduleItem(
               time: '8:00 AM – 10:00 AM',
-              title: 'Fresh Milk & Bakery Vans',
-              status: 'Completed',
+              title: 'Perumbilavu Malabar Dairy & Bakery',
+              status: 'Completed Run',
               statusColor: Colors.grey,
               icon: Icons.check_circle_outline,
             ),
@@ -448,15 +373,15 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
             _buildScheduleItem(
               time: '11:00 AM – 1:30 PM',
               title: 'Coastal Fresh Fish Van (Murali)',
-              status: 'On The Road Now',
+              status: 'On The Road Now (< 500m)',
               statusColor: const Color(0xFF198754),
               icon: Icons.directions_boat_outlined,
             ),
             const Divider(height: 18),
             _buildScheduleItem(
               time: '4:30 PM – 7:00 PM',
-              title: 'Farm Fresh Vegetables & Fruits',
-              status: 'Upcoming Evening',
+              title: 'Perumbilavu Organic Veggies & Fruits',
+              status: 'Upcoming Evening Run',
               statusColor: const Color(0xFF0284C7),
               icon: Icons.access_time_rounded,
             ),
@@ -518,218 +443,7 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
     );
   }
 
-  /// 6. Simplified Vendor Card for Non-Tech Users
-  Widget _buildSimpleVendorCard(BuildContext context, VendorInfo vendor) {
-    return GestureDetector(
-      onTap: () => context.push('/retail-vendor', extra: vendor),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Avatar / Emoji
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Center(
-                  child: Text(
-                    vendor.emoji,
-                    style: const TextStyle(fontSize: 28),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            vendor.name,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.onSurface,
-                            ),
-                          ),
-                        ),
-                        if (vendor.isLive)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFDCFCE7),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              'LIVE',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: const Color(0xFF15803D),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      vendor.subtitle,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 12,
-                        color: AppColors.outline,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(Icons.star, size: 14, color: Color(0xFFF59E0B)),
-                        const SizedBox(width: 3),
-                        Text(
-                          vendor.rating.toStringAsFixed(1),
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.onSurface,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        const Icon(Icons.near_me, size: 13, color: AppColors.primary),
-                        const SizedBox(width: 3),
-                        Text(
-                          '${vendor.distance} (${vendor.eta})',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              // Quick Call Button
-              Expanded(
-                flex: 2,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Calling driver for ${vendor.name}...'),
-                        backgroundColor: AppColors.primary,
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.phone, size: 16),
-                  label: Text(
-                    'Call',
-                    style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    side: const BorderSide(color: AppColors.primary),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Request Stop Button
-              Expanded(
-                flex: 3,
-                child: ElevatedButton(
-                  onPressed: () {
-                    context.push('/retail-vendor', extra: vendor);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: Text(
-                    'View Store & Items',
-                    style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    ),
-  );
-}
 
-  /// 7. Empty State
-  Widget _buildEmptyState(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
-      child: Center(
-        child: Column(
-          children: [
-            const Icon(Icons.storefront_outlined, size: 48, color: AppColors.outline),
-            const SizedBox(height: 12),
-            Text(
-              'No Sellers Found',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppColors.onSurface,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Try resetting your search or choosing another category.',
-              style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.outline),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: () {
-                _searchController.clear();
-                context.read<HomeBloc>().add(const HomeSearchQueryChanged(''));
-                context.read<HomeBloc>().add(const HomeCategoryChanged('All'));
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              child: const Text('Show All Sellers'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   /// 8. Senior & Beginner Help Card
   Widget _buildHelpBanner(BuildContext context) {

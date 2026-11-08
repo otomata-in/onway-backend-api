@@ -11,7 +11,8 @@ import 'live_tracking_page.dart';
 import 'retail_vendor_page.dart';
 
 class ScanVendorPage extends StatefulWidget {
-  const ScanVendorPage({super.key});
+  final bool showBackButton;
+  const ScanVendorPage({super.key, this.showBackButton = false});
 
   @override
   State<ScanVendorPage> createState() => _ScanVendorPageState();
@@ -64,7 +65,7 @@ class _ScanVendorPageState extends State<ScanVendorPage>
       body: CustomScrollView(
         slivers: [
           // Same Home Page Top Bar Template
-          const HomeAppBar(),
+          HomeAppBar(showBackButton: widget.showBackButton),
           _buildHeaderSection(),
           _buildScannerViewfinder(),
           _buildSimulateScanSection(),

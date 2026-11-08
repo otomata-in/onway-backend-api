@@ -77,12 +77,21 @@ class _HomeAppBarState extends State<HomeAppBar> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(6),
+                      width: 32,
+                      height: 32,
                       decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(10),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
                       ),
-                      child: const Icon(Icons.shopping_bag, size: 18, color: Colors.white),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.asset(
+                          'assets/images/onway_logo.png',
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.shopping_bag, size: 18, color: AppColors.primary),
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Text(
