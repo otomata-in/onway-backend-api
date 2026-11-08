@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/network/api_service.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../home/presentation/bloc/home_bloc.dart';
+import '../../../home/presentation/bloc/home_event.dart';
 import '../../../home/presentation/bloc/home_state.dart';
 import '../../../home/presentation/widgets/home_app_bar.dart';
 import '../../../vendor_details/presentation/pages/live_tracking_page.dart';
@@ -41,6 +44,7 @@ class _BookingsPageState extends State<BookingsPage> {
           final items = (b['items'] as List?) ?? [];
           final itemsText = items.map((i) => "${i['productName']} (${i['quantity']})").join(', ');
           return {
+            'bookingId': b['id']?.toString() ?? b['bookingNumber']?.toString() ?? '',
             'id': b['bookingNumber'] ?? '#ONW-00000',
             'vendorName': b['vendor']?['businessName'] ?? 'Vendor',
             'category': b['vendor']?['category'] ?? 'General',
@@ -68,6 +72,7 @@ class _BookingsPageState extends State<BookingsPage> {
           final itemsText = items.map((i) => "${i['productName']} (${i['quantity']})").join(', ');
           final isCancelled = b['status'] == 'CANCELLED';
           return {
+            'bookingId': b['id']?.toString() ?? b['bookingNumber']?.toString() ?? '',
             'id': b['bookingNumber'] ?? '#ONW-00000',
             'vendorName': b['vendor']?['businessName'] ?? 'Vendor',
             'category': b['vendor']?['category'] ?? 'General',
@@ -296,6 +301,69 @@ class _BookingsPageState extends State<BookingsPage> {
     );
   }
 
+  Future<void> _confirmCancelBooking(Map<String, dynamic> item) async {
+    final bId = item['bookingId']?.toString() ?? item['id']?.toString() ?? '';
+    final vendorName = item['vendorName'] ?? 'Vendor';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            const Icon(Icons.cancel_outlined, color: Color(0xFFDC2626), size: 24),
+            const SizedBox(width: 8),
+            Text(
+              'Cancel Booking?',
+              style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 17),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to cancel your booking with $vendorName?',
+          style: GoogleFonts.plusJakartaSans(fontSize: 13, color: AppColors.onSurfaceVariant),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Keep Booking',
+              style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, color: AppColors.outline),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Yes, Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      if (bId.isNotEmpty && !bId.startsWith('demo_')) {
+        await _api.cancelBooking(bId);
+      }
+      if (mounted) {
+        context.read<HomeBloc>().add(HomeBookingCancelRequested(bId));
+        _loadBookings();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Booking with $vendorName cancelled.'),
+            backgroundColor: const Color(0xFFDC2626),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildBookingCard(Map<String, dynamic> item, bool isActive) {
     final Color statusColor = item['statusColor'] as Color;
 
@@ -480,6 +548,28 @@ class _BookingsPageState extends State<BookingsPage> {
             children: [
               if (isActive) ...[
                 Expanded(
+                  flex: 2,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _confirmCancelBooking(item),
+                    icon: const Icon(Icons.close_rounded, size: 14, color: Color(0xFFDC2626)),
+                    label: Text(
+                      'Cancel',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFFDC2626),
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFFCA5A5)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 3,
                   child: ElevatedButton.icon(
                     onPressed: () {
                       Navigator.push(
@@ -487,6 +577,7 @@ class _BookingsPageState extends State<BookingsPage> {
                         MaterialPageRoute(
                           builder: (_) => LiveTrackingPage(
                             orderInfo: ActiveOrderInfo(
+                              bookingId: item['bookingId']?.toString() ?? '',
                               vendorName: item['vendorName'],
                               eta: item['eta'],
                               distance: item['distance'],
@@ -496,25 +587,25 @@ class _BookingsPageState extends State<BookingsPage> {
                         ),
                       );
                     },
-                    icon: const Icon(Icons.map_outlined, size: 16),
+                    icon: const Icon(Icons.map_outlined, size: 15),
                     label: Text(
                       'Track Live Route',
                       style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13,
+                        fontSize: 12.5,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 11),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       elevation: 0,
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                OutlinedButton(
+                const SizedBox(width: 6),
+                IconButton(
                   onPressed: () {
                     Navigator.push(
                       context,
@@ -535,18 +626,8 @@ class _BookingsPageState extends State<BookingsPage> {
                       ),
                     );
                   },
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text(
-                    'Vendor Info',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.onSurfaceVariant,
-                    ),
-                  ),
+                  icon: const Icon(Icons.storefront_outlined, color: AppColors.primary),
+                  tooltip: 'Vendor Info',
                 ),
               ] else ...[
                 Expanded(

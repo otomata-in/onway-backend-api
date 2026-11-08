@@ -215,3 +215,41 @@ exports.reorderBooking = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+exports.cancelBooking = async (req, res) => {
+  try {
+    const { profileId } = req.user;
+    const { id } = req.params;
+
+    // Check if booking exists by primary key id or bookingNumber
+    const booking = await prisma.booking.findFirst({
+      where: {
+        OR: [
+          { id, buyerId: profileId },
+          { bookingNumber: id, buyerId: profileId }
+        ]
+      }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    if (booking.status === 'COMPLETED') {
+      return res.status(400).json({ success: false, message: 'Cannot cancel an already completed booking' });
+    }
+
+    const updated = await prisma.booking.update({
+      where: { id: booking.id },
+      data: { status: 'CANCELLED' }
+    });
+
+    res.json({
+      success: true,
+      message: 'Booking cancelled successfully',
+      data: updated
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};

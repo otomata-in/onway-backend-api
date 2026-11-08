@@ -60,3 +60,11 @@ class HomeLocationSelected extends HomeEvent {
   @override
   List<Object?> get props => [latitude, longitude, title, addressLine];
 }
+
+class HomeBookingCancelRequested extends HomeEvent {
+  final String bookingId;
+  const HomeBookingCancelRequested(this.bookingId);
+
+  @override
+  List<Object?> get props => [bookingId];
+}

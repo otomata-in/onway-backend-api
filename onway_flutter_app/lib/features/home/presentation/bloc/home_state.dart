@@ -80,6 +80,7 @@ class CategoryInfo extends Equatable {
 }
 
 class ActiveOrderInfo extends Equatable {
+  final String bookingId;
   final String vendorId;
   final String vendorName;
   final String category;
@@ -93,6 +94,7 @@ class ActiveOrderInfo extends Equatable {
   final double buyerLng;
 
   const ActiveOrderInfo({
+    this.bookingId = '',
     this.vendorId = '',
     required this.vendorName,
     this.category = 'Organic Vegetables',
@@ -108,6 +110,7 @@ class ActiveOrderInfo extends Equatable {
 
   @override
   List<Object?> get props => [
+        bookingId,
         vendorId,
         vendorName,
         category,

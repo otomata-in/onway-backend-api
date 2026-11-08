@@ -13,6 +13,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<HomeVendorToggleFavorite>(_onVendorToggleFavorite);
     on<HomeSearchQueryChanged>(_onSearchQueryChanged);
     on<HomeLocationSelected>(_onLocationSelected);
+    on<HomeBookingCancelRequested>(_onBookingCancelRequested);
   }
 
   /// Emoji mapping for vendor categories
@@ -100,7 +101,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             final v = b['vendor'] ?? {};
             final vCategory = v['category'] ?? 'Organic Vegetables';
             final vName = v['businessName'] ?? v['name'] ?? b['vendorName'] ?? 'Vendor';
+            final bId = b['id']?.toString() ?? b['bookingNumber']?.toString() ?? '';
             activeOrders.add(ActiveOrderInfo(
+              bookingId: bId,
               vendorId: v['id'] ?? b['vendorId'] ?? '',
               vendorName: vName,
               category: vCategory,
@@ -118,8 +121,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       } catch (_) {}
 
       if (activeOrders.isEmpty && vendors.isNotEmpty) {
+        int idx = 1;
         for (final v in vendors.take(2)) {
           activeOrders.add(ActiveOrderInfo(
+            bookingId: 'demo_$idx',
             vendorId: v.id,
             vendorName: v.name,
             category: v.category,
@@ -132,6 +137,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             buyerLat: lat,
             buyerLng: lng,
           ));
+          idx++;
         }
       }
 
@@ -233,6 +239,17 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   void _onSearchQueryChanged(HomeSearchQueryChanged event, Emitter<HomeState> emit) {
     emit(state.copyWith(searchQuery: event.query));
+  }
+
+  Future<void> _onBookingCancelRequested(HomeBookingCancelRequested event, Emitter<HomeState> emit) async {
+    final updated = state.activeOrders.where((o) => o.bookingId != event.bookingId).toList();
+    emit(state.copyWith(activeOrders: updated));
+
+    if (!event.bookingId.startsWith('demo_') && event.bookingId.isNotEmpty) {
+      try {
+        await _api.cancelBooking(event.bookingId);
+      } catch (_) {}
+    }
   }
 
   static const _fallbackCategories = [

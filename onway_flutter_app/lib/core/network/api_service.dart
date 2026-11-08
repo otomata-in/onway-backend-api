@@ -570,6 +570,18 @@ class BuyerApiService {
     }
   }
 
+  Future<Map<String, dynamic>> cancelBooking(String bookingId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/bookings/$bookingId/cancel'),
+        headers: _headers,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
   Future<Map<String, dynamic>> getBookingTracking(String bookingId) async {
     try {
       final response = await http.get(

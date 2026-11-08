@@ -10,6 +10,8 @@ router.get('/active', buyerBookingsController.getActiveBookings);
 router.get('/history', buyerBookingsController.getBookingHistory);
 router.get('/:id', buyerBookingsController.getBookingDetails);
 router.get('/:id/tracking', buyerBookingsController.getBookingTracking);
+router.post('/:id/cancel', buyerBookingsController.cancelBooking);
+router.patch('/:id/cancel', buyerBookingsController.cancelBooking);
 router.post('/:id/reorder', buyerBookingsController.reorderBooking);
 
 module.exports = router;
