@@ -84,7 +84,7 @@ exports.createBooking = async (req, res) => {
 exports.getActiveBookings = async (req, res) => {
   try {
     const { profileId } = req.user;
-    const activeStatuses = ['EN_ROUTE', 'SELLER_NEARBY', 'ACCEPTED', 'PENDING'];
+    const activeStatuses = ['EN_ROUTE', 'SELLER_NEARBY'];
     
     const bookings = await prisma.booking.findMany({
       where: {
