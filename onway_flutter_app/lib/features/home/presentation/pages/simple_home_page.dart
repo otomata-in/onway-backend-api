@@ -8,8 +8,7 @@ import '../bloc/home_bloc.dart';
 import '../bloc/home_event.dart';
 import '../bloc/home_state.dart';
 import '../widgets/active_order_card.dart';
-import 'location_selection_page.dart';
-import 'notifications_page.dart';
+import '../widgets/home_app_bar.dart';
 
 /// Simple Home Page — Designed for everyday, non-tech background buyers.
 /// Clean, card-based, high-contrast, with minimal technical jargon and large tap targets.
@@ -54,24 +53,20 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7FAF7),
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
-          color: AppColors.primary,
-          onRefresh: () async {
-            context.read<HomeBloc>().add(const HomeLoadRequested());
-          },
-          child: CustomScrollView(
-            slivers: [
-              // 1. Simple Top Header
-              SliverToBoxAdapter(
-                child: _buildTopHeader(context, state),
-              ),
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: () async {
+          context.read<HomeBloc>().add(const HomeLoadRequested());
+        },
+        child: CustomScrollView(
+          slivers: [
+            // 1. Home App Bar (Same as Explorer / Advanced Map Screen)
+            const HomeAppBar(),
 
-              // 2. Search & Voice Input Bar
-              SliverToBoxAdapter(
-                child: _buildSearchBar(context),
-              ),
+            // 2. Search & Voice Input Bar
+            SliverToBoxAdapter(
+              child: _buildSearchBar(context),
+            ),
 
               // 3. Active Order (if in progress)
               if (state.activeOrder != null)
@@ -177,137 +172,8 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  /// 1. Top Header: Location Landmark + Live Map Pill + Notification Bell
-  Widget _buildTopHeader(BuildContext context, HomeState state) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      child: Row(
-        children: [
-          // Delivery Location Picker
-          Expanded(
-            child: GestureDetector(
-              onTap: () async {
-                final result = await Navigator.push<Map<String, dynamic>>(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LocationSelectionPage()),
-                );
-                if (result != null && context.mounted) {
-                  final title = result['title'] ?? 'Selected Address';
-                  final subtitle = result['subtitle'] ?? result['addressLine'] ?? '';
-                  final lat = (result['lat'] as num?)?.toDouble() ?? 10.6987;
-                  final lng = (result['lng'] as num?)?.toDouble() ?? 76.0919;
-
-                  context.read<HomeBloc>().add(HomeLocationSelected(
-                    latitude: lat,
-                    longitude: lng,
-                    title: title,
-                    addressLine: subtitle,
-                  ));
-                }
-              },
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.location_on, color: AppColors.primary, size: 20),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                state.selectedAddressTitle.isNotEmpty ? state.selectedAddressTitle : 'Select Location',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.onSurface,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.onSurface),
-                          ],
-                        ),
-                        Text(
-                          state.selectedAddressLine.isNotEmpty ? state.selectedAddressLine : 'Tap to change delivery point',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
-                            color: AppColors.outline,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Live Map Switch Pill
-          GestureDetector(
-            onTap: () => context.read<HomeBloc>().add(const HomeNavIndexChanged(1)),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              margin: const EdgeInsets.only(left: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.map_rounded, size: 16, color: AppColors.primary),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Live Map',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Notifications Bell
-          IconButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const NotificationsPage()),
-              );
-            },
-            icon: const Icon(Icons.notifications_none_rounded, color: AppColors.onSurface),
-          ),
-        ],
-      ),
-    );
-  }
+      );
+    }
 
   /// 2. Search & Voice Input Bar
   Widget _buildSearchBar(BuildContext context) {
