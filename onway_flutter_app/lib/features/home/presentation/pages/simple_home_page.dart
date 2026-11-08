@@ -9,6 +9,7 @@ import '../bloc/home_event.dart';
 import '../bloc/home_state.dart';
 import '../widgets/active_order_card.dart';
 import '../widgets/home_app_bar.dart';
+import '../widgets/near_you_now_carousel.dart';
 
 /// Simple Home Page — Designed for everyday, non-tech background buyers.
 /// Clean, card-based, high-contrast, with minimal technical jargon and large tap targets.
@@ -48,8 +49,7 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
-    final liveVendors = state.vendors.where((v) => v.isLive).toList();
-    final spotlightVendor = liveVendors.isNotEmpty ? liveVendors.first : (state.vendors.isNotEmpty ? state.vendors.first : null);
+    final nearVendors = state.nearYouNowVendors;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7FAF7),
@@ -86,10 +86,16 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
                   ),
                 ),
 
-              // 4. Hero Live Spotlight Banner ("Near You Now")
-              if (spotlightVendor != null)
+              // 4. Sellers Near You Now (< 500m) Animated Auto-Sliding Carousel Stack
+              if (nearVendors.isNotEmpty)
                 SliverToBoxAdapter(
-                  child: _buildHeroSpotlight(context, spotlightVendor),
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 4, bottom: 6),
+                    child: NearYouNowCarousel(
+                      vendors: nearVendors,
+                      selectedAddress: state.selectedAddressTitle,
+                    ),
+                  ),
                 ),
 
               // 5. Visual Daily Essentials Categories
@@ -275,169 +281,7 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
     );
   }
 
-  /// 3. Hero Spotlight Banner ("Coming to You Right Now")
-  Widget _buildHeroSpotlight(BuildContext context, VendorInfo vendor) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF0F5132), Color(0xFF198754)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF198754).withValues(alpha: 0.3),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                // Live Pulse Dot
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF75F8A1),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'NEAR YOU NOW',
-                        style: GoogleFonts.plusJakartaSans(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${vendor.distance} · ${vendor.eta}',
-                    style: GoogleFonts.plusJakartaSans(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Text(
-                  vendor.emoji,
-                  style: const TextStyle(fontSize: 34),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        vendor.name,
-                        style: GoogleFonts.plusJakartaSans(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        vendor.subtitle,
-                        style: GoogleFonts.plusJakartaSans(
-                          color: Colors.white.withValues(alpha: 0.85),
-                          fontSize: 13,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                // 1-Tap Request Stop Button
-                Expanded(
-                  flex: 3,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      _showRequestStopDialog(context, vendor);
-                    },
-                    icon: const Icon(Icons.front_hand_rounded, size: 18),
-                    label: Text(
-                      'Request Stop Here',
-                      style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF0F5132),
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                // View Items button
-                Expanded(
-                  flex: 2,
-                  child: OutlinedButton(
-                    onPressed: () {
-                      context.push('/retail-vendor', extra: vendor);
-                    },
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Colors.white, width: 1.5),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: Text(
-                      'View Store',
-                      style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// 4. Visual Category Grid (Big Touch Targets)
+  /// 3. Visual Category Grid (Big Touch Targets)
   Widget _buildVisualCategoryGrid(BuildContext context, HomeState state) {
     final categories = [
       {'name': 'Fish', 'local': 'പച്ചമീൻ', 'emoji': '🐟', 'color': const Color(0xFFE0F2FE)},
@@ -930,88 +774,6 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
           ],
         ),
       ),
-    );
-  }
-
-  void _showRequestStopDialog(BuildContext context, VendorInfo vendor) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                '✋ Request Stop at Your Gate',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.onSurface,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Alert ${vendor.name} to halt near ${widget.state.selectedAddressTitle}?',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  color: AppColors.outline,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Stop requested! ${vendor.name} has been notified.'),
-                            backgroundColor: const Color(0xFF198754),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF198754),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text('Confirm Stop'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

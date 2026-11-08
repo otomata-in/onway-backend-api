@@ -11,6 +11,7 @@ class VendorInfo extends Equatable {
   final double rating;
   final String eta;
   final String distance;
+  final double distanceMeters;
   final bool isLive;
   final String category;
   final bool isFavorite;
@@ -26,6 +27,7 @@ class VendorInfo extends Equatable {
     required this.rating,
     required this.eta,
     required this.distance,
+    this.distanceMeters = 300.0,
     required this.isLive,
     required this.category,
     this.isFavorite = false,
@@ -42,6 +44,7 @@ class VendorInfo extends Equatable {
     double? rating,
     String? eta,
     String? distance,
+    double? distanceMeters,
     bool? isLive,
     String? category,
     bool? isFavorite,
@@ -57,6 +60,7 @@ class VendorInfo extends Equatable {
       rating: rating ?? this.rating,
       eta: eta ?? this.eta,
       distance: distance ?? this.distance,
+      distanceMeters: distanceMeters ?? this.distanceMeters,
       isLive: isLive ?? this.isLive,
       category: category ?? this.category,
       isFavorite: isFavorite ?? this.isFavorite,
@@ -66,7 +70,7 @@ class VendorInfo extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, name, subtitle, emoji, imagePath, rating, eta, distance, isLive, category, isFavorite, latitude, longitude];
+  List<Object?> get props => [id, name, subtitle, emoji, imagePath, rating, eta, distance, distanceMeters, isLive, category, isFavorite, latitude, longitude];
 }
 
 class CategoryInfo extends Equatable {
@@ -168,6 +172,15 @@ class HomeState extends Equatable {
           v.category.toLowerCase().contains(query);
       return matchesCategory && matchesQuery;
     }).toList();
+  }
+
+  /// Sellers near the user within 500m (or all live vendors for dev testing)
+  List<VendorInfo> get nearYouNowVendors {
+    final within500m = vendors.where((v) => v.isLive && v.distanceMeters <= 550).toList();
+    if (within500m.isNotEmpty) return within500m;
+    final live = vendors.where((v) => v.isLive).toList();
+    if (live.isNotEmpty) return live;
+    return vendors;
   }
 
   HomeState copyWith({
