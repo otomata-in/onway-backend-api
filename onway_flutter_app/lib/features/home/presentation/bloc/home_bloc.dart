@@ -93,10 +93,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       List<VendorInfo> vendors = await _fetchVendorsForLocation(lat, lng);
 
       // ─── Load Active Bookings ────────────────────────────────
-      List<ActiveOrderInfo> activeOrders = [];
+      List<ActiveOrderInfo> activeOrders = List.from(state.activeOrders);
       try {
         final bookingResponse = await _api.getActiveBookings();
         if (bookingResponse['success'] == true && bookingResponse['data'] != null) {
+          activeOrders.clear();
           final bookingList = bookingResponse['data'] as List;
           for (final b in bookingList) {
             final v = b['vendor'] ?? {};

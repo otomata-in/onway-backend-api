@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
-import '../../../home/presentation/bloc/home_bloc.dart';
-import '../../../home/presentation/bloc/home_event.dart';
 import '../../../home/presentation/bloc/home_state.dart';
 import 'live_tracking_page.dart';
 
@@ -166,7 +163,6 @@ class BookingSuccessPage extends StatelessWidget {
                 width: double.infinity,
                 child: OutlinedButton(
                   onPressed: () {
-                    context.read<HomeBloc>().add(const HomeLoadRequested());
                     context.go('/home');
                   },
                   style: OutlinedButton.styleFrom(

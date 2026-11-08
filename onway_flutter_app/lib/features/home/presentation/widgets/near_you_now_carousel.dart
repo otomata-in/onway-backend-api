@@ -381,7 +381,6 @@ class _NearYouNowCarouselState extends State<NearYouNowCarousel> {
                             );
 
                             context.read<HomeBloc>().add(HomeBookingCreated(orderInfo));
-                            context.read<HomeBloc>().add(const HomeLoadRequested());
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text('Stop requested! ${vendor.name} has been notified to halt.'),

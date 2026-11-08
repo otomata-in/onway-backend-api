@@ -724,7 +724,6 @@ class _BookingPageState extends State<BookingPage> {
                             );
 
                             homeBloc.add(HomeBookingCreated(orderInfo));
-                            homeBloc.add(const HomeLoadRequested());
 
                             nav.pushReplacement(
                               MaterialPageRoute(
