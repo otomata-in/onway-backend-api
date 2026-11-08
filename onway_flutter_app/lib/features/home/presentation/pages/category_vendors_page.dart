@@ -556,3 +556,4 @@ class _CategoryVendorsPageState extends State<CategoryVendorsPage> {
     );
   }
 }
+
