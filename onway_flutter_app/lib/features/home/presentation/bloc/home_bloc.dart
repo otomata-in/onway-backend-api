@@ -91,54 +91,55 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       List<VendorInfo> vendors = await _fetchVendorsForLocation(lat, lng);
 
       // ─── Load Active Bookings ────────────────────────────────
-      ActiveOrderInfo? activeOrder;
+      List<ActiveOrderInfo> activeOrders = [];
       try {
         final bookingResponse = await _api.getActiveBookings();
         if (bookingResponse['success'] == true && bookingResponse['data'] != null) {
           final bookingList = bookingResponse['data'] as List;
-          if (bookingList.isNotEmpty) {
-            final b = bookingList.first;
+          for (final b in bookingList) {
             final v = b['vendor'] ?? {};
             final vCategory = v['category'] ?? 'Organic Vegetables';
-            activeOrder = ActiveOrderInfo(
+            final vName = v['businessName'] ?? v['name'] ?? b['vendorName'] ?? 'Vendor';
+            activeOrders.add(ActiveOrderInfo(
               vendorId: v['id'] ?? b['vendorId'] ?? '',
-              vendorName: v['businessName'] ?? 'Mattom Organic Veggies',
+              vendorName: vName,
               category: vCategory,
               emoji: _emojiForCategory(vCategory),
-              eta: '${b['eta'] ?? 3} mins',
-              distance: '${b['distance'] ?? 0.2} km',
-              progress: (b['progress'] as num?)?.toDouble() ?? 0.75,
+              eta: '${b['eta'] ?? 10} mins',
+              distance: '${b['distance'] ?? 1.2} km',
+              progress: (b['progress'] as num?)?.toDouble() ?? 0.70,
               vendorLat: (v['currentLatitude'] as num?)?.toDouble() ?? 10.5935,
               vendorLng: (v['currentLongitude'] as num?)?.toDouble() ?? 76.0808,
               buyerLat: lat,
               buyerLng: lng,
-            );
+            ));
           }
         }
       } catch (_) {}
 
-      if (activeOrder == null && vendors.isNotEmpty) {
-        final v = vendors.first;
-        activeOrder = ActiveOrderInfo(
-          vendorId: v.id,
-          vendorName: v.name,
-          category: v.category,
-          emoji: v.emoji,
-          eta: v.eta,
-          distance: v.distance,
-          progress: 0.75,
-          vendorLat: v.latitude,
-          vendorLng: v.longitude,
-          buyerLat: lat,
-          buyerLng: lng,
-        );
+      if (activeOrders.isEmpty && vendors.isNotEmpty) {
+        for (final v in vendors.take(2)) {
+          activeOrders.add(ActiveOrderInfo(
+            vendorId: v.id,
+            vendorName: v.name,
+            category: v.category,
+            emoji: v.emoji,
+            eta: v.eta,
+            distance: v.distance,
+            progress: 0.75,
+            vendorLat: v.latitude,
+            vendorLng: v.longitude,
+            buyerLat: lat,
+            buyerLng: lng,
+          ));
+        }
       }
 
       emit(state.copyWith(
         status: HomeStatus.loaded,
         categories: categories,
         vendors: vendors,
-        activeOrder: activeOrder,
+        activeOrders: activeOrders,
         userLatitude: lat,
         userLongitude: lng,
         isLocationSelected: isLocSelected,

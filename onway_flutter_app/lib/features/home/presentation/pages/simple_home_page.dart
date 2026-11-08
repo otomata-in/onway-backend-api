@@ -68,12 +68,21 @@ class _SimpleHomePageState extends State<SimpleHomePage> {
               child: _buildSearchBar(context),
             ),
 
-              // 3. Active Order (if in progress)
-              if (state.activeOrder != null)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
-                    child: ActiveOrderCard(order: state.activeOrder!),
+              // 3. Booked Vendors (Vertically stacked in new rows)
+              if (state.activeOrders.isNotEmpty)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final order = state.activeOrders[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: ActiveOrderCard(order: order),
+                        );
+                      },
+                      childCount: state.activeOrders.length,
+                    ),
                   ),
                 ),
 

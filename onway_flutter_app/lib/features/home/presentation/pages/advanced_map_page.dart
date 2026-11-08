@@ -57,11 +57,20 @@ class _AdvancedMapPageState extends State<AdvancedMapPage> {
     return CustomScrollView(
       slivers: [
         const HomeAppBar(),
-        if (state.activeOrder != null)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: ActiveOrderCard(order: state.activeOrder!),
+        if (state.activeOrders.isNotEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final order = state.activeOrders[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: ActiveOrderCard(order: order),
+                  );
+                },
+                childCount: state.activeOrders.length,
+              ),
             ),
           ),
         SliverToBoxAdapter(
@@ -337,3 +346,4 @@ class _AdvancedMapPageState extends State<AdvancedMapPage> {
     );
   }
 }
+

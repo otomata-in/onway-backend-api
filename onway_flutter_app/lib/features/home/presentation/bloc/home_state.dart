@@ -129,7 +129,8 @@ class HomeState extends Equatable {
   final int navIndex;
   final List<CategoryInfo> categories;
   final List<VendorInfo> vendors;
-  final ActiveOrderInfo? activeOrder;
+  final List<ActiveOrderInfo> activeOrders;
+  ActiveOrderInfo? get activeOrder => activeOrders.isNotEmpty ? activeOrders.first : null;
   final bool isLocationSelected;
   final double userLatitude;
   final double userLongitude;
@@ -144,7 +145,8 @@ class HomeState extends Equatable {
     this.navIndex = 0,
     this.categories = const [],
     this.vendors = const [],
-    this.activeOrder,
+    this.activeOrders = const [],
+    ActiveOrderInfo? activeOrder,
     this.isLocationSelected = true,
     this.userLatitude = 10.698731,
     this.userLongitude = 76.091942,
@@ -172,6 +174,7 @@ class HomeState extends Equatable {
     int? navIndex,
     List<CategoryInfo>? categories,
     List<VendorInfo>? vendors,
+    List<ActiveOrderInfo>? activeOrders,
     ActiveOrderInfo? activeOrder,
     bool? isLocationSelected,
     double? userLatitude,
@@ -180,6 +183,11 @@ class HomeState extends Equatable {
     String? selectedAddressLine,
     String? errorMessage,
   }) {
+    List<ActiveOrderInfo> resolvedOrders = activeOrders ?? this.activeOrders;
+    if (activeOrders == null && activeOrder != null) {
+      resolvedOrders = [activeOrder];
+    }
+
     return HomeState(
       status: status ?? this.status,
       selectedCategory: selectedCategory ?? this.selectedCategory,
@@ -187,7 +195,7 @@ class HomeState extends Equatable {
       navIndex: navIndex ?? this.navIndex,
       categories: categories ?? this.categories,
       vendors: vendors ?? this.vendors,
-      activeOrder: activeOrder ?? this.activeOrder,
+      activeOrders: resolvedOrders,
       isLocationSelected: isLocationSelected ?? this.isLocationSelected,
       userLatitude: userLatitude ?? this.userLatitude,
       userLongitude: userLongitude ?? this.userLongitude,
@@ -205,7 +213,7 @@ class HomeState extends Equatable {
         navIndex,
         categories,
         vendors,
-        activeOrder,
+        activeOrders,
         isLocationSelected,
         userLatitude,
         userLongitude,
