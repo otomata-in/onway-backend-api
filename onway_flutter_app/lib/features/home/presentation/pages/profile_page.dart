@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/network/api_service.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/widgets/standard_top_bar.dart';
-import '../bloc/home_bloc.dart';
-import '../bloc/home_event.dart';
+import '../widgets/home_app_bar.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -353,17 +350,7 @@ class _ProfilePageState extends State<ProfilePage> {
           ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
           : CustomScrollView(
               slivers: [
-                StandardTopBar(
-                  title: 'Profile',
-                  subtitle: 'Manage your account details',
-                  icon: Icons.person_outline,
-                  onBackTap: () {
-                    context.read<HomeBloc>().add(const HomeNavIndexChanged(0));
-                  },
-                  onIconTap: () {
-                    _showEditProfileBottomSheet();
-                  },
-                ),
+                const HomeAppBar(),
                 
                 SliverList(
                   delegate: SliverChildListDelegate([
