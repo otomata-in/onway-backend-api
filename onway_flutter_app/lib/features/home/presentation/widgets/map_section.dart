@@ -11,6 +11,7 @@ class MapSection extends StatefulWidget {
   final LatLng userLocation;
   final bool isLocationSelected;
   final VoidCallback? onSelectLocationTap;
+  final double height;
 
   const MapSection({
     super.key,
@@ -18,6 +19,7 @@ class MapSection extends StatefulWidget {
     this.userLocation = const LatLng(9.9790, 76.2760),
     this.isLocationSelected = false,
     this.onSelectLocationTap,
+    this.height = 416, // 30% increase from original 320 (320 * 1.30 = 416)
   });
 
   @override
@@ -57,6 +59,7 @@ class _MapSectionState extends State<MapSection> {
   // Original Exact Static Map (Default Launch view)
   // ═══════════════════════════════════════════════════════════════
   Widget _buildOriginalStaticMap() {
+    final mapHeight = widget.height;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Container(
@@ -76,7 +79,7 @@ class _MapSectionState extends State<MapSection> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(32),
           child: SizedBox(
-            height: 320,
+            height: mapHeight,
             child: Stack(
               children: [
                 // Map background image
@@ -121,7 +124,7 @@ class _MapSectionState extends State<MapSection> {
 
                 // Ocean Catch — top:15%, left:18%
                 Positioned(
-                  top: 320 * 0.15,
+                  top: mapHeight * 0.15,
                   left: 390 * 0.18 - 30,
                   child: GestureDetector(
                     onTap: () {
@@ -145,7 +148,7 @@ class _MapSectionState extends State<MapSection> {
 
                 // Guruvayur Fruits — top:20%, left:75%
                 Positioned(
-                  top: 320 * 0.20,
+                  top: mapHeight * 0.20,
                   left: 390 * 0.75 - 30,
                   child: GestureDetector(
                     onTap: () {
@@ -168,7 +171,7 @@ class _MapSectionState extends State<MapSection> {
 
                 // Spice Route — top:25%, left:55%
                 Positioned(
-                  top: 320 * 0.25,
+                  top: mapHeight * 0.25,
                   left: 390 * 0.55 - 30,
                   child: _buildVendorMarker(
                     '🌶️', 'Spice Route', '2km away',
@@ -178,7 +181,7 @@ class _MapSectionState extends State<MapSection> {
 
                 // Nutts Corner — top:5%, left:40%
                 Positioned(
-                  top: 320 * 0.05,
+                  top: mapHeight * 0.05,
                   left: 390 * 0.40 - 30,
                   child: _buildVendorMarker(
                     '🍕', 'Nutts Corner', '10 mins away',
@@ -188,7 +191,7 @@ class _MapSectionState extends State<MapSection> {
 
                 // Fruit Basket — top:46%, right:4%
                 Positioned(
-                  top: 320 * 0.46,
+                  top: mapHeight * 0.46,
                   right: 390 * 0.04,
                   child: _buildVendorMarker(
                     '🍎', 'Fruit Basket', '4 mins away',
@@ -198,7 +201,7 @@ class _MapSectionState extends State<MapSection> {
 
                 // Dairy Fresh — top:78.5%, right:10%
                 Positioned(
-                  top: 320 * 0.785,
+                  top: mapHeight * 0.785,
                   right: 390 * 0.10,
                   child: _buildVendorMarker(
                     '🥛', 'Dairy Fresh', '600m away',
@@ -208,7 +211,7 @@ class _MapSectionState extends State<MapSection> {
 
                 // The Deli Van — top:68%, left:34%
                 Positioned(
-                  top: 320 * 0.68,
+                  top: mapHeight * 0.68,
                   left: 390 * 0.34 - 30,
                   child: _buildVendorMarker(
                     '🧀', 'The Deli Van', '6 mins away',
@@ -218,7 +221,7 @@ class _MapSectionState extends State<MapSection> {
 
                 // Ice Cream Parlor — bottom:28%, left:2.5%
                 Positioned(
-                  bottom: 320 * 0.28,
+                  bottom: mapHeight * 0.28,
                   left: 390 * 0.025,
                   child: _buildVendorMarker(
                     '🍦', 'Ice Cream Parlor', '1.2km away',
@@ -388,7 +391,7 @@ class _MapSectionState extends State<MapSection> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(32),
           child: SizedBox(
-            height: 320,
+            height: widget.height,
             child: Stack(
               children: [
                 FlutterMap(
