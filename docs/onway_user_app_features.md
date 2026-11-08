@@ -24,18 +24,21 @@ flowchart TD
     B -->|Send OTP| D[OTP Verification Screen]
     D -->|Verify 12345| C
 
-    subgraph Main App Shell [Home Bottom Navigation]
-        C[Home Feed & Live Map]
-        E[Saved Vendors - Tab 1]
-        F[Scan QR - Tab 2]
-        G[Bookings / Orders - Tab 3]
-        H[Profile & Settings - Tab 4]
+    subgraph Main App Shell [6-Tab Bottom Navigation]
+        C[Simple Home Feed - Tab 0]
+        C2[Advanced Live Map - Tab 1]
+        E[Saved Vendors - Tab 2]
+        F[Scan QR - Tab 3]
+        G[Bookings / Orders - Tab 4]
+        H[Profile & Settings - Tab 5]
     end
 
     C -->|Select Category / Vendor| I[Retail Vendor Store Page]
+    C -->|Tap Live Map Button| C2
     C -->|Change Address| J[Location & Address Selection]
     C -->|Tap Notification Bell| K[Notifications Page]
     C -->|Active Order Banner| L[Live Vehicle Tracking Page]
+    C2 -->|Tap Map Marker / Vendor Card| I
 
     I -->|Add Items to Cart & Book| M[Order Token Booking Page]
     M -->|Confirm Booking| N[Booking Success Page]
@@ -101,9 +104,71 @@ flowchart TD
 
 ---
 
-### 4. Home Page & Live Map Feed (Bottom Nav Tab 0)
-* **File**: `lib/features/home/presentation/pages/home_page.dart`
-* **Route**: `/home` (`home`)
+### 4. Simple Home Page (Bottom Nav Tab 0)
+* **File**: `lib/features/home/presentation/pages/simple_home_page.dart`
+* **Route**: `/home` (Default Tab 0)
+* **BLoC**: `HomeBloc`, `HomeEvent`, `HomeState`
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  📍 Perumbilavu Junction... ▼   [🗺️ Live Map]   🔔 (2)   │  <- Simple Top Bar
+├──────────────────────────────────────────────────────────┤
+│  🔍 Search fish, veggies, fruits, bakery...         🎙️  │  <- Search & Voice Bar
+├──────────────────────────────────────────────────────────┤
+│  🟢 NEAR YOU NOW                           500m · 8 mins │  <- Hero Live Spotlight
+│  🐟 Murali Fresh Fish Van                                │
+│  [ ✋ Request Stop Here ]         [ View Store ]         │
+├──────────────────────────────────────────────────────────┤
+│  WHAT DO YOU NEED TODAY?                                 │  <- Visual Category Grid
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐      │
+│  │ 🐟 Fish     │ │ 🥬 Veggies   │ │ 🍎 Fruits    │      │
+│  │   പച്ചമീൻ    │ │   പച്ചക്കറി  │ │   പഴങ്ങൾ   │      │
+│  └──────────────┘ └──────────────┘ └──────────────┘      │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐      │
+│  │ 🍞 Bakery   │ │ 🥛 Dairy     │ │ 🛍️ All Items │      │
+│  │   ബേക്കറി    │ │   പാൽ        │ │   എല്ലാം      │      │
+│  └──────────────┘ └──────────────┘ └──────────────┘      │
+├──────────────────────────────────────────────────────────┤
+│  🕒 TODAY'S VAN SCHEDULE (Perumbilavu Route)            │  <- Schedule Timeline
+│  ✅ 08:00 AM – 10:00 AM : Milk & Bakery (Passed)         │
+│  🟢 11:00 AM – 01:30 PM : Fresh Fish Van (On The Road)   │
+│  🔵 04:30 PM – 07:00 PM : Evening Veggies & Fruits       │
+├──────────────────────────────────────────────────────────┤
+│  SELLERS NEAR YOU                     [ View on Map > ]  │
+│  ┌──────────────────────────────────────────────────────┐│
+│  │ 🥬 Perumbilavu Organic Veggies          ★ 4.9 · 1.2km││
+│  │    [ 📞 Call Driver ]      [ View Store & Items ]    ││
+│  └──────────────────────────────────────────────────────┘│
+└──────────────────────────────────────────────────────────┘
+```
+
+#### Key Components & Functionalities:
+1. **Simplified Top Bar**:
+   - Location chip showing delivery landmark (`selectedAddressTitle`).
+   - Quick one-tap switch button **`[🗺️ Live Map]`** that jumps directly to Tab 1.
+   - Notification bell icon.
+2. **Search with Voice Assistance**:
+   - High-contrast search input with prominent mic button for non-tech / regional language users.
+3. **Hero Live Spotlight ("Near You Now")**:
+   - Prominently highlights the nearest active roving vendor with live pulse animation.
+   - 1-Tap **"✋ Request Stop Here"** action: notifies the driver without needing map navigation.
+   - **"View Store"** shortcut to jump straight into product ordering.
+4. **Visual Bilingual Category Grid**:
+   - Large touch-friendly cards with real emojis and Malayalam + English subtitles.
+   - Instant filtering of nearby sellers with one tap.
+5. **Today's Van Schedule Timeline**:
+   - Morning, Noon, and Evening roving time windows with live status (`Completed`, `On The Road Now`, `Upcoming`).
+6. **Non-Tech Friendly Seller Cards**:
+   - Direct **"Call"** button to phone the driver directly.
+   - Big bold titles, distance in minutes, and store view button.
+7. **Customer Support & Assistance Banner**:
+   - Direct helpline and WhatsApp ordering assistance for seniors and first-time users.
+
+---
+
+### 5. Advanced Live Map Page (Bottom Nav Tab 1)
+* **File**: `lib/features/home/presentation/pages/advanced_map_page.dart`
+* **Route**: `/home` (Tab Index 1)
 * **BLoC**: `HomeBloc`, `HomeEvent`, `HomeState`
 
 ```
@@ -130,14 +195,15 @@ flowchart TD
 
 #### Key Components & Functionalities:
 1. **Home App Bar (`home_app_bar.dart`)**:
-   * Displays the current active delivery location address.
-   * Tapping the address opens the **Location Selection Sheet** (`location_selection_page.dart`).
-   * Notification bell icon with dynamic unread count badge; opens `notifications_page.dart`.
+   - Displays current address landmark with bottom sheet address picker.
 2. **Interactive Live Map Section (`map_section.dart`)**:
-   * OpenStreetMap rendered using `flutter_map`.
-   * User's current location pin (GPS or chosen saved address).
-   * Live vendor markers with vehicle icons and category color badges.
-   * Tapping any vendor vehicle marker on the map opens a preview bottom sheet with distance and ETA.
+   - OpenStreetMap rendered using `flutter_map` + `latlong2`.
+   - Real-time GPS coordinates of roving delivery vehicles with customized vehicle pins.
+   - Polyline rendering of active vendor travel routes and buyer waypoints.
+3. **Category Filter Chips**:
+   - Horizontal scrolling pills to filter map pins and vendor cards dynamically.
+4. **Detailed Vendor Discovery Cards**:
+   - Displays closing time, operational route names, ratings, and booking shortcuts.
 3. **Active Token / Order Banner (`active_order_card.dart`)**:
    * Visible only when the buyer has an active order token (`EN_ROUTE` or `SELLER_NEARBY`).
    * Displays Token ID (`#TK-108`), Vendor Name, Item count, and Live ETA countdown.
@@ -151,11 +217,11 @@ flowchart TD
    * Bookmark heart icon to toggle favorite status (`POST /api/v1/buyer/favorites/:id`).
    * Direct action button: "View Store" (navigates to `retail_vendor_page.dart`).
 6. **Floating Bottom Navigation Bar (`bottom_nav_bar.dart`)**:
-   * 5 navigation tabs: **Home**, **Saved**, **QR Scan**, **Bookings**, **Profile**.
+   * 6 navigation tabs: **Home** (Tab 0), **Live Map** (Tab 1), **Saved** (Tab 2), **Scan QR** (Tab 3), **Bookings** (Tab 4), **Profile** (Tab 5).
 
 ---
 
-### 5. Retail Vendor Store & Inventory Page
+### 6. Retail Vendor Store & Inventory Page
 * **File**: `lib/features/vendor_details/presentation/pages/retail_vendor_page.dart`
 * **Route**: `/retail-vendor` (pushed with `VendorInfo` argument)
 * **BLoC**: `VendorDetailsBloc`, `VendorDetailsEvent`, `VendorDetailsState`
@@ -176,7 +242,7 @@ flowchart TD
 
 ---
 
-### 6. Order Token Booking Page
+### 7. Order Token Booking Page
 * **File**: `lib/features/vendor_details/presentation/pages/booking_page.dart`
 
 #### Key Functionalities:
@@ -194,7 +260,7 @@ flowchart TD
 
 ---
 
-### 7. Booking Success Screen
+### 8. Booking Success Screen
 * **File**: `lib/features/vendor_details/presentation/pages/booking_success_page.dart`
 
 #### Key Functionalities:
@@ -209,7 +275,7 @@ flowchart TD
 
 ---
 
-### 8. Live Vehicle Tracking Page
+### 9. Live Vehicle Tracking Page
 * **File**: `lib/features/vendor_details/presentation/pages/live_tracking_page.dart`
 * **Route**: `/live-tracking` (pushed with `ActiveOrderInfo`)
 
@@ -232,7 +298,31 @@ flowchart TD
 
 ---
 
-### 9. Bookings & Order History (Bottom Nav Tab 3)
+### 10. Saved / Favorite Vendors (Bottom Nav Tab 2)
+* **File**: `lib/features/home/presentation/pages/saved_vendors_page.dart`
+
+#### Key Functionalities:
+1. **Personalized Vendor Roster**:
+   * Quick access to bookmarked roving vendors (fishmonger, organic vegetables, dairy cart).
+2. **Live Route Status Pill**:
+   * Dynamic indicator showing if a favorite vendor is currently on the road broadcasting GPS or offline.
+3. **Direct Quick-Order & Stop Request**:
+   * Instant button to open their catalog or call them.
+
+---
+
+### 11. Scan QR Code (Bottom Nav Tab 3)
+* **File**: `lib/features/vendor_details/presentation/pages/scan_vendor_page.dart`
+
+#### Key Functionalities:
+1. **Physical Van QR Scanner**:
+   * When a buyer sees a vendor's delivery van on the road or in their neighborhood, scanning the vehicle's printed QR code instantly pulls up their live digital inventory.
+2. **Camera Viewfinder**:
+   * Real-time camera viewfinder with flashlight toggle.
+
+---
+
+### 12. Bookings & Order History (Bottom Nav Tab 4)
 * **File**: `lib/features/orders/presentation/pages/bookings_page.dart`
 
 #### Key Functionalities:
@@ -248,10 +338,7 @@ flowchart TD
 
 ---
 
-### 10. Saved / Favorite Vendors (Bottom Nav Tab 1)
-* **File**: `lib/features/home/presentation/pages/saved_vendors_page.dart`
-
-#### Key Functionalities:
+### 13. Profile & Settings (Bottom Nav Tab 5)
 1. **Bookmarked Sellers List**:
    * Displays all vendors bookmarked by the user (`isFavorite = true`).
 2. **Route Schedule Indicator**:
@@ -355,3 +442,4 @@ flowchart TD
 | **Notifications** | `GET` | `/api/v1/user/notifications` | Fetches proximity & order notifications |
 | **User Profile** | `GET`, `PUT` | `/api/v1/user/profile` | Fetches and updates user profile data |
 | **Live Socket** | `WSS` | `wss://.../socket.io` | Real-time vehicle GPS & proximity alerts |
+
