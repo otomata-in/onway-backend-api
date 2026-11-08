@@ -101,3 +101,4 @@ neon sql
 SELECT count(*) FROM users;
 ```
 Or view the database visual explorer in the [Neon Console](https://console.neon.tech/).
+

@@ -74,3 +74,4 @@ flutter build apk --debug  # or --release
 The APK output is generated at:
 `build/app/outputs/flutter-apk/app-debug.apk` (or `app-release.apk`).
 Share this APK directly with your remote testers via Google Drive, WhatsApp, or Slack!
+
