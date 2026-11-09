@@ -9,3 +9,5 @@
 5. app logo
 
 6. explore page : the map hight can be increated to 30% more of its current hight
+
+7. daily trackings page contains the daily trackings listing component right? the text size and component side can be reduced, nov it seems that the component is big, ve have to scale dovn its size, the 4 buttons in that component can be in a same rov insted of 2 rovs so that the button size and the text size can be adjusted accordngly there

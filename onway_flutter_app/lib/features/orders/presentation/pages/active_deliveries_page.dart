@@ -210,7 +210,7 @@ class _ActiveDeliveriesPageState extends State<ActiveDeliveriesPage> {
                     final item = _dailyTrackings[index];
                     return Padding(
                       key: ValueKey(item['id']),
-                      padding: const EdgeInsets.only(bottom: 24),
+                      padding: const EdgeInsets.only(bottom: 12),
                       child: DeliveryTrackingCard(
                         vendorName: item['vendorName'],
                         category: item['category'],
