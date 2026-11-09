@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/models/teritory_models.dart';
 import '../../../core/services/teritory_data_service.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../../core/widgets/teritory_logo.dart';
 import '../../flag/presentation/drop_flag_modal.dart';
 import '../../flag/presentation/flag_detail_sheet.dart';
 
@@ -194,27 +195,10 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                         ),
                         child: Row(
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(7),
-                              decoration: const BoxDecoration(
-                                color: TeritoryColors.primary,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.flag_rounded,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'TERITORY',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1.2,
-                                color: TeritoryColors.textPrimary,
-                              ),
+                            const TeritoryLogo(
+                              size: 34,
+                              showText: true,
+                              subtitle: 'FOOTPRINTS',
                             ),
                             const Spacer(),
                             Container(
