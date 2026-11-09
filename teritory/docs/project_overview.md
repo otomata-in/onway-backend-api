@@ -60,3 +60,4 @@ Travelers earn badges, passport stamps, nomad rankings (from *Local Scout* to *G
    - Travel tribes, expedition planning, group flags.
    - Offline flag caching for remote backcountry travels.
    - NFC/Bluetooth proximity passport stamping.
+

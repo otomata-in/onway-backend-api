@@ -72,3 +72,4 @@ This document outlines high-impact, visionary features designed to establish **T
 ### 🎒 4.2 Sustainable & Leave-No-Trace Advocacy
 - Eco-Badges for verified clean trail cleanups and train/cycle expeditions.
 - Local community support badges when supporting indigenous guides and artisan shops.
+

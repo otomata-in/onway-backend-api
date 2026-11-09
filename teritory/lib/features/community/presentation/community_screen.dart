@@ -172,7 +172,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     scrollDirection: Axis.horizontal,
                     itemCount: tribes.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    separatorBuilder: (_, _) => const SizedBox(width: 12),
                     itemBuilder: (ctx, index) {
                       final tribe = tribes[index];
                       final isJoined = _joinedTribes.contains(tribe.id);
@@ -315,7 +315,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   physics: const NeverScrollableScrollPhysics(),
                   shrinkWrap: true,
                   itemCount: friendFlags.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 14),
+                  separatorBuilder: (_, _) => const SizedBox(height: 14),
                   itemBuilder: (ctx, index) {
                     final fFlag = friendFlags[index];
 

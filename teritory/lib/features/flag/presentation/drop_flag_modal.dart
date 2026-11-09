@@ -243,7 +243,7 @@ class _DropFlagModalState extends State<DropFlagModal> {
                   ),
                   Switch.adaptive(
                     value: _isMajorFlag,
-                    activeColor: TeritoryColors.majorGoldDark,
+                    activeThumbColor: TeritoryColors.majorGoldDark,
                     activeTrackColor: TeritoryColors.majorGold,
                     onChanged: (val) {
                       setState(() {

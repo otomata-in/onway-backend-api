@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
-import '../../../core/models/teritory_models.dart';
 import '../../../core/services/teritory_data_service.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../../flag/presentation/flag_detail_sheet.dart';
@@ -494,7 +493,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     scrollDirection: Axis.horizontal,
                     itemCount: user.passportStamps.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    separatorBuilder: (_, _) => const SizedBox(width: 10),
                     itemBuilder: (ctx, index) {
                       final stamp = user.passportStamps[index];
                       return Container(
@@ -594,7 +593,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   physics: const NeverScrollableScrollPhysics(),
                   shrinkWrap: true,
                   itemCount: displayedFlags.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (ctx, index) {
                     final flag = displayedFlags[index];
                     return GestureDetector(
@@ -628,7 +627,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 width: 72,
                                 height: 72,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
+                                errorBuilder: (ctx, err, stack) => Container(
                                   width: 72,
                                   height: 72,
                                   color: TeritoryColors.surfaceContainer,

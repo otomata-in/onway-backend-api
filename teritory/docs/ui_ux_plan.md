@@ -29,3 +29,4 @@ To power all screens reliably with realistic, rich data:
 - `friendFlags`: Pins dropped by friends (friendName, avatar, placeName, lat, lng, note, date, likes, photos).
 - `majorWonders`: Curated world wonders (Taj Mahal, Colosseum, Machu Picchu, Mount Everest Base, Great Wall, Santorini, Grand Canyon).
 - `travelTribes`: Active community groups with expedition goals.
+

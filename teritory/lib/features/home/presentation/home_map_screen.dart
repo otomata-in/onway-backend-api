@@ -323,7 +323,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     scrollDirection: Axis.horizontal,
                     itemCount: friendFlags.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    separatorBuilder: (_, _) => const SizedBox(width: 10),
                     itemBuilder: (ctx, index) {
                       final f = friendFlags[index];
                       return GestureDetector(

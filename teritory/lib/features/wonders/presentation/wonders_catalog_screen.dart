@@ -167,7 +167,7 @@ class _WondersCatalogScreenState extends State<WondersCatalogScreen> {
                   physics: const NeverScrollableScrollPhysics(),
                   shrinkWrap: true,
                   itemCount: filteredWonders.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 14),
+                  separatorBuilder: (_, _) => const SizedBox(height: 14),
                   itemBuilder: (ctx, index) {
                     final wonder = filteredWonders[index];
 

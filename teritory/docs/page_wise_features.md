@@ -95,3 +95,4 @@ A curated registry of the world's most famous destinations, natural wonders, and
 1. Curated collections: *The New 7 Wonders of the World*, *UNESCO Heritage Trails*, *Alpine Summits*, *Ancient Temples*.
 2. Status indicators: `[Claimed ✓]` vs `[Unexplored]`.
 3. Quick search by continent, country, or difficulty.
+

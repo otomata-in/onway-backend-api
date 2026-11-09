@@ -395,3 +395,4 @@ class _FlagDetailSheetState extends State<FlagDetailSheet> {
     );
   }
 }
+
