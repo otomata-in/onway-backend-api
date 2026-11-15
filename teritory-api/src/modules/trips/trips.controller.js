@@ -408,6 +408,61 @@ const getTripHistory = async (req, res, next) => {
   }
 };
 
+const toggleSaveTripPlan = async (req, res, next) => {
+  try {
+    const { id: tripPlanId } = req.params;
+    const userId = req.user.id;
+
+    const plan = await prisma.tripPlan.findUnique({
+      where: { id: tripPlanId },
+    });
+    if (!plan) {
+      throw ApiError.notFound('Trip plan not found');
+    }
+
+    const existing = await prisma.savedTripPlan.findUnique({
+      where: {
+        userId_tripPlanId: { userId, tripPlanId },
+      },
+    });
+
+    if (existing) {
+      await prisma.savedTripPlan.delete({
+        where: { id: existing.id },
+      });
+      return ApiResponse.success(res, { isSaved: false }, 'Trip plan removed from saved');
+    } else {
+      await prisma.savedTripPlan.create({
+        data: { userId, tripPlanId },
+      });
+      return ApiResponse.success(res, { isSaved: true }, 'Trip plan saved');
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getSavedTripPlans = async (req, res, next) => {
+  try {
+    const saved = await prisma.savedTripPlan.findMany({
+      where: { userId: req.user.id },
+      include: {
+        tripPlan: {
+          include: {
+            waypoints: { orderBy: { orderIndex: 'asc' } },
+            createdBy: { select: { id: true, displayName: true, avatarUrl: true } },
+          },
+        },
+      },
+      orderBy: { savedAt: 'desc' },
+    });
+
+    return ApiResponse.success(res, saved.map((s) => s.tripPlan));
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getTripsHub,
   createTripPlan,
@@ -419,5 +474,7 @@ module.exports = {
   validateWaypoint,
   completeTrip,
   getTripHistory,
+  toggleSaveTripPlan,
+  getSavedTripPlans,
 };
 

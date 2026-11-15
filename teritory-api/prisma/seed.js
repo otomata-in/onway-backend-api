@@ -374,6 +374,53 @@ async function main() {
     },
   });
 
+  // Proposed Trip Plans for Community Voting
+  const tp2 = await prisma.tripPlan.create({
+    data: {
+      id: 'tp2',
+      name: 'Munnar Cloud Chaser Circuit',
+      description: 'Chasing the top mist peaks of Idukki and tea trail ridges.',
+      createdById: 'u2',
+      communityId: 'comm2',
+      originName: 'Kochi Marine Drive',
+      destinationName: 'Top Station Munnar',
+      totalDistanceKm: 142.0,
+      estimatedDays: 2,
+      status: 'PROPOSED',
+      voteCount: 14,
+      waypoints: {
+        create: [
+          { orderIndex: 0, placeName: 'Kochi Marine Drive', latitude: 9.9790, longitude: 76.2760, category: 'Coastal' },
+          { orderIndex: 1, placeName: 'Cheeyappara Waterfalls', latitude: 10.0270, longitude: 76.8970, category: 'Waterfall', distanceFromPrevKm: 78.0 },
+          { orderIndex: 2, placeName: 'Top Station Munnar', latitude: 10.1250, longitude: 77.2450, category: 'Peak View', distanceFromPrevKm: 64.0 },
+        ],
+      },
+    },
+  });
+
+  const tp3 = await prisma.tripPlan.create({
+    data: {
+      id: 'tp3',
+      name: 'Wayanad Rainforest Safari',
+      description: 'Hidden caves, ancient edakkal stones, and deep canopy routes.',
+      createdById: 'u3',
+      communityId: 'comm1',
+      originName: 'Calicut Beach',
+      destinationName: 'Edakkal Caves',
+      totalDistanceKm: 98.0,
+      estimatedDays: 2,
+      status: 'PROPOSED',
+      voteCount: 9,
+      waypoints: {
+        create: [
+          { orderIndex: 0, placeName: 'Calicut Beach', latitude: 11.2588, longitude: 75.7804, category: 'Coastal' },
+          { orderIndex: 1, placeName: 'Thamarassery Churam Viewpoint', latitude: 11.5120, longitude: 76.0120, category: 'Ghat Pass', distanceFromPrevKm: 52.0 },
+          { orderIndex: 2, placeName: 'Edakkal Caves', latitude: 11.6280, longitude: 76.2340, category: 'Archaeological', distanceFromPrevKm: 46.0 },
+        ],
+      },
+    },
+  });
+
   // 10. Seed Legendary Rally
   await prisma.legendaryRally.create({
     data: {

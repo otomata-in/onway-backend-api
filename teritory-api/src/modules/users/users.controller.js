@@ -106,6 +106,75 @@ const getFriends = async (req, res, next) => {
   }
 };
 
+// Search users by name or handle
+const searchUsers = async (req, res, next) => {
+  try {
+    const { q = '' } = req.query;
+    if (!q.trim()) {
+      return ApiResponse.success(res, []);
+    }
+    const query = q.trim();
+    const users = await prisma.user.findMany({
+      where: {
+        id: { not: req.user.id },
+        OR: [
+          { displayName: { contains: query, mode: 'insensitive' } },
+          { handle: { contains: query, mode: 'insensitive' } },
+        ],
+      },
+      select: {
+        id: true,
+        displayName: true,
+        handle: true,
+        avatarUrl: true,
+        totalFlags: true,
+        completedTripsCount: true,
+        state: true,
+        district: true,
+        isPrivate: true,
+      },
+      take: 20,
+    });
+    return ApiResponse.success(res, users);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Invite friends (multi-select) to a clan, community, trip, or rally
+const inviteFriends = async (req, res, next) => {
+  try {
+    const { targetUserIds = [], type = 'COMMUNITY', targetId, title, message } = req.body;
+    if (!Array.isArray(targetUserIds) || targetUserIds.length === 0) {
+      throw ApiError.badRequest('At least one friend must be selected');
+    }
+
+    const typeMap = {
+      CLAN: 'CLAN_INVITE',
+      COMMUNITY: 'COMMUNITY_INVITE',
+      TRIP: 'TRIP_INVITE',
+      RALLY: 'RALLY_INVITE',
+    };
+    const notifType = typeMap[type.toUpperCase()] || 'COMMUNITY_INVITE';
+
+    const notifications = targetUserIds.map((userId) => ({
+      userId,
+      type: notifType,
+      title: title || `${req.user.displayName} invited you!`,
+      body: message || `${req.user.displayName} invited you to join a ${type}.`,
+      actionUrl: targetId ? `/${type.toLowerCase()}/${targetId}` : '/notifications',
+    }));
+
+    await prisma.notification.createMany({
+      data: notifications,
+    });
+
+    return ApiResponse.success(res, { invitedCount: targetUserIds.length }, 'Invitations sent successfully');
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Send Friend Request
 const sendFriendRequest = async (req, res, next) => {
   try {
@@ -206,6 +275,8 @@ module.exports = {
   toggleTripMode,
   getUserProfile,
   getFriends,
+  searchUsers,
+  inviteFriends,
   sendFriendRequest,
   respondFriendRequest,
 };
