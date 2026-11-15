@@ -62,7 +62,7 @@ class ClanDetailScreen extends ConsumerWidget {
                   Image.network(
                     clan.coverImageUrl,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorBuilder: (_, _, _) => Container(
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
@@ -400,7 +400,7 @@ class _CommunityCard extends StatelessWidget {
                 child: Image.network(
                   community.coverImageUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const Icon(
+                  errorBuilder: (_, _, _) => const Icon(
                     Icons.groups_rounded,
                     color: Colors.white,
                     size: 28,

@@ -5,6 +5,7 @@ import '../../../core/models/user_models.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/data_providers.dart';
 import '../../../core/services/mock_data_service.dart';
+import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 
 class InviteFriendsSheet extends ConsumerStatefulWidget {
@@ -85,6 +86,8 @@ class _InviteFriendsSheetState extends ConsumerState<InviteFriendsSheet> {
 
   void _sendInvites() {
     if (_selectedFriendIds.isEmpty) return;
+    final ids = _selectedFriendIds.toList();
+    TeritoryRepository.instance.inviteFriends(ids, 'COMMUNITY', widget.contextLabel);
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

@@ -155,7 +155,7 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               scrollDirection: Axis.horizontal,
               itemCount: _categories.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
                 final category = _categories[index];
                 final isSelected = _selectedCategory == category;
@@ -217,7 +217,7 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
                 : ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: filteredClans.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 14),
+                    separatorBuilder: (_, _) => const SizedBox(height: 14),
                     itemBuilder: (context, index) {
                       final clan = filteredClans[index];
                       final isJoined = _joinedClans.contains(clan.id);
@@ -322,7 +322,7 @@ class _ClanCard extends StatelessWidget {
                   child: Image.network(
                     clan.coverImageUrl,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
                   ),
                 ),
                 // Dark gradient overlay

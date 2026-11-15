@@ -5,7 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/models/trip_models.dart';
+import '../../../core/providers/data_providers.dart';
 import '../../../core/services/mock_data_service.dart';
+import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 
 class ActiveTripScreen extends ConsumerStatefulWidget {
@@ -444,11 +446,40 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        onPressed: () {
+                        onPressed: () async {
+                          if (nextWaypoint == null) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                                content: Text('Flagging this stop...')),
+                              duration: Duration(seconds: 1),
+                              content: Text('Validating waypoint via GPS...'),
+                            ),
                           );
+                          final result = await TeritoryRepository.instance.validateWaypoint(
+                            trip.id,
+                            nextWaypoint.id,
+                            nextWaypoint.latitude,
+                            nextWaypoint.longitude,
+                          );
+                          if (!context.mounted) return;
+                          if (result != null && result['isWithinRadius'] == true) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: TeritoryColors.validatedGreen,
+                                content: Text('🎯 ${nextWaypoint.placeName} Validated! Flag added to passport.'),
+                              ),
+                            );
+                            ref.read(activeTripNotifierProvider.notifier).refresh();
+                          } else {
+                            final dist = result?['distanceMeters'] != null
+                                ? '${((result!['distanceMeters'] as num) / 1000).toStringAsFixed(1)}km'
+                                : 'beyond 15km';
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: Colors.orange.shade800,
+                                content: Text('📍 Out of radius ($dist). Must be within 15km to flag!'),
+                              ),
+                            );
+                          }
                         },
                         icon:
                             const Icon(Icons.flag_rounded, size: 20),

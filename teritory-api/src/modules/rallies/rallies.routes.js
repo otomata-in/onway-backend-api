@@ -3,8 +3,9 @@ const router = express.Router();
 const ralliesController = require('./rallies.controller');
 const { authenticate, optionalAuthenticate } = require('../../middleware/authenticate');
 
-router.post('/', authenticate, ralliesController.createRally);
+router.get('/', optionalAuthenticate, ralliesController.getNearbyRallies);
 router.get('/nearby', optionalAuthenticate, ralliesController.getNearbyRallies);
+router.post('/', authenticate, ralliesController.createRally);
 
 router.get('/:id', optionalAuthenticate, ralliesController.getRallyById);
 router.post('/:id/join', authenticate, ralliesController.joinRally);

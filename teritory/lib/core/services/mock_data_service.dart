@@ -1555,6 +1555,25 @@ class MockDataService {
   List<CommunityMessage> messagesByCommunity(String communityId) =>
       _communityMessages.where((m) => m.communityId == communityId).toList();
 
+  List<CommunityMember> communityMembers(String communityId) {
+    final comm = communityById(communityId);
+    final count = comm?.memberCount ?? 5;
+    final limit = users.length > count ? count : users.length;
+    final roles = [CommunityRole.creator, CommunityRole.moderator];
+    return List.generate(
+      limit,
+      (i) => CommunityMember(
+        id: 'cm_${communityId}_$i',
+        communityId: communityId,
+        userId: users[i].id,
+        userName: users[i].displayName,
+        userAvatar: users[i].avatarUrl,
+        role: i == 0 ? roles[0] : (i == 1 ? roles[1] : CommunityRole.member),
+        joinedAt: DateTime(2025, 4 + i, 1),
+      ),
+    );
+  }
+
   List<CommunityActivity> activitiesByCommunity(String communityId) =>
       _communityActivities
           .where((a) => a.communityId == communityId)

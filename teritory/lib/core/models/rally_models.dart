@@ -38,29 +38,63 @@ class LegendaryRally {
   });
 
   factory LegendaryRally.fromJson(Map<String, dynamic> json) {
+    String orgId = json['organizerId'] as String? ?? json['createdById'] as String? ?? '';
+    String orgName = json['organizerName'] as String? ?? '';
+    if (json['host'] is Map) {
+      if (orgId.isEmpty) orgId = json['host']['id'] as String? ?? '';
+      if (orgName.isEmpty) orgName = json['host']['displayName'] as String? ?? '';
+    }
+
+    final pCount = json['participantCount'] as int? ??
+        (json['participants'] is List ? (json['participants'] as List).length : 0);
+
+    final statusStr = (json['status'] as String? ?? 'pending').toLowerCase();
+    RallyStatus rStatus = RallyStatus.pending;
+    if (statusStr == 'active') {
+      rStatus = RallyStatus.active;
+    } else if (statusStr == 'completed') {
+      rStatus = RallyStatus.completed;
+    } else if (statusStr == 'expired') {
+      rStatus = RallyStatus.expired;
+    } else {
+      rStatus = RallyStatus.pending;
+    }
+
+    final start = json['windowStartTime'] != null
+        ? DateTime.parse(json['windowStartTime'] as String)
+        : (json['scheduledAt'] != null
+            ? DateTime.parse(json['scheduledAt'] as String)
+            : (json['createdAt'] != null
+                ? DateTime.parse(json['createdAt'] as String)
+                : DateTime.now()));
+
+    final end = json['windowEndTime'] != null
+        ? DateTime.parse(json['windowEndTime'] as String)
+        : (json['expiresAt'] != null
+            ? DateTime.parse(json['expiresAt'] as String)
+            : DateTime.now().add(const Duration(days: 2)));
+
     return LegendaryRally(
       id: json['id'] as String,
       name: json['name'] as String,
-      organizerId: json['organizerId'] as String,
-      organizerName: json['organizerName'] as String,
-      locationName: json['locationName'] as String,
+      organizerId: orgId,
+      organizerName: orgName.isNotEmpty ? orgName : 'Host',
+      locationName: json['locationName'] as String? ?? json['placeName'] as String? ?? '',
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),
       radiusMeters: (json['radiusMeters'] as num?)?.toDouble() ?? 500,
       inviteType: RallyInviteType.values.firstWhere(
-        (e) => e.name == json['inviteType'] as String,
+        (e) => e.name.toLowerCase() == (json['inviteType'] as String? ?? 'open').toLowerCase(),
         orElse: () => RallyInviteType.open,
       ),
       communityId: json['communityId'] as String?,
-      windowStartTime:
-          DateTime.parse(json['windowStartTime'] as String),
-      windowEndTime: DateTime.parse(json['windowEndTime'] as String),
-      status: RallyStatus.values.firstWhere(
-        (e) => e.name == json['status'] as String,
-        orElse: () => RallyStatus.pending,
-      ),
-      participantCount: json['participantCount'] as int? ?? 0,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      windowStartTime: start,
+      windowEndTime: end,
+      status: rStatus,
+      participantCount: pCount,
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
     );
   }
 

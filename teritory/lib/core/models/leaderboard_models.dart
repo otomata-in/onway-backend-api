@@ -51,27 +51,27 @@ class LeaderboardEntry {
 
   factory LeaderboardEntry.fromJson(Map<String, dynamic> json) {
     return LeaderboardEntry(
-      id: json['id'] as String,
-      userId: json['userId'] as String,
-      userName: json['userName'] as String,
-      userHandle: json['userHandle'] as String,
-      userAvatar: json['userAvatar'] as String? ?? '',
+      id: json['id'] as String? ?? json['userId'] as String? ?? '',
+      userId: json['userId'] as String? ?? json['id'] as String? ?? '',
+      userName: json['userName'] as String? ?? json['displayName'] as String? ?? 'Traveler',
+      userHandle: json['userHandle'] as String? ?? json['handle'] as String? ?? 'traveler',
+      userAvatar: json['userAvatar'] as String? ?? json['avatarUrl'] as String? ?? '',
       scope: LeaderboardScope.values.firstWhere(
-        (e) => e.name == json['scope'] as String,
+        (e) => e.name.toLowerCase() == (json['scope'] as String? ?? 'global').toLowerCase(),
         orElse: () => LeaderboardScope.global,
       ),
       period: LeaderboardPeriod.values.firstWhere(
-        (e) => e.name == json['period'] as String,
+        (e) => e.name.toLowerCase() == (json['period'] as String? ?? 'alltime').toLowerCase(),
         orElse: () => LeaderboardPeriod.alltime,
       ),
-      rank: json['rank'] as int,
-      compositeScore: json['compositeScore'] as int,
+      rank: json['rank'] as int? ?? 1,
+      compositeScore: json['compositeScore'] as int? ?? json['score'] as int? ?? 0,
       totalFlags: json['totalFlags'] as int? ?? 0,
       majorFlags: json['majorFlags'] as int? ?? 0,
       countriesVisited: json['countriesVisited'] as int? ?? 0,
       continentsExplored: json['continentsExplored'] as int? ?? 0,
-      completedTrips: json['completedTrips'] as int? ?? 0,
-      legendaryRallies: json['legendaryRallies'] as int? ?? 0,
+      completedTrips: json['completedTrips'] as int? ?? json['completedTripsCount'] as int? ?? 0,
+      legendaryRallies: json['legendaryRallies'] as int? ?? json['legendaryRalliesCount'] as int? ?? 0,
       communityContributions:
           json['communityContributions'] as int? ?? 0,
       streakDays: json['streakDays'] as int? ?? 0,

@@ -26,21 +26,38 @@ class Community {
   });
 
   factory Community.fromJson(Map<String, dynamic> json) {
+    String pClanName = json['parentClanName'] as String? ?? '';
+    if (pClanName.isEmpty && json['clan'] is Map) {
+      pClanName = json['clan']['name'] as String? ?? '';
+    }
+
+    int memCount = json['memberCount'] as int? ?? 0;
+    if (memCount == 0 && json['_count'] is Map) {
+      memCount = json['_count']['members'] as int? ?? 0;
+    }
+
+    int activePlans = json['activeTripPlansCount'] as int? ?? 0;
+    if (activePlans == 0 && json['_count'] is Map) {
+      activePlans = json['_count']['tripPlans'] as int? ?? 0;
+    }
+
     return Community(
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String? ?? '',
       coverImageUrl: json['coverImageUrl'] as String? ?? '',
-      parentClanId: json['parentClanId'] as String,
-      parentClanName: json['parentClanName'] as String? ?? '',
-      memberCount: json['memberCount'] as int? ?? 0,
-      activeTripPlansCount: json['activeTripPlansCount'] as int? ?? 0,
+      parentClanId: json['parentClanId'] as String? ?? (json['clan'] is Map ? json['clan']['id'] as String? ?? '' : ''),
+      parentClanName: pClanName,
+      memberCount: memCount,
+      activeTripPlansCount: activePlans,
       isPublic: json['isPublic'] as bool? ?? true,
       interestTags: (json['interestTags'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
           [],
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
     );
   }
 
@@ -126,14 +143,22 @@ class CommunityMessage {
   });
 
   factory CommunityMessage.fromJson(Map<String, dynamic> json) {
+    String uName = json['userName'] as String? ?? '';
+    String uAvatar = json['userAvatar'] as String? ?? '';
+    if (json['user'] is Map) {
+      if (uName.isEmpty) uName = json['user']['displayName'] as String? ?? '';
+      if (uAvatar.isEmpty) uAvatar = json['user']['avatarUrl'] as String? ?? '';
+    }
     return CommunityMessage(
       id: json['id'] as String,
-      communityId: json['communityId'] as String,
-      userId: json['userId'] as String,
-      userName: json['userName'] as String,
-      userAvatar: json['userAvatar'] as String? ?? '',
-      text: json['text'] as String,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      communityId: json['communityId'] as String? ?? '',
+      userId: json['userId'] as String? ?? '',
+      userName: uName.isNotEmpty ? uName : 'Traveler',
+      userAvatar: uAvatar,
+      text: json['text'] as String? ?? '',
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
     );
   }
 

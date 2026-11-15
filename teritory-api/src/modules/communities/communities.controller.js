@@ -2,6 +2,32 @@ const prisma = require('../../config/prisma');
 const ApiResponse = require('../../utils/ApiResponse');
 const ApiError = require('../../utils/ApiError');
 
+const listCommunities = async (req, res, next) => {
+  try {
+    const { clanId, tag, search } = req.query;
+    const where = {};
+    if (clanId) where.parentClanId = clanId;
+    if (tag) where.interestTags = { has: tag };
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+    const communities = await prisma.community.findMany({
+      where,
+      include: {
+        clan: { select: { id: true, name: true } },
+        _count: { select: { members: true, tripPlans: true } },
+      },
+      orderBy: { memberCount: 'desc' },
+    });
+    return ApiResponse.success(res, communities);
+  } catch (err) {
+    next(err);
+  }
+};
+
 const createCommunity = async (req, res, next) => {
   try {
     const { name, description = '', coverImageUrl, parentClanId, interestTags = [], isPublic = true } = req.body;
@@ -212,6 +238,7 @@ const getCommunityTripPlans = async (req, res, next) => {
 };
 
 module.exports = {
+  listCommunities,
   createCommunity,
   getCommunityById,
   joinCommunity,

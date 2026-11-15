@@ -5,7 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/models/trip_models.dart';
+import '../../../core/providers/data_providers.dart';
 import '../../../core/services/mock_data_service.dart';
+import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 
 class TripPlanDetailScreen extends ConsumerWidget {
@@ -15,9 +17,12 @@ class TripPlanDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final plan = MockDataService.instance.tripPlans
-        .where((p) => p.id == tripPlanId)
-        .firstOrNull;
+    final plan = ref.watch(tripPlansProvider)
+            .where((p) => p.id == tripPlanId)
+            .firstOrNull ??
+        MockDataService.instance.tripPlans
+            .where((p) => p.id == tripPlanId)
+            .firstOrNull;
 
     if (plan == null) {
       return Scaffold(
@@ -34,6 +39,7 @@ class TripPlanDetailScreen extends ConsumerWidget {
       );
     }
 
+    final isSaved = ref.watch(savedPlansProvider).any((p) => p.id == tripPlanId);
     final durationHours = plan.estimatedDurationHours.toInt();
     final days = durationHours ~/ 24;
     final hrs = durationHours % 24;
@@ -53,6 +59,24 @@ class TripPlanDetailScreen extends ConsumerWidget {
           ),
         ),
         actions: [
+          IconButton(
+            icon: Icon(
+              isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+              color: isSaved ? TeritoryColors.primary : null,
+              size: 22,
+            ),
+            onPressed: () async {
+              await ref.read(savedPlansNotifierProvider.notifier).toggleSave(plan.id);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    duration: const Duration(seconds: 1),
+                    content: Text(isSaved ? 'Removed from saved plans' : 'Saved to your expedition plans!'),
+                  ),
+                );
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.share_rounded, size: 20),
             onPressed: () {
@@ -337,10 +361,17 @@ class TripPlanDetailScreen extends ConsumerWidget {
                   const SizedBox(width: 10),
                   // Vote buttons
                   IconButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Upvoted!')),
-                      );
+                    onPressed: () async {
+                      await TeritoryRepository.instance.voteTripPlan(plan.id);
+                      ref.read(tripPlansNotifierProvider.notifier).refresh();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            duration: Duration(seconds: 1),
+                            content: Text('Upvoted! Vote recorded in backend.'),
+                          ),
+                        );
+                      }
                     },
                     icon: const Icon(Icons.thumb_up_outlined),
                     color: TeritoryColors.validatedGreen,

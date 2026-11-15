@@ -74,23 +74,23 @@ class ServiceListing {
   factory ServiceListing.fromJson(Map<String, dynamic> json) {
     return ServiceListing(
       id: json['id'] as String,
-      providerId: json['providerId'] as String,
-      providerName: json['providerName'] as String,
-      serviceType: json['serviceType'] as String,
+      providerId: json['providerId'] as String? ?? '',
+      providerName: json['providerName'] as String? ?? '',
+      serviceType: json['serviceType'] as String? ?? json['category'] as String? ?? 'General',
       terrainType: json['terrainType'] as String? ?? '',
-      title: json['title'] as String,
+      title: json['title'] as String? ?? json['name'] as String? ?? 'Service',
       description: json['description'] as String? ?? '',
       priceRange: json['priceRange'] as String? ?? '',
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
       ratingCount: json['ratingCount'] as int? ?? 0,
-      latitude: (json['latitude'] as num).toDouble(),
-      longitude: (json['longitude'] as num).toDouble(),
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
       distanceFromTerritoryKm:
-          (json['distanceFromTerritoryKm'] as num?)?.toDouble() ?? 0.0,
+          (json['distanceFromTerritoryKm'] as num?)?.toDouble() ?? (json['distanceKm'] as num?)?.toDouble() ?? 0.0,
       imageUrls: (json['imageUrls'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
-          [],
+          (json['imageUrl'] != null ? [json['imageUrl'] as String] : []),
       bookingDeepLink: json['bookingDeepLink'] as String? ?? '',
     );
   }

@@ -113,10 +113,9 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
                   const SizedBox(width: 8),
                   IconButton(
                     onPressed: () {
-                      if (_controller.text.trim().isNotEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Message sent!')),
-                        );
+                      final text = _controller.text.trim();
+                      if (text.isNotEmpty) {
+                        ref.read(communityMessagesNotifierProvider(widget.communityId).notifier).sendMessage(text);
                         _controller.clear();
                       }
                     },

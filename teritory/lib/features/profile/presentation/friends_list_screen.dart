@@ -246,7 +246,7 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen>
           return ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: friendList.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final friend = friendList[index];
               return _FriendCard(

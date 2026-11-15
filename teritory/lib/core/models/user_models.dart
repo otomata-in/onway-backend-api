@@ -26,12 +26,14 @@ class User {
       id: json['id'] as String,
       email: json['email'] as String? ?? '',
       phone: json['phone'] as String? ?? '',
-      displayName: json['displayName'] as String,
-      handle: json['handle'] as String,
+      displayName: json['displayName'] as String? ?? 'Traveler',
+      handle: json['handle'] as String? ?? 'traveler',
       avatarUrl: json['avatarUrl'] as String? ?? '',
       bio: json['bio'] as String? ?? '',
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      authProvider: json['authProvider'] as String? ?? 'email',
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
+      authProvider: (json['authProvider'] as String? ?? 'phone').toLowerCase(),
     );
   }
 

@@ -119,38 +119,62 @@ class TripPlan {
   });
 
   factory TripPlan.fromJson(Map<String, dynamic> json) {
+    final waypointsList = (json['waypoints'] as List<dynamic>?)
+            ?.map((e) => TripWaypoint.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        [];
+
+    final oLat = (json['originLat'] as num?)?.toDouble() ??
+        (waypointsList.isNotEmpty ? waypointsList.first.latitude : 0.0);
+    final oLng = (json['originLng'] as num?)?.toDouble() ??
+        (waypointsList.isNotEmpty ? waypointsList.first.longitude : 0.0);
+    final dLat = (json['destLat'] as num?)?.toDouble() ??
+        (waypointsList.isNotEmpty ? waypointsList.last.latitude : 0.0);
+    final dLng = (json['destLng'] as num?)?.toDouble() ??
+        (waypointsList.isNotEmpty ? waypointsList.last.longitude : 0.0);
+
+    final cBy = json['createdBy'] is String
+        ? json['createdBy'] as String
+        : (json['createdById'] as String? ?? (json['createdBy'] is Map ? json['createdBy']['id'] as String? ?? '' : ''));
+    final cByName = json['createdByName'] as String? ??
+        (json['createdBy'] is Map ? json['createdBy']['displayName'] as String? ?? '' : '');
+
+    final statusStr = (json['status'] as String? ?? 'draft').toLowerCase();
+    final durationHours = (json['estimatedDurationHours'] as num?)?.toDouble() ??
+        ((json['estimatedDays'] as num?)?.toDouble() != null ? (json['estimatedDays'] as num).toDouble() * 8.0 : 8.0);
+    final distanceKm = (json['estimatedDistanceKm'] as num?)?.toDouble() ??
+        (json['totalDistanceKm'] as num?)?.toDouble() ?? 0.0;
+    final voteScore = json['voteScore'] as int? ?? json['voteCount'] as int? ?? 0;
+
     return TripPlan(
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String? ?? '',
-      createdBy: json['createdBy'] as String,
-      createdByName: json['createdByName'] as String,
+      createdBy: cBy,
+      createdByName: cByName,
       communityId: json['communityId'] as String?,
       communityName: json['communityName'] as String?,
-      originName: json['originName'] as String,
-      originLat: (json['originLat'] as num).toDouble(),
-      originLng: (json['originLng'] as num).toDouble(),
-      destinationName: json['destinationName'] as String,
-      destLat: (json['destLat'] as num).toDouble(),
-      destLng: (json['destLng'] as num).toDouble(),
-      estimatedDurationHours:
-          (json['estimatedDurationHours'] as num).toDouble(),
-      estimatedDistanceKm: (json['estimatedDistanceKm'] as num).toDouble(),
+      originName: json['originName'] as String? ?? (waypointsList.isNotEmpty ? waypointsList.first.placeName : ''),
+      originLat: oLat,
+      originLng: oLng,
+      destinationName: json['destinationName'] as String? ?? (waypointsList.isNotEmpty ? waypointsList.last.placeName : ''),
+      destLat: dLat,
+      destLng: dLng,
+      estimatedDurationHours: durationHours,
+      estimatedDistanceKm: distanceKm,
       status: TripPlanStatus.values.firstWhere(
-        (e) => e.name == json['status'] as String,
+        (e) => e.name.toLowerCase() == statusStr,
         orElse: () => TripPlanStatus.draft,
       ),
-      voteScore: json['voteScore'] as int? ?? 0,
-      waypoints: (json['waypoints'] as List<dynamic>?)
-              ?.map(
-                  (e) => TripWaypoint.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [],
+      voteScore: voteScore,
+      waypoints: waypointsList,
       gearSuggestions: (json['gearSuggestions'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
           [],
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
     );
   }
 
@@ -232,14 +256,23 @@ class TripParticipant {
   });
 
   factory TripParticipant.fromJson(Map<String, dynamic> json) {
+    String uName = json['userName'] as String? ?? '';
+    String uAvatar = json['userAvatar'] as String? ?? '';
+    if (json['user'] is Map) {
+      if (uName.isEmpty) uName = json['user']['displayName'] as String? ?? '';
+      if (uAvatar.isEmpty) uAvatar = json['user']['avatarUrl'] as String? ?? '';
+    }
+
+    final statusStr = (json['status'] as String? ?? 'joined').toLowerCase();
+
     return TripParticipant(
       id: json['id'] as String,
-      tripId: json['tripId'] as String,
+      tripId: json['tripId'] as String? ?? '',
       userId: json['userId'] as String,
-      userName: json['userName'] as String,
-      userAvatar: json['userAvatar'] as String? ?? '',
+      userName: uName,
+      userAvatar: uAvatar,
       status: ParticipantStatus.values.firstWhere(
-        (e) => e.name == json['status'] as String,
+        (e) => e.name.toLowerCase() == statusStr || e.name.toLowerCase() == statusStr.replaceAll('_', ''),
         orElse: () => ParticipantStatus.joined,
       ),
       currentLat: (json['currentLat'] as num?)?.toDouble(),
@@ -285,16 +318,26 @@ class Trip {
   });
 
   factory Trip.fromJson(Map<String, dynamic> json) {
+    String tName = json['tripName'] as String? ?? '';
+    if (tName.isEmpty && json['tripPlan'] is Map) {
+      tName = json['tripPlan']['name'] as String? ?? '';
+    }
+
+    final orgId = json['organizerId'] as String? ?? json['createdById'] as String? ?? '';
+    final statusStr = (json['status'] as String? ?? 'active').toLowerCase();
+
     return Trip(
       id: json['id'] as String,
-      tripPlanId: json['tripPlanId'] as String,
-      tripName: json['tripName'] as String,
-      organizerId: json['organizerId'] as String,
+      tripPlanId: json['tripPlanId'] as String? ?? (json['tripPlan'] is Map ? json['tripPlan']['id'] as String? ?? '' : ''),
+      tripName: tName.isNotEmpty ? tName : 'Expedition',
+      organizerId: orgId,
       status: TripStatus.values.firstWhere(
-        (e) => e.name == json['status'] as String,
+        (e) => e.name.toLowerCase() == statusStr,
         orElse: () => TripStatus.active,
       ),
-      startedAt: DateTime.parse(json['startedAt'] as String),
+      startedAt: json['startedAt'] != null
+          ? DateTime.parse(json['startedAt'] as String)
+          : DateTime.now(),
       completedAt: json['completedAt'] != null
           ? DateTime.parse(json['completedAt'] as String)
           : null,

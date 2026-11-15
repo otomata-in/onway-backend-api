@@ -3,6 +3,7 @@ const router = express.Router();
 const communitiesController = require('./communities.controller');
 const { authenticate, optionalAuthenticate } = require('../../middleware/authenticate');
 
+router.get('/', optionalAuthenticate, communitiesController.listCommunities);
 router.post('/', authenticate, communitiesController.createCommunity);
 router.get('/:id', optionalAuthenticate, communitiesController.getCommunityById);
 router.post('/:id/join', authenticate, communitiesController.joinCommunity);

@@ -32,18 +32,21 @@ class NotificationItem {
   });
 
   factory NotificationItem.fromJson(Map<String, dynamic> json) {
+    final typeStr = (json['type'] as String? ?? '').toLowerCase().replaceAll('_', '');
     return NotificationItem(
       id: json['id'] as String,
       type: NotificationType.values.firstWhere(
-        (e) => e.name == json['type'] as String,
+        (e) => e.name.toLowerCase() == typeStr,
         orElse: () => NotificationType.kudos,
       ),
-      title: json['title'] as String,
-      body: json['body'] as String,
-      targetId: json['targetId'] as String?,
+      title: json['title'] as String? ?? '',
+      body: json['body'] as String? ?? '',
+      targetId: json['targetId'] as String? ?? (json['actionUrl'] as String?),
       targetType: json['targetType'] as String?,
       isRead: json['isRead'] as bool? ?? false,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
     );
   }
 

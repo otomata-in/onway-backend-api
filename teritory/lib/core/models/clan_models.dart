@@ -28,6 +28,21 @@ class Clan {
   });
 
   factory Clan.fromJson(Map<String, dynamic> json) {
+    String chName = json['chieftainName'] as String? ?? '';
+    if (chName.isEmpty && json['chieftain'] is Map) {
+      chName = json['chieftain']['displayName'] as String? ?? '';
+    }
+
+    int memCount = json['memberCount'] as int? ?? 0;
+    if (memCount == 0 && json['_count'] is Map) {
+      memCount = json['_count']['members'] as int? ?? 0;
+    }
+
+    int commCount = json['communitiesCount'] as int? ?? 0;
+    if (commCount == 0 && json['_count'] is Map) {
+      commCount = json['_count']['communities'] as int? ?? 0;
+    }
+
     return Clan(
       id: json['id'] as String,
       name: json['name'] as String,
@@ -35,12 +50,14 @@ class Clan {
       coverImageUrl: json['coverImageUrl'] as String? ?? '',
       region: json['region'] as String? ?? '',
       interestTag: json['interestTag'] as String? ?? '',
-      memberCount: json['memberCount'] as int? ?? 0,
-      communitiesCount: json['communitiesCount'] as int? ?? 0,
-      chieftainId: json['chieftainId'] as String,
-      chieftainName: json['chieftainName'] as String? ?? '',
+      memberCount: memCount,
+      communitiesCount: commCount,
+      chieftainId: json['chieftainId'] as String? ?? (json['chieftain'] is Map ? json['chieftain']['id'] as String? ?? '' : ''),
+      chieftainName: chName,
       isPublic: json['isPublic'] as bool? ?? true,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
     );
   }
 
