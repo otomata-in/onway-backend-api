@@ -16,6 +16,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late final MapController _profileMapController;
   String _activeTab = 'All Flags';
+  String _mapStyle = 'nature'; // 'nature' (NatGeo Green), 'topo' (OpenTopoMap), 'dark' (Midnight Dark)
 
   @override
   void initState() {
@@ -331,7 +332,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Container(
-                    height: 240,
+                    height: 270,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(22),
                       border: Border.all(color: TeritoryColors.border),
@@ -356,22 +357,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               maxZoom: 15.0,
                             ),
                             children: [
-                              TileLayer(
-                                urlTemplate:
-                                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                userAgentPackageName: 'com.onway.teritory',
-                                tileBuilder: (context, tileWidget, tile) =>
-                                    ColorFiltered(
-                                  colorFilter:
-                                      const ColorFilter.matrix(<double>[
-                                    -0.62, 0, 0, 0, 160,
-                                    0, -0.66, 0, 0, 170,
-                                    0, 0, -0.74, 0, 192,
-                                    0, 0, 0, 1, 0,
-                                  ]),
-                                  child: tileWidget,
+                              if (_mapStyle == 'nature')
+                                TileLayer(
+                                  urlTemplate:
+                                      'https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}',
+                                  userAgentPackageName: 'com.onway.teritory',
+                                  maxNativeZoom: 16,
+                                )
+                              else if (_mapStyle == 'topo')
+                                TileLayer(
+                                  urlTemplate:
+                                      'https://tile.opentopomap.org/{z}/{x}/{y}.png',
+                                  userAgentPackageName: 'com.onway.teritory',
+                                  maxNativeZoom: 17,
+                                )
+                              else
+                                TileLayer(
+                                  urlTemplate:
+                                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                  userAgentPackageName: 'com.onway.teritory',
+                                  tileBuilder: (context, tileWidget, tile) =>
+                                      ColorFiltered(
+                                    colorFilter:
+                                        const ColorFilter.matrix(<double>[
+                                      -0.62, 0, 0, 0, 160,
+                                      0, -0.66, 0, 0, 170,
+                                      0, 0, -0.74, 0, 192,
+                                      0, 0, 0, 1, 0,
+                                    ]),
+                                    child: tileWidget,
+                                  ),
                                 ),
-                              ),
                               MarkerLayer(
                                 markers: allFlags.map((flag) {
                                   return Marker(
@@ -412,6 +428,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 }).toList(),
                               ),
                             ],
+                          ),
+
+                          // Floating Map Style Toggle (Top-Right)
+                          Positioned(
+                            top: 10,
+                            right: 10,
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.94),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.12),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildMapThemePill('🌿 Nature', 'nature'),
+                                  _buildMapThemePill('⛰️ Topo', 'topo'),
+                                  _buildMapThemePill('🌙 Dark', 'dark'),
+                                ],
+                              ),
+                            ),
                           ),
 
                           // Quick Zoom Buttons (Continent presets)
@@ -762,6 +806,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMapThemePill(String label, String styleKey) {
+    final isSelected = _mapStyle == styleKey;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _mapStyle = styleKey;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF1B4332) : Colors.transparent, // Rich Forest Green
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 10.5,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            color: isSelected ? Colors.white : TeritoryColors.textSecondary,
+          ),
+        ),
       ),
     );
   }
