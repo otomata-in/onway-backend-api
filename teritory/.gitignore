@@ -45,3 +45,5 @@ app.*.map.json
 /android/app/release
 *.apk
 teritory_screen.png
+teritory_screen_release.png
+teritory_scifi_live.png
