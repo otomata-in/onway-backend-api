@@ -360,6 +360,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 urlTemplate:
                                     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                                 userAgentPackageName: 'com.onway.teritory',
+                                tileBuilder: (context, tileWidget, tile) =>
+                                    ColorFiltered(
+                                  colorFilter:
+                                      const ColorFilter.matrix(<double>[
+                                    -0.62, 0, 0, 0, 160,
+                                    0, -0.66, 0, 0, 170,
+                                    0, 0, -0.74, 0, 192,
+                                    0, 0, 0, 1, 0,
+                                  ]),
+                                  child: tileWidget,
+                                ),
                               ),
                               MarkerLayer(
                                 markers: allFlags.map((flag) {

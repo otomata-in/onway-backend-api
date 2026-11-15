@@ -21,7 +21,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
   late final MapController _mapController;
   final LatLng _currentLocation = const LatLng(9.9790, 76.2760); // Kochi center
   String _selectedFilter = 'All';
-  String _mapTheme = 'scifi'; // 'scifi' (default) or 'standard'
+  bool _isDarkTheme = true; // Classic Dark Theme (default)
   late AnimationController _pulseController;
 
   @override
@@ -69,7 +69,6 @@ class _HomeMapScreenState extends State<HomeMapScreen>
 
         final userFlags = dataService.userFlags;
         final friendFlags = dataService.friendFlags;
-        final isSciFi = _mapTheme == 'scifi';
 
         // Apply filter
         List<Marker> markers = [];
@@ -130,7 +129,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
         return Scaffold(
           body: Stack(
             children: [
-              // ── Interactive Map Canvas (OSM) ──
+              // ── Interactive Map Canvas (100% Free OSM with Classic Dark Mode) ──
               FlutterMap(
                 mapController: _mapController,
                 options: MapOptions(
@@ -144,13 +143,20 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: _mapTheme == 'scifi'
-                        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-                        : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    subdomains: _mapTheme == 'scifi'
-                        ? const ['a', 'b', 'c', 'd']
-                        : const [],
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.onway.teritory',
+                    tileBuilder: _isDarkTheme
+                        ? (context, tileWidget, tile) => ColorFiltered(
+                              colorFilter: const ColorFilter.matrix(<double>[
+                                -0.62, 0, 0, 0, 160,
+                                0, -0.66, 0, 0, 170,
+                                0, 0, -0.74, 0, 192,
+                                0, 0, 0, 1, 0,
+                              ]),
+                              child: tileWidget,
+                            )
+                        : null,
                   ),
                   MarkerLayer(markers: markers),
                 ],
@@ -169,7 +175,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Colors.black.withValues(alpha: 0.45),
+                          Colors.black.withValues(alpha: _isDarkTheme ? 0.65 : 0.45),
                           Colors.transparent,
                         ],
                       ),
@@ -189,19 +195,17 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: isSciFi
-                              ? const Color(0xF00A0F1D)
+                          color: _isDarkTheme
+                              ? const Color(0xF21E293B)
                               : Colors.white,
                           borderRadius: BorderRadius.circular(24),
-                          border: isSciFi
+                          border: _isDarkTheme
                               ? Border.all(
-                                  color: const Color(0x4D00E5FF), width: 1.2)
+                                  color: const Color(0xFF334155), width: 1.0)
                               : null,
                           boxShadow: [
                             BoxShadow(
-                              color: isSciFi
-                                  ? const Color(0x3300E5FF)
-                                  : Colors.black.withValues(alpha: 0.12),
+                              color: Colors.black.withValues(alpha: 0.18),
                               blurRadius: 18,
                               offset: const Offset(0, 4),
                             ),
@@ -212,39 +216,36 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                             TeritoryLogo(
                               size: 34,
                               showText: true,
-                              subtitle: isSciFi ? 'QUANTUM RADAR' : 'FOOTPRINTS',
-                              isDark: isSciFi,
+                              subtitle: 'FOOTPRINTS',
+                              isDark: _isDarkTheme,
                             ),
                             const Spacer(),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: isSciFi
-                                    ? const Color(0x2600E5FF)
+                                color: _isDarkTheme
+                                    ? const Color(0xFF0F172A)
                                     : TeritoryColors.primaryLight,
                                 borderRadius: BorderRadius.circular(12),
-                                border: isSciFi
+                                border: _isDarkTheme
                                     ? Border.all(
-                                        color: const Color(0x6600E5FF))
+                                        color: const Color(0xFF334155),
+                                        width: 0.8)
                                     : null,
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.people_alt_rounded,
+                                  const Icon(Icons.people_alt_rounded,
                                       size: 14,
-                                      color: isSciFi
-                                          ? const Color(0xFF00E5FF)
-                                          : TeritoryColors.primary),
+                                      color: TeritoryColors.primary),
                                   const SizedBox(width: 4),
                                   Text(
                                     '${friendFlags.length} Friends Active',
                                     style: GoogleFonts.plusJakartaSans(
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
-                                      color: isSciFi
-                                          ? const Color(0xFF00E5FF)
-                                          : TeritoryColors.primary,
+                                      color: TeritoryColors.primary,
                                     ),
                                   ),
                                 ],
@@ -274,52 +275,51 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                 ),
               ),
 
-              // ── Right Side Quick Navigation Buttons ──
+              // ── Right Side Navigation Buttons ──
               Positioned(
                 right: 16,
                 bottom: 160,
                 child: Column(
                   children: [
-                    // Sci-Fi Theme Toggle Button
+                    // Theme Toggle Button (Classic Dark / Daylight)
                     FloatingActionButton.small(
                       heroTag: 'theme_toggle_btn',
                       backgroundColor:
-                          isSciFi ? const Color(0xFF0F172A) : Colors.white,
-                      foregroundColor: isSciFi
-                          ? const Color(0xFF00E5FF)
-                          : TeritoryColors.textPrimary,
+                          _isDarkTheme ? const Color(0xFF1E293B) : Colors.white,
+                      foregroundColor: _isDarkTheme
+                          ? const Color(0xFFF59E0B)
+                          : const Color(0xFF0F172A),
                       elevation: 4,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
-                        side: isSciFi
+                        side: _isDarkTheme
                             ? const BorderSide(
-                                color: Color(0x6600E5FF), width: 1.2)
+                                color: Color(0xFF334155), width: 1.0)
                             : BorderSide.none,
                       ),
                       onPressed: () {
                         setState(() {
-                          _mapTheme =
-                              _mapTheme == 'scifi' ? 'standard' : 'scifi';
+                          _isDarkTheme = !_isDarkTheme;
                         });
                       },
-                      child: Icon(isSciFi
-                          ? Icons.radar_rounded
-                          : Icons.wb_sunny_rounded),
+                      child: Icon(_isDarkTheme
+                          ? Icons.dark_mode_rounded
+                          : Icons.light_mode_rounded),
                     ),
                     const SizedBox(height: 8),
                     FloatingActionButton.small(
                       heroTag: 'recenter_btn',
                       backgroundColor:
-                          isSciFi ? const Color(0xFF0F172A) : Colors.white,
-                      foregroundColor: isSciFi
-                          ? const Color(0xFF00E5FF)
+                          _isDarkTheme ? const Color(0xFF1E293B) : Colors.white,
+                      foregroundColor: _isDarkTheme
+                          ? Colors.white
                           : TeritoryColors.textPrimary,
                       elevation: 4,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
-                        side: isSciFi
+                        side: _isDarkTheme
                             ? const BorderSide(
-                                color: Color(0x3300E5FF), width: 1.0)
+                                color: Color(0xFF334155), width: 1.0)
                             : BorderSide.none,
                       ),
                       onPressed: _recenterToUser,
@@ -329,16 +329,16 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                     FloatingActionButton.small(
                       heroTag: 'zoom_in_btn',
                       backgroundColor:
-                          isSciFi ? const Color(0xFF0F172A) : Colors.white,
-                      foregroundColor: isSciFi
-                          ? const Color(0xFF00E5FF)
+                          _isDarkTheme ? const Color(0xFF1E293B) : Colors.white,
+                      foregroundColor: _isDarkTheme
+                          ? Colors.white
                           : TeritoryColors.textPrimary,
                       elevation: 4,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
-                        side: isSciFi
+                        side: _isDarkTheme
                             ? const BorderSide(
-                                color: Color(0x3300E5FF), width: 1.0)
+                                color: Color(0xFF334155), width: 1.0)
                             : BorderSide.none,
                       ),
                       onPressed: () {
@@ -354,16 +354,16 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                     FloatingActionButton.small(
                       heroTag: 'zoom_out_btn',
                       backgroundColor:
-                          isSciFi ? const Color(0xFF0F172A) : Colors.white,
-                      foregroundColor: isSciFi
-                          ? const Color(0xFF00E5FF)
+                          _isDarkTheme ? const Color(0xFF1E293B) : Colors.white,
+                      foregroundColor: _isDarkTheme
+                          ? Colors.white
                           : TeritoryColors.textPrimary,
                       elevation: 4,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
-                        side: isSciFi
+                        side: _isDarkTheme
                             ? const BorderSide(
-                                color: Color(0x3300E5FF), width: 1.0)
+                                color: Color(0xFF334155), width: 1.0)
                             : BorderSide.none,
                       ),
                       onPressed: () {
@@ -401,23 +401,21 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                         child: Container(
                           padding: const EdgeInsets.fromLTRB(8, 6, 14, 6),
                           decoration: BoxDecoration(
-                            color: isSciFi
-                                ? const Color(0xF00A0F1D)
+                            color: _isDarkTheme
+                                ? const Color(0xF21E293B)
                                 : Colors.white,
                             borderRadius: BorderRadius.circular(30),
                             border: Border.all(
                               color: f.isMajorFlag
                                   ? TeritoryColors.majorGold
-                                  : isSciFi
-                                      ? const Color(0x6600E5FF)
-                                      : Colors.white,
+                                  : (_isDarkTheme
+                                      ? const Color(0xFF334155)
+                                      : Colors.white),
                               width: 1.5,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: isSciFi
-                                    ? const Color(0x3300E5FF)
-                                    : Colors.black.withValues(alpha: 0.12),
+                                color: Colors.black.withValues(alpha: 0.15),
                                 blurRadius: 10,
                                 offset: const Offset(0, 3),
                               ),
@@ -442,7 +440,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                                         style: GoogleFonts.plusJakartaSans(
                                           fontSize: 12,
                                           fontWeight: FontWeight.bold,
-                                          color: isSciFi
+                                          color: _isDarkTheme
                                               ? Colors.white
                                               : TeritoryColors.textPrimary,
                                         ),
@@ -461,7 +459,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                                     overflow: TextOverflow.ellipsis,
                                     style: GoogleFonts.plusJakartaSans(
                                       fontSize: 11,
-                                      color: isSciFi
+                                      color: _isDarkTheme
                                           ? const Color(0xFF94A3B8)
                                           : TeritoryColors.textSecondary,
                                     ),
@@ -531,7 +529,6 @@ class _HomeMapScreenState extends State<HomeMapScreen>
 
   Widget _buildFilterChip(String label, IconData icon) {
     final isSelected = _selectedFilter == label;
-    final isSciFi = _mapTheme == 'scifi';
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: GestureDetector(
@@ -541,23 +538,19 @@ class _HomeMapScreenState extends State<HomeMapScreen>
           });
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             color: isSelected
-                ? (isSciFi ? const Color(0xFF00E5FF) : TeritoryColors.surfaceDark)
-                : (isSciFi ? const Color(0xF00A0F1D) : Colors.white),
+                ? TeritoryColors.primary
+                : (_isDarkTheme ? const Color(0xF21E293B) : Colors.white),
             borderRadius: BorderRadius.circular(20),
-            border: isSciFi
-                ? Border.all(
-                    color: isSelected
-                        ? const Color(0xFF00E5FF)
-                        : const Color(0x3300E5FF),
-                    width: 1.0)
+            border: _isDarkTheme && !isSelected
+                ? Border.all(color: const Color(0xFF334155), width: 1.0)
                 : null,
             boxShadow: [
               BoxShadow(
-                color: isSciFi && isSelected
-                    ? const Color(0x6600E5FF)
+                color: isSelected
+                    ? TeritoryColors.primary.withValues(alpha: 0.35)
                     : Colors.black.withValues(alpha: 0.08),
                 blurRadius: 8,
               ),
@@ -570,8 +563,8 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                 icon,
                 size: 15,
                 color: isSelected
-                    ? (isSciFi ? const Color(0xFF0A0F1D) : Colors.white)
-                    : (isSciFi ? const Color(0xFF94A3B8) : TeritoryColors.textPrimary),
+                    ? Colors.white
+                    : (_isDarkTheme ? const Color(0xFFCBD5E1) : TeritoryColors.textPrimary),
               ),
               const SizedBox(width: 6),
               Text(
@@ -580,8 +573,8 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                   fontSize: 12,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                   color: isSelected
-                      ? (isSciFi ? const Color(0xFF0A0F1D) : Colors.white)
-                      : (isSciFi ? const Color(0xFFE2E8F0) : TeritoryColors.textPrimary),
+                      ? Colors.white
+                      : (_isDarkTheme ? const Color(0xFFCBD5E1) : TeritoryColors.textPrimary),
                 ),
               ),
             ],
@@ -591,11 +584,8 @@ class _HomeMapScreenState extends State<HomeMapScreen>
     );
   }
 
-  // Current Location Pulsing Pin
+  // Current Location Pulsing Pin (Classic Coral Travel Beacon)
   Widget _buildCurrentLocationMarker() {
-    final isSciFi = _mapTheme == 'scifi';
-    final pulseColor = isSciFi ? const Color(0xFF00E5FF) : TeritoryColors.primary;
-
     return AnimatedBuilder(
       animation: _pulseController,
       builder: (context, child) {
@@ -611,7 +601,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                 height: 50,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: pulseColor.withValues(alpha: opacity * 0.5),
+                  color: TeritoryColors.primary.withValues(alpha: opacity * 0.45),
                 ),
               ),
             ),
@@ -620,12 +610,12 @@ class _HomeMapScreenState extends State<HomeMapScreen>
               height: 22,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: pulseColor,
+                color: TeritoryColors.primary,
                 border: Border.all(color: Colors.white, width: 3.5),
                 boxShadow: [
                   BoxShadow(
-                    color: pulseColor.withValues(alpha: 0.6),
-                    blurRadius: 8,
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
                 ],
@@ -651,7 +641,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
+                color: Colors.black.withValues(alpha: 0.25),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
@@ -696,10 +686,10 @@ class _HomeMapScreenState extends State<HomeMapScreen>
 
   // Pin for Friend's Flagged locations
   Widget _buildFriendFlagPin(FriendFlag fFlag) {
-    final isSciFi = _mapTheme == 'scifi';
-    final accentColor = fFlag.isMajorFlag
+    final pinBg = _isDarkTheme ? const Color(0xF21E293B) : Colors.white;
+    final pinBorder = fFlag.isMajorFlag
         ? TeritoryColors.majorGold
-        : (isSciFi ? const Color(0xFF00E5FF) : TeritoryColors.sapphireBlue);
+        : TeritoryColors.sapphireBlue;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -707,17 +697,15 @@ class _HomeMapScreenState extends State<HomeMapScreen>
         Container(
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
-            color: isSciFi ? const Color(0xF00A0F1D) : Colors.white,
+            color: pinBg,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: accentColor,
+              color: pinBorder,
               width: 1.8,
             ),
             boxShadow: [
               BoxShadow(
-                color: isSciFi
-                    ? accentColor.withValues(alpha: 0.45)
-                    : Colors.black.withValues(alpha: 0.2),
+                color: Colors.black.withValues(alpha: 0.25),
                 blurRadius: 8,
                 offset: const Offset(0, 3),
               ),
@@ -739,7 +727,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
-                    color: isSciFi ? Colors.white : TeritoryColors.textPrimary,
+                    color: _isDarkTheme ? Colors.white : TeritoryColors.textPrimary,
                   ),
                 ),
               ),
@@ -747,7 +735,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
               Icon(
                 Icons.flag_rounded,
                 size: 13,
-                color: accentColor,
+                color: pinBorder,
               ),
               const SizedBox(width: 2),
             ],
@@ -756,7 +744,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
         Icon(
           Icons.arrow_drop_down,
           size: 18,
-          color: accentColor,
+          color: pinBorder,
         ),
       ],
     );
