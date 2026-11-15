@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/providers/data_providers.dart';
+import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 
-class CommunityCreateScreen extends StatefulWidget {
-  const CommunityCreateScreen({super.key});
+class CommunityCreateScreen extends ConsumerStatefulWidget {
+  final String? clanId;
+  const CommunityCreateScreen({super.key, this.clanId});
 
   @override
-  State<CommunityCreateScreen> createState() => _CommunityCreateScreenState();
+  ConsumerState<CommunityCreateScreen> createState() => _CommunityCreateScreenState();
 }
 
-class _CommunityCreateScreenState extends State<CommunityCreateScreen> {
+class _CommunityCreateScreenState extends ConsumerState<CommunityCreateScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -35,12 +39,46 @@ class _CommunityCreateScreenState extends State<CommunityCreateScreen> {
     super.dispose();
   }
 
-  void _createCommunity() {
-    if (_formKey.currentState?.validate() ?? false) {
+  Future<void> _createCommunity() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final name = _nameController.text.trim();
+    final desc = _descriptionController.text.trim();
+    final parentClan = widget.clanId ?? 'c1';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        duration: Duration(seconds: 1),
+        content: Text('Founding community in backend...'),
+      ),
+    );
+
+    final created = await TeritoryRepository.instance.createCommunity(
+      name: name,
+      parentClanId: parentClan,
+      description: desc,
+      interestTags: _selectedTags.toList(),
+      isPublic: _isPublic,
+    );
+
+    if (!mounted) return;
+    if (created != null) {
+      ref.read(communitiesNotifierProvider.notifier).refresh();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Community "${_nameController.text}" created successfully!',
+            '🛡️ Community "$name" founded successfully!',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
+          ),
+          backgroundColor: TeritoryColors.emeraldGreen,
+        ),
+      );
+      Navigator.pop(context);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Community "$name" created successfully!',
             style: GoogleFonts.plusJakartaSans(),
           ),
           backgroundColor: TeritoryColors.emeraldGreen,

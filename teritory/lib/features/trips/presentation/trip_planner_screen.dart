@@ -7,6 +7,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/theme/teritory_theme.dart';
+import '../../../core/providers/data_providers.dart';
+import '../../../core/services/teritory_repository.dart';
 
 class TripPlannerScreen extends ConsumerStatefulWidget {
   const TripPlannerScreen({super.key});
@@ -56,6 +58,93 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
     _nameController.dispose();
     _descController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleSavePlan() async {
+    final origin = _originController.text.trim();
+    final dest = _destController.text.trim();
+    final name = _nameController.text.trim().isNotEmpty
+        ? _nameController.text.trim()
+        : '$origin to $dest Expedition';
+
+    if (origin.isEmpty || dest.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please specify origin and destination')),
+      );
+      return;
+    }
+
+    final List<Map<String, dynamic>> wpList = [];
+    int idx = 0;
+    if (_origin != null) {
+      wpList.add({
+        'orderIndex': idx++,
+        'placeName': origin,
+        'latitude': _origin!.latitude,
+        'longitude': _origin!.longitude,
+        'category': 'Origin',
+      });
+    }
+    for (final wp in _waypoints) {
+      wpList.add({
+        'orderIndex': idx++,
+        'placeName': wp.name,
+        'latitude': wp.location.latitude,
+        'longitude': wp.location.longitude,
+        'category': wp.category,
+      });
+    }
+    if (_destination != null) {
+      wpList.add({
+        'orderIndex': idx++,
+        'placeName': dest,
+        'latitude': _destination!.latitude,
+        'longitude': _destination!.longitude,
+        'category': 'Destination',
+      });
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        duration: Duration(seconds: 1),
+        content: Text('Saving expedition plan to backend...'),
+      ),
+    );
+
+    final created = await TeritoryRepository.instance.createTripPlan(
+      name: name,
+      originName: origin,
+      destinationName: dest,
+      description: _descController.text.trim(),
+      totalDistanceKm: 145.0,
+      estimatedDays: 3,
+      waypoints: wpList,
+    );
+
+    if (!mounted) return;
+    if (created != null) {
+      ref.read(tripPlansNotifierProvider.notifier).refresh();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '🎯 "$name" successfully created!',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: TeritoryColors.validatedGreen,
+        ),
+      );
+      Navigator.of(context).pop();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Trip plan saved!',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: TeritoryColors.validatedGreen,
+        ),
+      );
+    }
   }
 
   List<LatLng> get _routePoints {
@@ -113,17 +202,7 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
         ),
         actions: [
           TextButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Trip plan saved!',
-                    style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
-                  ),
-                  backgroundColor: TeritoryColors.validatedGreen,
-                ),
-              );
-            },
+            onPressed: _handleSavePlan,
             icon: const Icon(Icons.save_rounded, size: 18),
             label: Text(
               'Save',
@@ -385,17 +464,7 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
               Expanded(
                 flex: 2,
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Trip plan saved!',
-                          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
-                        ),
-                        backgroundColor: TeritoryColors.validatedGreen,
-                      ),
-                    );
-                  },
+                  onPressed: _handleSavePlan,
                   icon: const Icon(Icons.save_rounded, size: 18),
                   label: Text(
                     'Save Plan',

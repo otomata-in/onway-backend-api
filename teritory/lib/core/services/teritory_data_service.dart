@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/teritory_models.dart';
+import 'teritory_repository.dart';
 
 class TeritoryDataService extends ChangeNotifier {
   static final TeritoryDataService instance = TeritoryDataService._internal();
@@ -106,6 +107,22 @@ class TeritoryDataService extends ChangeNotifier {
     );
 
     notifyListeners();
+
+    // Asynchronously persist to standalone backend
+    TeritoryRepository.instance.dropFlag(
+      placeName: placeName,
+      latitude: coordinates.latitude,
+      longitude: coordinates.longitude,
+      city: city,
+      country: country,
+      countryCode: country.length >= 2
+          ? country.substring(0, 2).toUpperCase()
+          : 'IN',
+      isMajorFlag: isMajorFlag,
+      category: category,
+      notes: notes,
+      photoUrl: newFlag.photoUrl,
+    );
   }
 }
 

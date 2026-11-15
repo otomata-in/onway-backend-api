@@ -368,4 +368,95 @@ class TeritoryRepository {
     }
     return false;
   }
+
+  Future<TripPlan?> createTripPlan({
+    required String name,
+    required String originName,
+    required String destinationName,
+    String description = '',
+    String? communityId,
+    double totalDistanceKm = 0.0,
+    int estimatedDays = 1,
+    List<Map<String, dynamic>> waypoints = const [],
+  }) async {
+    try {
+      final res = await _api.post('/trips/plans', body: {
+        'name': name,
+        'description': description,
+        'originName': originName,
+        'destinationName': destinationName,
+        'communityId': communityId,
+        'totalDistanceKm': totalDistanceKm,
+        'estimatedDays': estimatedDays,
+        'waypoints': waypoints,
+      });
+      if (res is Map<String, dynamic>) {
+        return TripPlan.fromJson(res);
+      }
+    } catch (e) {
+      if (kDebugMode) print('❌ [createTripPlan] Error: $e');
+    }
+    return null;
+  }
+
+  Future<Community?> createCommunity({
+    required String name,
+    required String parentClanId,
+    String description = '',
+    List<String> interestTags = const [],
+    bool isPublic = true,
+    String? coverImageUrl,
+  }) async {
+    try {
+      final res = await _api.post('/communities', body: {
+        'name': name,
+        'parentClanId': parentClanId,
+        'description': description,
+        'interestTags': interestTags,
+        'isPublic': isPublic,
+        'coverImageUrl': coverImageUrl ??
+            'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600',
+      });
+      if (res is Map<String, dynamic>) {
+        return Community.fromJson(res);
+      }
+    } catch (e) {
+      if (kDebugMode) print('❌ [createCommunity] Error: $e');
+    }
+    return null;
+  }
+
+  Future<bool> dropFlag({
+    required String placeName,
+    required double latitude,
+    required double longitude,
+    String city = '',
+    String country = 'India',
+    String countryCode = 'IN',
+    String continent = 'Asia',
+    bool isMajorFlag = false,
+    String category = 'General',
+    String notes = '',
+    String? photoUrl,
+  }) async {
+    try {
+      final res = await _api.post('/flags', body: {
+        'placeName': placeName,
+        'city': city,
+        'country': country,
+        'countryCode': countryCode,
+        'continent': continent,
+        'latitude': latitude,
+        'longitude': longitude,
+        'isMajorFlag': isMajorFlag,
+        'category': category,
+        'notes': notes,
+        'photoUrl': photoUrl,
+      });
+      return res != null;
+    } catch (e) {
+      if (kDebugMode) print('❌ [dropFlag] Error: $e');
+    }
+    return false;
+  }
 }

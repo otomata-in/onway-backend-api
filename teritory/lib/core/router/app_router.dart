@@ -77,8 +77,9 @@ final GoRouter appRouter = GoRouter(
                   routes: [
                     GoRoute(
                       path: 'create',
-                      builder: (context, state) =>
-                          const CommunityCreateScreen(),
+                      builder: (context, state) => CommunityCreateScreen(
+                        clanId: state.pathParameters['clanId'],
+                      ),
                     ),
                     GoRoute(
                       path: 'communities/:communityId',
