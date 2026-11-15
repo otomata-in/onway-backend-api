@@ -28,6 +28,19 @@ class TeritoryColors {
   static const Color textPrimary = Color(0xFF0F172A);
   static const Color textSecondary = Color(0xFF64748B);
   static const Color textMuted = Color(0xFF94A3B8);
+
+  // V2 Color Tokens
+  static const Color clanPurple = Color(0xFF8B5CF6);
+  static const Color communityIndigo = Color(0xFF6366F1);
+  static const Color tripRoute = Color(0xFF22D3EE);
+  static const Color rallyGold = Color(0xFFFBBF24);
+  static const Color validatedGreen = Color(0xFF10B981);
+  static const Color expiredRed = Color(0xFFEF4444);
+  static const Color gearAmber = Color(0xFFF59E0B);
+  static const Color chatBubbleSelf = Color(0xFF1E293B);
+  static const Color chatBubbleOther = Color(0xFFF1F5F9);
+  static const Color subTerritoryTeal = Color(0xFF38BDF8);
+  static const Color foodOrange = Color(0xFFFB923C);
 }
 
 class TeritoryTheme {

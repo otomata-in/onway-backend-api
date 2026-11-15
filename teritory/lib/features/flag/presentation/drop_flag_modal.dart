@@ -407,6 +407,39 @@ class _DropFlagModalState extends State<DropFlagModal> {
                 ),
               ),
             ),
+
+            // ── Legendary Rally Button ─────────────────────────────────
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Legendary Rally mode coming soon!',
+                      style: GoogleFonts.plusJakartaSans(),
+                    ),
+                    backgroundColor: TeritoryColors.rallyGold,
+                  ),
+                );
+              },
+              icon: const Text('🏴', style: TextStyle(fontSize: 18)),
+              label: Text(
+                'Start Legendary Rally',
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w700,
+                  color: TeritoryColors.rallyGold,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: TeritoryColors.rallyGold),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                minimumSize: const Size(double.infinity, 48),
+              ),
+            ),
           ],
         ),
       ),

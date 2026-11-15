@@ -1,0 +1,423 @@
+enum TripPlanStatus { draft, proposed, voted, active, completed }
+
+enum TripStatus { active, completed, expired }
+
+enum ParticipantStatus { joined, inProgress, completed, dropped }
+
+enum TripBadge { full, partial, none }
+
+class TripWaypoint {
+  final String id;
+  final String tripPlanId;
+  final int orderIndex;
+  final String placeName;
+  final double latitude;
+  final double longitude;
+  final String category;
+  final int flagCount;
+  final DateTime? estimatedArrivalTime;
+  final DateTime? estimatedDepartureTime;
+  final bool isValidated;
+  final double distanceFromPrevKm;
+
+  const TripWaypoint({
+    required this.id,
+    required this.tripPlanId,
+    required this.orderIndex,
+    required this.placeName,
+    required this.latitude,
+    required this.longitude,
+    this.category = 'general',
+    this.flagCount = 0,
+    this.estimatedArrivalTime,
+    this.estimatedDepartureTime,
+    this.isValidated = false,
+    this.distanceFromPrevKm = 0.0,
+  });
+
+  factory TripWaypoint.fromJson(Map<String, dynamic> json) {
+    return TripWaypoint(
+      id: json['id'] as String,
+      tripPlanId: json['tripPlanId'] as String,
+      orderIndex: json['orderIndex'] as int,
+      placeName: json['placeName'] as String,
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+      category: json['category'] as String? ?? 'general',
+      flagCount: json['flagCount'] as int? ?? 0,
+      estimatedArrivalTime: json['estimatedArrivalTime'] != null
+          ? DateTime.parse(json['estimatedArrivalTime'] as String)
+          : null,
+      estimatedDepartureTime: json['estimatedDepartureTime'] != null
+          ? DateTime.parse(json['estimatedDepartureTime'] as String)
+          : null,
+      isValidated: json['isValidated'] as bool? ?? false,
+      distanceFromPrevKm:
+          (json['distanceFromPrevKm'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'tripPlanId': tripPlanId,
+        'orderIndex': orderIndex,
+        'placeName': placeName,
+        'latitude': latitude,
+        'longitude': longitude,
+        'category': category,
+        'flagCount': flagCount,
+        'estimatedArrivalTime': estimatedArrivalTime?.toIso8601String(),
+        'estimatedDepartureTime': estimatedDepartureTime?.toIso8601String(),
+        'isValidated': isValidated,
+        'distanceFromPrevKm': distanceFromPrevKm,
+      };
+}
+
+class TripPlan {
+  final String id;
+  final String name;
+  final String description;
+  final String createdBy;
+  final String createdByName;
+  final String? communityId;
+  final String? communityName;
+  final String originName;
+  final double originLat;
+  final double originLng;
+  final String destinationName;
+  final double destLat;
+  final double destLng;
+  final double estimatedDurationHours;
+  final double estimatedDistanceKm;
+  final TripPlanStatus status;
+  final int voteScore;
+  final List<TripWaypoint> waypoints;
+  final List<String> gearSuggestions;
+  final DateTime createdAt;
+
+  const TripPlan({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.createdBy,
+    required this.createdByName,
+    this.communityId,
+    this.communityName,
+    required this.originName,
+    required this.originLat,
+    required this.originLng,
+    required this.destinationName,
+    required this.destLat,
+    required this.destLng,
+    required this.estimatedDurationHours,
+    required this.estimatedDistanceKm,
+    this.status = TripPlanStatus.draft,
+    this.voteScore = 0,
+    this.waypoints = const [],
+    this.gearSuggestions = const [],
+    required this.createdAt,
+  });
+
+  factory TripPlan.fromJson(Map<String, dynamic> json) {
+    return TripPlan(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      description: json['description'] as String? ?? '',
+      createdBy: json['createdBy'] as String,
+      createdByName: json['createdByName'] as String,
+      communityId: json['communityId'] as String?,
+      communityName: json['communityName'] as String?,
+      originName: json['originName'] as String,
+      originLat: (json['originLat'] as num).toDouble(),
+      originLng: (json['originLng'] as num).toDouble(),
+      destinationName: json['destinationName'] as String,
+      destLat: (json['destLat'] as num).toDouble(),
+      destLng: (json['destLng'] as num).toDouble(),
+      estimatedDurationHours:
+          (json['estimatedDurationHours'] as num).toDouble(),
+      estimatedDistanceKm: (json['estimatedDistanceKm'] as num).toDouble(),
+      status: TripPlanStatus.values.firstWhere(
+        (e) => e.name == json['status'] as String,
+        orElse: () => TripPlanStatus.draft,
+      ),
+      voteScore: json['voteScore'] as int? ?? 0,
+      waypoints: (json['waypoints'] as List<dynamic>?)
+              ?.map(
+                  (e) => TripWaypoint.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+      gearSuggestions: (json['gearSuggestions'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          [],
+      createdAt: DateTime.parse(json['createdAt'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'description': description,
+        'createdBy': createdBy,
+        'createdByName': createdByName,
+        'communityId': communityId,
+        'communityName': communityName,
+        'originName': originName,
+        'originLat': originLat,
+        'originLng': originLng,
+        'destinationName': destinationName,
+        'destLat': destLat,
+        'destLng': destLng,
+        'estimatedDurationHours': estimatedDurationHours,
+        'estimatedDistanceKm': estimatedDistanceKm,
+        'status': status.name,
+        'voteScore': voteScore,
+        'waypoints': waypoints.map((e) => e.toJson()).toList(),
+        'gearSuggestions': gearSuggestions,
+        'createdAt': createdAt.toIso8601String(),
+      };
+}
+
+class TripVote {
+  final String id;
+  final String tripPlanId;
+  final String userId;
+  final String direction;
+
+  const TripVote({
+    required this.id,
+    required this.tripPlanId,
+    required this.userId,
+    required this.direction,
+  });
+
+  factory TripVote.fromJson(Map<String, dynamic> json) {
+    return TripVote(
+      id: json['id'] as String,
+      tripPlanId: json['tripPlanId'] as String,
+      userId: json['userId'] as String,
+      direction: json['direction'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'tripPlanId': tripPlanId,
+        'userId': userId,
+        'direction': direction,
+      };
+}
+
+class TripParticipant {
+  final String id;
+  final String tripId;
+  final String userId;
+  final String userName;
+  final String userAvatar;
+  final ParticipantStatus status;
+  final double? currentLat;
+  final double? currentLng;
+  final DateTime? lastUpdated;
+
+  const TripParticipant({
+    required this.id,
+    required this.tripId,
+    required this.userId,
+    required this.userName,
+    required this.userAvatar,
+    this.status = ParticipantStatus.joined,
+    this.currentLat,
+    this.currentLng,
+    this.lastUpdated,
+  });
+
+  factory TripParticipant.fromJson(Map<String, dynamic> json) {
+    return TripParticipant(
+      id: json['id'] as String,
+      tripId: json['tripId'] as String,
+      userId: json['userId'] as String,
+      userName: json['userName'] as String,
+      userAvatar: json['userAvatar'] as String? ?? '',
+      status: ParticipantStatus.values.firstWhere(
+        (e) => e.name == json['status'] as String,
+        orElse: () => ParticipantStatus.joined,
+      ),
+      currentLat: (json['currentLat'] as num?)?.toDouble(),
+      currentLng: (json['currentLng'] as num?)?.toDouble(),
+      lastUpdated: json['lastUpdated'] != null
+          ? DateTime.parse(json['lastUpdated'] as String)
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'tripId': tripId,
+        'userId': userId,
+        'userName': userName,
+        'userAvatar': userAvatar,
+        'status': status.name,
+        'currentLat': currentLat,
+        'currentLng': currentLng,
+        'lastUpdated': lastUpdated?.toIso8601String(),
+      };
+}
+
+class Trip {
+  final String id;
+  final String tripPlanId;
+  final String tripName;
+  final String organizerId;
+  final TripStatus status;
+  final DateTime startedAt;
+  final DateTime? completedAt;
+  final List<TripParticipant> participants;
+
+  const Trip({
+    required this.id,
+    required this.tripPlanId,
+    required this.tripName,
+    required this.organizerId,
+    this.status = TripStatus.active,
+    required this.startedAt,
+    this.completedAt,
+    this.participants = const [],
+  });
+
+  factory Trip.fromJson(Map<String, dynamic> json) {
+    return Trip(
+      id: json['id'] as String,
+      tripPlanId: json['tripPlanId'] as String,
+      tripName: json['tripName'] as String,
+      organizerId: json['organizerId'] as String,
+      status: TripStatus.values.firstWhere(
+        (e) => e.name == json['status'] as String,
+        orElse: () => TripStatus.active,
+      ),
+      startedAt: DateTime.parse(json['startedAt'] as String),
+      completedAt: json['completedAt'] != null
+          ? DateTime.parse(json['completedAt'] as String)
+          : null,
+      participants: (json['participants'] as List<dynamic>?)
+              ?.map((e) =>
+                  TripParticipant.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'tripPlanId': tripPlanId,
+        'tripName': tripName,
+        'organizerId': organizerId,
+        'status': status.name,
+        'startedAt': startedAt.toIso8601String(),
+        'completedAt': completedAt?.toIso8601String(),
+        'participants': participants.map((e) => e.toJson()).toList(),
+      };
+}
+
+class TripWaypointValidation {
+  final String id;
+  final String tripId;
+  final String waypointId;
+  final String userId;
+  final DateTime flaggedAt;
+  final double distanceFromWaypointM;
+  final bool isWithinRadius;
+
+  const TripWaypointValidation({
+    required this.id,
+    required this.tripId,
+    required this.waypointId,
+    required this.userId,
+    required this.flaggedAt,
+    required this.distanceFromWaypointM,
+    required this.isWithinRadius,
+  });
+
+  factory TripWaypointValidation.fromJson(Map<String, dynamic> json) {
+    return TripWaypointValidation(
+      id: json['id'] as String,
+      tripId: json['tripId'] as String,
+      waypointId: json['waypointId'] as String,
+      userId: json['userId'] as String,
+      flaggedAt: DateTime.parse(json['flaggedAt'] as String),
+      distanceFromWaypointM:
+          (json['distanceFromWaypointM'] as num).toDouble(),
+      isWithinRadius: json['isWithinRadius'] as bool,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'tripId': tripId,
+        'waypointId': waypointId,
+        'userId': userId,
+        'flaggedAt': flaggedAt.toIso8601String(),
+        'distanceFromWaypointM': distanceFromWaypointM,
+        'isWithinRadius': isWithinRadius,
+      };
+}
+
+class TripCompletion {
+  final String id;
+  final String tripId;
+  final String userId;
+  final String userName;
+  final DateTime completedAt;
+  final double totalDistanceKm;
+  final double totalDurationHours;
+  final int waypointsValidated;
+  final int totalWaypoints;
+  final TripBadge badge;
+  final String? routeThumbnailUrl;
+
+  const TripCompletion({
+    required this.id,
+    required this.tripId,
+    required this.userId,
+    required this.userName,
+    required this.completedAt,
+    required this.totalDistanceKm,
+    required this.totalDurationHours,
+    required this.waypointsValidated,
+    required this.totalWaypoints,
+    this.badge = TripBadge.none,
+    this.routeThumbnailUrl,
+  });
+
+  factory TripCompletion.fromJson(Map<String, dynamic> json) {
+    return TripCompletion(
+      id: json['id'] as String,
+      tripId: json['tripId'] as String,
+      userId: json['userId'] as String,
+      userName: json['userName'] as String,
+      completedAt: DateTime.parse(json['completedAt'] as String),
+      totalDistanceKm: (json['totalDistanceKm'] as num).toDouble(),
+      totalDurationHours: (json['totalDurationHours'] as num).toDouble(),
+      waypointsValidated: json['waypointsValidated'] as int,
+      totalWaypoints: json['totalWaypoints'] as int,
+      badge: TripBadge.values.firstWhere(
+        (e) => e.name == json['badge'] as String,
+        orElse: () => TripBadge.none,
+      ),
+      routeThumbnailUrl: json['routeThumbnailUrl'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'tripId': tripId,
+        'userId': userId,
+        'userName': userName,
+        'completedAt': completedAt.toIso8601String(),
+        'totalDistanceKm': totalDistanceKm,
+        'totalDurationHours': totalDurationHours,
+        'waypointsValidated': waypointsValidated,
+        'totalWaypoints': totalWaypoints,
+        'badge': badge.name,
+        'routeThumbnailUrl': routeThumbnailUrl,
+      };
+}
