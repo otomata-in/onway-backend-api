@@ -7,3 +7,4 @@ router.get('/gear', optionalAuthenticate, servicesController.getGearServices);
 router.get('/nearby-food', optionalAuthenticate, servicesController.getNearbyFood);
 
 module.exports = router;
+

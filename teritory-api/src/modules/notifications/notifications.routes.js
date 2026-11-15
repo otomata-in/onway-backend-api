@@ -8,3 +8,4 @@ router.patch('/:id/read', authenticate, notificationsController.markRead);
 router.patch('/read-all', authenticate, notificationsController.markAllRead);
 
 module.exports = router;
+

@@ -16,3 +16,4 @@ router.post('/friends/requests/:id/respond', authenticate, usersController.respo
 router.get('/:userId', authenticate, usersController.getUserProfile);
 
 module.exports = router;
+

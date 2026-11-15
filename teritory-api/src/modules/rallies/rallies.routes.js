@@ -12,3 +12,4 @@ router.post('/:id/arrive', authenticate, ralliesController.markArrival);
 router.post('/:id/complete', authenticate, ralliesController.completeRally);
 
 module.exports = router;
+

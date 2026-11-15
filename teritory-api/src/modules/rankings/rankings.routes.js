@@ -7,3 +7,4 @@ router.get('/', optionalAuthenticate, rankingsController.getLeaderboard);
 router.get('/me', authenticate, rankingsController.getMyRank);
 
 module.exports = router;
+

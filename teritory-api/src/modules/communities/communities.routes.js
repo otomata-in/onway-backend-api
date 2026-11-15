@@ -15,3 +15,4 @@ router.get('/:id/members', optionalAuthenticate, communitiesController.getCommun
 router.get('/:id/trip-plans', optionalAuthenticate, communitiesController.getCommunityTripPlans);
 
 module.exports = router;
+

@@ -73,3 +73,4 @@ Connect to `ws://localhost:4000`:
 - `join_trip`: `{ tripId }`
 - `trip_location_update`: `{ tripId, latitude, longitude }`
 - `join_rally`: `{ rallyId }`
+

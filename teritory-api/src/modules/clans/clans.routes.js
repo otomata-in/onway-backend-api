@@ -13,3 +13,4 @@ router.post('/:clanId/leave', authenticate, clansController.leaveClan);
 router.get('/:clanId/communities', optionalAuthenticate, clansController.getClanCommunities);
 
 module.exports = router;
+

@@ -13,3 +13,4 @@ router.post('/:id/comments', authenticate, flagsController.addComment);
 router.post('/:id/kudos', authenticate, flagsController.addKudos);
 
 module.exports = router;
+

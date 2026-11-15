@@ -17,3 +17,4 @@ router.post('/:tripId/validate-waypoint', authenticate, tripsController.validate
 router.post('/:tripId/complete', authenticate, tripsController.completeTrip);
 
 module.exports = router;
+

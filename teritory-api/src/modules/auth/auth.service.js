@@ -29,14 +29,14 @@ const generateTokens = async (userId, handle) => {
 
 const sendOtp = async (phone) => {
   const cleanPhone = phone.trim();
-  const testOtp = '123456'; // Default dev OTP
+  const testOtp = '12345'; // Development bypass OTP to cut SMS provider costs
 
-  // Cache in redis for 5 minutes
+  // Cache in redis/memory for 5 minutes
   await redis.set(`otp:${cleanPhone}`, testOtp, 'EX', 300);
 
   return {
     phone: cleanPhone,
-    message: 'OTP dispatched successfully (Dev bypass: 123456)',
+    message: 'OTP dispatched successfully (Dev bypass: 12345)',
   };
 };
 
@@ -44,7 +44,9 @@ const verifyOtp = async (phone, otp) => {
   const cleanPhone = phone.trim();
   const cachedOtp = await redis.get(`otp:${cleanPhone}`);
 
-  if (otp !== '123456' && cachedOtp !== otp) {
+  // Allow '12345' (or legacy 123456) as static dev bypass, or match cached OTP
+  const isDevBypass = otp === '12345' || otp === '123456';
+  if (!isDevBypass && cachedOtp !== otp) {
     throw ApiError.badRequest('Invalid or expired OTP code');
   }
 
@@ -122,3 +124,4 @@ module.exports = {
   logout,
   generateTokens,
 };
+
