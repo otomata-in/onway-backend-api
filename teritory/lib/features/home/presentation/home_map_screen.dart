@@ -21,7 +21,8 @@ class _HomeMapScreenState extends State<HomeMapScreen>
   late final MapController _mapController;
   final LatLng _currentLocation = const LatLng(9.9790, 76.2760); // Kochi center
   String _selectedFilter = 'All';
-  bool _isDarkTheme = true; // Classic Dark Theme (default)
+  String _mapStyle = 'oceanic'; // 'oceanic' (Greenish-Bluish-Black mix), 'satellite' (ESRI Satellite), 'daylight' (Clean White)
+  bool get _isDarkTheme => _mapStyle != 'daylight';
   late AnimationController _pulseController;
 
   @override
@@ -142,22 +143,30 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                   ),
                 ),
                 children: [
-                  TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.onway.teritory',
-                    tileBuilder: _isDarkTheme
-                        ? (context, tileWidget, tile) => ColorFiltered(
-                              colorFilter: const ColorFilter.matrix(<double>[
-                                -0.62, 0, 0, 0, 160,
-                                0, -0.66, 0, 0, 170,
-                                0, 0, -0.74, 0, 192,
-                                0, 0, 0, 1, 0,
-                              ]),
-                              child: tileWidget,
-                            )
-                        : null,
-                  ),
+                  if (_mapStyle == 'satellite')
+                    TileLayer(
+                      urlTemplate:
+                          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                      userAgentPackageName: 'com.onway.teritory',
+                      maxNativeZoom: 18,
+                    )
+                  else
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.onway.teritory',
+                      tileBuilder: _mapStyle == 'oceanic'
+                          ? (context, tileWidget, tile) => ColorFiltered(
+                                colorFilter: const ColorFilter.matrix(<double>[
+                                  -0.20, -0.15, -0.30, 0.0, 140,
+                                  -0.45,  0.20, -0.35, 0.0, 165,
+                                  -0.55,  0.05, -0.05, 0.0, 185,
+                                   0.0,   0.0,   0.0,  1.0, 0,
+                                ]),
+                                child: tileWidget,
+                              )
+                          : null,
+                    ),
                   MarkerLayer(markers: markers),
                 ],
               ),
@@ -281,14 +290,21 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                 bottom: 160,
                 child: Column(
                   children: [
-                    // Theme Toggle Button (Classic Dark / Daylight)
+                    // Map Theme Selector (Oceanic Teal/Black -> Satellite -> Daylight)
                     FloatingActionButton.small(
                       heroTag: 'theme_toggle_btn',
+                      tooltip: _mapStyle == 'oceanic'
+                          ? 'Midnight Oceanic (Tap for Satellite)'
+                          : _mapStyle == 'satellite'
+                              ? 'Satellite Earth (Tap for Daylight)'
+                              : 'Daylight Map (Tap for Oceanic)',
                       backgroundColor:
                           _isDarkTheme ? const Color(0xFF1E293B) : Colors.white,
-                      foregroundColor: _isDarkTheme
-                          ? const Color(0xFFF59E0B)
-                          : const Color(0xFF0F172A),
+                      foregroundColor: _mapStyle == 'oceanic'
+                          ? const Color(0xFF38BDF8)
+                          : _mapStyle == 'satellite'
+                              ? const Color(0xFF34D399)
+                              : const Color(0xFFF59E0B),
                       elevation: 4,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -299,12 +315,20 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                       ),
                       onPressed: () {
                         setState(() {
-                          _isDarkTheme = !_isDarkTheme;
+                          if (_mapStyle == 'oceanic') {
+                            _mapStyle = 'satellite';
+                          } else if (_mapStyle == 'satellite') {
+                            _mapStyle = 'daylight';
+                          } else {
+                            _mapStyle = 'oceanic';
+                          }
                         });
                       },
-                      child: Icon(_isDarkTheme
-                          ? Icons.dark_mode_rounded
-                          : Icons.light_mode_rounded),
+                      child: Icon(_mapStyle == 'oceanic'
+                          ? Icons.water_drop_rounded
+                          : _mapStyle == 'satellite'
+                              ? Icons.satellite_alt_rounded
+                              : Icons.light_mode_rounded),
                     ),
                     const SizedBox(height: 8),
                     FloatingActionButton.small(
