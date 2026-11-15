@@ -16,7 +16,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late final MapController _profileMapController;
   String _activeTab = 'All Flags';
-  String _mapStyle = 'nature'; // 'nature' (NatGeo Green), 'topo' (OpenTopoMap), 'dark' (Midnight Dark)
+  bool _isOceanicTheme = true; // true: Midnight Oceanic (Teal/Blue/Black mix), false: Daylight White map
 
   @override
   void initState() {
@@ -357,37 +357,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               maxZoom: 15.0,
                             ),
                             children: [
-                              if (_mapStyle == 'nature')
-                                TileLayer(
-                                  urlTemplate:
-                                      'https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}',
-                                  userAgentPackageName: 'com.onway.teritory',
-                                  maxNativeZoom: 16,
-                                )
-                              else if (_mapStyle == 'topo')
-                                TileLayer(
-                                  urlTemplate:
-                                      'https://tile.opentopomap.org/{z}/{x}/{y}.png',
-                                  userAgentPackageName: 'com.onway.teritory',
-                                  maxNativeZoom: 17,
-                                )
-                              else
-                                TileLayer(
-                                  urlTemplate:
-                                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                  userAgentPackageName: 'com.onway.teritory',
-                                  tileBuilder: (context, tileWidget, tile) =>
-                                      ColorFiltered(
-                                    colorFilter:
-                                        const ColorFilter.matrix(<double>[
-                                      -0.62, 0, 0, 0, 160,
-                                      0, -0.66, 0, 0, 170,
-                                      0, 0, -0.74, 0, 192,
-                                      0, 0, 0, 1, 0,
-                                    ]),
-                                    child: tileWidget,
-                                  ),
-                                ),
+                              TileLayer(
+                                urlTemplate:
+                                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                userAgentPackageName: 'com.onway.teritory',
+                                tileBuilder: _isOceanicTheme
+                                    ? (context, tileWidget, tile) =>
+                                        ColorFiltered(
+                                      colorFilter:
+                                          const ColorFilter.matrix(<double>[
+                                        -0.20, -0.15, -0.30, 0.0, 140,
+                                        -0.45,  0.20, -0.35, 0.0, 165,
+                                        -0.55,  0.05, -0.05, 0.0, 185,
+                                         0.0,   0.0,   0.0,  1.0, 0,
+                                      ]),
+                                      child: tileWidget,
+                                    )
+                                    : null,
+                              ),
                               MarkerLayer(
                                 markers: allFlags.map((flag) {
                                   return Marker(
@@ -450,9 +437,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  _buildMapThemePill('🌿 Nature', 'nature'),
-                                  _buildMapThemePill('⛰️ Topo', 'topo'),
-                                  _buildMapThemePill('🌙 Dark', 'dark'),
+                                  _buildMapThemePill('🌊 Oceanic', true),
+                                  _buildMapThemePill('☀️ Daylight', false),
                                 ],
                               ),
                             ),
@@ -810,26 +796,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildMapThemePill(String label, String styleKey) {
-    final isSelected = _mapStyle == styleKey;
+  Widget _buildMapThemePill(String label, bool isOceanic) {
+    final isSelected = _isOceanicTheme == isOceanic;
     return GestureDetector(
       onTap: () {
         setState(() {
-          _mapStyle = styleKey;
+          _isOceanicTheme = isOceanic;
         });
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF1B4332) : Colors.transparent, // Rich Forest Green
+          color: isSelected ? const Color(0xFF0F172A) : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Text(
           label,
           style: GoogleFonts.plusJakartaSans(
-            fontSize: 10.5,
+            fontSize: 11,
             fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            color: isSelected ? Colors.white : TeritoryColors.textSecondary,
+            color: isSelected
+                ? (isOceanic ? const Color(0xFF38BDF8) : const Color(0xFFF59E0B))
+                : TeritoryColors.textSecondary,
           ),
         ),
       ),
