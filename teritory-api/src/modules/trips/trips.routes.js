@@ -4,6 +4,7 @@ const tripsController = require('./trips.controller');
 const { authenticate, optionalAuthenticate } = require('../../middleware/authenticate');
 
 router.get('/hub', authenticate, tripsController.getTripsHub);
+router.get('/plans', optionalAuthenticate, tripsController.listTripPlans);
 router.post('/plans', authenticate, tripsController.createTripPlan);
 router.get('/plans/saved', authenticate, tripsController.getSavedTripPlans);
 router.get('/plans/:id', optionalAuthenticate, tripsController.getTripPlanById);

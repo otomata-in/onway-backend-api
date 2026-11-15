@@ -198,6 +198,11 @@ const sendCommunityMessage = async (req, res, next) => {
       },
     });
 
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`community:${id}`).emit('new_message', message);
+    }
+
     return ApiResponse.created(res, message);
   } catch (err) {
     next(err);

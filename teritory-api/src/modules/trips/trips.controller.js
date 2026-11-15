@@ -299,6 +299,19 @@ const validateWaypoint = async (req, res, next) => {
       },
     });
 
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`trip:${tripId}`).emit('waypoint_validated', {
+        tripId,
+        waypointId,
+        userId: req.user.id,
+        userName: req.user.displayName,
+        waypointName: waypoint.placeName,
+        isValid,
+        distanceM: Math.round(distanceM),
+      });
+    }
+
     return ApiResponse.success(res, {
       isValid,
       distanceM: Math.round(distanceM),
@@ -463,9 +476,32 @@ const getSavedTripPlans = async (req, res, next) => {
   }
 };
 
+const listTripPlans = async (req, res, next) => {
+  try {
+    const { communityId, status } = req.query;
+    const where = {};
+    if (communityId) where.communityId = communityId;
+    if (status) where.status = status;
+
+    const plans = await prisma.tripPlan.findMany({
+      where,
+      include: {
+        waypoints: { orderBy: { orderIndex: 'asc' } },
+        createdBy: { select: { id: true, displayName: true, avatarUrl: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return ApiResponse.success(res, plans);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getTripsHub,
   createTripPlan,
+  listTripPlans,
   getTripPlanById,
   voteTripPlan,
   startTripFromPlan,

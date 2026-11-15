@@ -1,3 +1,5 @@
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
 require('dotenv').config();
 const http = require('http');
 const { Server } = require('socket.io');
@@ -21,6 +23,7 @@ const io = new Server(server, {
   pingTimeout: 20000,
 });
 
+app.set('io', io);
 initSocket(io);
 
 // Start background cron jobs

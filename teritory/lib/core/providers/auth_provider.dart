@@ -3,6 +3,7 @@ import '../models/user_models.dart';
 import '../services/teritory_repository.dart';
 import '../services/api_service.dart';
 import '../services/mock_data_service.dart';
+import '../services/socket_service.dart';
 
 class CurrentUserNotifier extends Notifier<User> {
   @override
@@ -18,6 +19,7 @@ class CurrentUserNotifier extends Notifier<User> {
     }
     final user = await TeritoryRepository.instance.fetchMyProfile();
     state = user;
+    SocketService.instance.connect();
   }
 
   void updateUser(User user) {
@@ -28,12 +30,14 @@ class CurrentUserNotifier extends Notifier<User> {
     final user = await TeritoryRepository.instance.loginWithOtp(phone, otp);
     if (user != null) {
       state = user;
+      SocketService.instance.connect();
       return true;
     }
     return false;
   }
 
   Future<void> logout() async {
+    SocketService.instance.disconnect();
     await TeritoryApiService.instance.clearToken();
     state = MockDataService.instance.currentUser;
   }

@@ -24,6 +24,7 @@ class TeritoryApiService {
 
   String? _token;
   String? get token => _token;
+  String? get accessToken => _token;
   bool get isAuthenticated => _token != null && _token!.isNotEmpty;
 
   static const String _tokenKey = 'teritory_access_token';

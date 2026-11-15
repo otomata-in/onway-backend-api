@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user_models.dart';
 import '../models/clan_models.dart';
@@ -9,6 +10,7 @@ import '../models/leaderboard_models.dart';
 import '../models/notification_models.dart';
 import '../services/teritory_repository.dart';
 import '../services/mock_data_service.dart';
+import '../services/socket_service.dart';
 
 // ─── Clans ─────────────────────────────────────────────────────────────
 
@@ -110,9 +112,21 @@ final communityMembersProvider =
 
 class CommunityMessagesNotifier
     extends FamilyNotifier<List<CommunityMessage>, String> {
+  StreamSubscription<CommunityMessage>? _sub;
+
   @override
   List<CommunityMessage> build(String arg) {
     _load(arg);
+    SocketService.instance.joinCommunity(arg);
+    _sub = SocketService.instance.messageStream.listen((msg) {
+      if (msg.communityId == arg && !state.any((m) => m.id == msg.id)) {
+        state = [...state, msg];
+      }
+    });
+    ref.onDispose(() {
+      _sub?.cancel();
+      SocketService.instance.leaveCommunity(arg);
+    });
     return MockDataService.instance.messagesByCommunity(arg);
   }
 
@@ -123,7 +137,7 @@ class CommunityMessagesNotifier
 
   Future<void> sendMessage(String text) async {
     final newMsg = await TeritoryRepository.instance.sendCommunityMessage(arg, text);
-    if (newMsg != null) {
+    if (newMsg != null && !state.any((m) => m.id == newMsg.id)) {
       state = [...state, newMsg];
     }
   }

@@ -4,10 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../../../core/models/trip_models.dart';
 import '../../../core/providers/data_providers.dart';
 import '../../../core/services/mock_data_service.dart';
 import '../../../core/services/teritory_repository.dart';
+import '../../../core/services/socket_service.dart';
 import '../../../core/theme/teritory_theme.dart';
 
 class ActiveTripScreen extends ConsumerStatefulWidget {
@@ -44,13 +44,15 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Find the active trip
-    final trips = MockDataService.instance.activeTrips
-        .where((t) => t.status == TripStatus.active)
-        .toList();
+    // Find the active trip from live provider
+    final trips = ref.watch(activeTripProvider);
     final trip = widget.tripId != null
         ? trips.where((t) => t.id == widget.tripId).firstOrNull ?? trips.firstOrNull
         : trips.firstOrNull;
+
+    if (trip != null) {
+      SocketService.instance.joinTrip(trip.id);
+    }
 
     if (trip == null) {
       return Scaffold(
@@ -67,10 +69,10 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
       );
     }
 
-    // Get the associated plan for waypoints
-    final plan = MockDataService.instance.tripPlans
-        .where((p) => p.id == trip.tripPlanId)
-        .firstOrNull;
+    // Get the associated plan for waypoints from live provider
+    final allPlans = ref.watch(tripPlansProvider);
+    final plan = allPlans.where((p) => p.id == trip.tripPlanId).firstOrNull ??
+        MockDataService.instance.tripPlans.where((p) => p.id == trip.tripPlanId).firstOrNull;
 
     final waypoints = plan?.waypoints ?? [];
     final waypointPoints =
