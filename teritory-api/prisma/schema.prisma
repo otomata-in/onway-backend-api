@@ -1,0 +1,638 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── ENUMS ─────────────────────────────────────────────────────────
+
+enum AuthProvider {
+  PHONE
+  EMAIL
+  GOOGLE
+  APPLE
+}
+
+enum FriendStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  BLOCKED
+}
+
+enum FriendCategory {
+  FAVORITES
+  TRAVEL_BUDDIES
+  FAMILY
+}
+
+enum ClanRole {
+  CHIEFTAIN
+  MODERATOR
+  MEMBER
+}
+
+enum CommunityRole {
+  CREATOR
+  MODERATOR
+  MEMBER
+}
+
+enum CommunityActivityType {
+  FLAG_DROP
+  TRIP_COMPLETE
+  ANNOUNCEMENT
+  MEMBER_JOIN
+}
+
+enum TripPlanStatus {
+  DRAFT
+  PROPOSED
+  VOTED
+  ACTIVE
+  COMPLETED
+}
+
+enum TripLiveStatus {
+  ACTIVE
+  COMPLETED
+  EXPIRED
+}
+
+enum ParticipantStatus {
+  JOINED
+  IN_PROGRESS
+  COMPLETED
+  DROPPED
+}
+
+enum TripBadge {
+  FULL
+  PARTIAL
+  NONE
+}
+
+enum ReactionType {
+  EPIC
+  HIDDEN_GEM
+  GREAT_SHOT
+}
+
+enum RallyStatus {
+  GATHERING
+  ACTIVE
+  COMPLETED
+  EXPIRED
+}
+
+enum LeaderboardScope {
+  GLOBAL
+  COUNTRY
+  STATE
+  DISTRICT
+  FRIENDS
+}
+
+enum LeaderboardPeriod {
+  ALL_TIME
+  YEARLY
+  MONTHLY
+  WEEKLY
+}
+
+enum NotificationType {
+  FRIEND_REQUEST
+  FRIEND_ACCEPTED
+  CLAN_INVITE
+  COMMUNITY_INVITE
+  TRIP_INVITE
+  TRIP_STARTED
+  TRIP_COMPLETED
+  RALLY_INVITE
+  RALLY_STARTED
+  WAYPOINT_VALIDATED
+  ACHIEVEMENT
+  SYSTEM
+}
+
+// ─── USER & AUTH ───────────────────────────────────────────────────
+
+model User {
+  id            String       @id @default(uuid())
+  phone         String?      @unique
+  email         String?      @unique
+  displayName   String
+  handle        String       @unique
+  avatarUrl     String?
+  coverImageUrl String?
+  bio           String       @default("")
+  authProvider  AuthProvider @default(PHONE)
+  fcmToken      String?
+  isActive      Boolean      @default(true)
+  isVerified    Boolean      @default(false)
+
+  // Aggregated Stats
+  totalFlags            Int @default(0)
+  majorFlags            Int @default(0)
+  countriesVisited      Int @default(0)
+  continentsVisited     Int @default(0)
+  totalTravelDays       Int @default(0)
+  completedTripsCount   Int @default(0)
+  legendaryRalliesCount Int @default(0)
+
+  // Location & Base
+  country       String?
+  countryCode   String?
+  state         String?
+  district      String?
+  lastLatitude  Float?
+  lastLongitude Float?
+  lastActiveAt  DateTime?
+
+  // Preferences
+  mapStyle   String  @default("midnight_oceanic")
+  isPrivate  Boolean @default(false)
+  isTripMode Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  refreshTokens        RefreshToken[]
+  flags                Flag[]
+  flagReactions        FlagReaction[]
+  flagComments         FlagComment[]
+  friendsSent          FriendRelationship[] @relation("SentFriends")
+  friendsReceived      FriendRelationship[] @relation("ReceivedFriends")
+  passportStamps       PassportStamp[]
+  clanMemberships      ClanMember[]
+  clansChieftained     Clan[]               @relation("ClanChieftain")
+  communityMemberships CommunityMember[]
+  communityMessages    CommunityMessage[]
+  communityActivities  CommunityActivity[]
+  tripPlansCreated     TripPlan[]           @relation("PlanCreator")
+  tripVotes            TripVote[]
+  savedTripPlans       SavedTripPlan[]
+  tripsCreated         Trip[]               @relation("TripLeader")
+  tripParticipations   TripParticipant[]
+  waypointValidations  WaypointValidation[]
+  ralliesCreated       LegendaryRally[]     @relation("RallyHost")
+  rallyParticipations  RallyParticipant[]
+  notifications        Notification[]
+
+  @@index([handle])
+  @@index([country, state, district])
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  userId     String
+  tokenHash  String   @unique
+  deviceInfo String?
+  isRevoked  Boolean  @default(false)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ─── SOCIAL GRAPH & FRIENDS ────────────────────────────────────────
+
+model FriendRelationship {
+  id         String          @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     FriendStatus    @default(PENDING)
+  category   FriendCategory?
+  since      DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  sender   User @relation("SentFriends", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedFriends", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@index([senderId, status])
+  @@index([receiverId, status])
+  @@map("friend_relationships")
+}
+
+// ─── FLAGS, SUB-TERRITORIES & INTERACTIONS ──────────────────────────
+
+model Flag {
+  id          String   @id @default(uuid())
+  userId      String
+  placeName   String
+  city        String
+  country     String
+  countryCode String   @default("IN")
+  continent   String   @default("Asia")
+  latitude    Float
+  longitude   Float
+  isMajorFlag Boolean  @default(false)
+  category    String   @default("General")
+  notes       String   @default("")
+  photoUrl    String?
+  kudos       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reactions FlagReaction[]
+  comments  FlagComment[]
+
+  @@index([userId])
+  @@index([latitude, longitude])
+  @@index([country, city])
+  @@map("flags")
+}
+
+model FlagReaction {
+  id        String       @id @default(uuid())
+  flagId    String
+  userId    String
+  type      ReactionType
+  createdAt DateTime     @default(now())
+
+  flag Flag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([flagId, userId, type])
+  @@map("flag_reactions")
+}
+
+model FlagComment {
+  id        String   @id @default(uuid())
+  flagId    String
+  userId    String
+  text      String
+  createdAt DateTime @default(now())
+
+  flag Flag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([flagId, createdAt])
+  @@map("flag_comments")
+}
+
+model PassportStamp {
+  id         String   @id @default(uuid())
+  userId     String
+  title      String
+  category   String
+  date       String
+  badgeColor String   @default("#F59E0B")
+  icon       String   @default("star")
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("passport_stamps")
+}
+
+// ─── CLANS & COMMUNITIES ────────────────────────────────────────────
+
+model Clan {
+  id               String   @id @default(uuid())
+  name             String
+  description      String   @default("")
+  coverImageUrl    String?
+  region           String   @default("")
+  interestTag      String   @default("")
+  chieftainId      String
+  isPublic         Boolean  @default(true)
+  memberCount      Int      @default(1)
+  communitiesCount Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  chieftain   User          @relation("ClanChieftain", fields: [chieftainId], references: [id])
+  members     ClanMember[]
+  communities Community[]
+
+  @@index([region])
+  @@map("clans")
+}
+
+model ClanMember {
+  id       String   @id @default(uuid())
+  clanId   String
+  userId   String
+  role     ClanRole @default(MEMBER)
+  joinedAt DateTime @default(now())
+
+  clan Clan @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clanId, userId])
+  @@map("clan_members")
+}
+
+model Community {
+  id                   String   @id @default(uuid())
+  name                 String
+  description          String   @default("")
+  coverImageUrl        String?
+  parentClanId         String
+  isPublic             Boolean  @default(true)
+  interestTags         String[] @default([])
+  memberCount          Int      @default(1)
+  activeTripPlansCount Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  clan       Clan                @relation(fields: [parentClanId], references: [id], onDelete: Cascade)
+  members    CommunityMember[]
+  messages   CommunityMessage[]
+  activities CommunityActivity[]
+  tripPlans  TripPlan[]
+
+  @@index([parentClanId])
+  @@map("communities")
+}
+
+model CommunityMember {
+  id          String        @id @default(uuid())
+  communityId String
+  userId      String
+  role        CommunityRole @default(MEMBER)
+  joinedAt    DateTime      @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, userId])
+  @@map("community_members")
+}
+
+model CommunityMessage {
+  id          String   @id @default(uuid())
+  communityId String
+  userId      String
+  text        String
+  createdAt   DateTime @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([communityId, createdAt])
+  @@map("community_messages")
+}
+
+model CommunityActivity {
+  id          String                @id @default(uuid())
+  communityId String
+  userId      String
+  type        CommunityActivityType
+  title       String
+  description String                @default("")
+  createdAt   DateTime              @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([communityId, createdAt])
+  @@map("community_activities")
+}
+
+// ─── EXPEDITIONS, TRIP PLANS & VALIDATIONS ─────────────────────────
+
+model TripPlan {
+  id               String         @id @default(uuid())
+  name             String
+  description      String         @default("")
+  createdById      String
+  communityId      String?
+  originName       String
+  destinationName  String
+  totalDistanceKm  Float          @default(0.0)
+  estimatedDays    Int            @default(1)
+  status           TripPlanStatus @default(DRAFT)
+  voteCount        Int            @default(0)
+  participantLimit Int            @default(50)
+  startDate        DateTime?
+  endDate          DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  createdBy User            @relation("PlanCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  community Community?      @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  waypoints TripWaypoint[]
+  votes     TripVote[]
+  trips     Trip[]
+  savedBy   SavedTripPlan[]
+
+  @@index([communityId])
+  @@index([createdById])
+  @@map("trip_plans")
+}
+
+model TripWaypoint {
+  id                     String    @id @default(uuid())
+  tripPlanId             String
+  orderIndex             Int
+  placeName              String
+  latitude               Float
+  longitude              Float
+  category               String    @default("general")
+  flagCount              Int       @default(0)
+  estimatedArrivalTime   DateTime?
+  estimatedDepartureTime DateTime?
+  distanceFromPrevKm     Float     @default(0.0)
+  createdAt              DateTime  @default(now())
+
+  tripPlan    TripPlan             @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
+  validations WaypointValidation[]
+
+  @@index([tripPlanId, orderIndex])
+  @@map("trip_waypoints")
+}
+
+model TripVote {
+  id         String   @id @default(uuid())
+  tripPlanId String
+  userId     String
+  createdAt  DateTime @default(now())
+
+  tripPlan TripPlan @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tripPlanId, userId])
+  @@map("trip_votes")
+}
+
+model SavedTripPlan {
+  id         String   @id @default(uuid())
+  userId     String
+  tripPlanId String
+  savedAt    DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tripPlan TripPlan @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tripPlanId])
+  @@map("saved_trip_plans")
+}
+
+model Trip {
+  id          String         @id @default(uuid())
+  tripPlanId  String
+  createdById String
+  status      TripLiveStatus @default(ACTIVE)
+  startedAt   DateTime       @default(now())
+  completedAt DateTime?
+  expiresAt   DateTime
+
+  tripPlan     TripPlan             @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
+  leader       User                 @relation("TripLeader", fields: [createdById], references: [id])
+  participants TripParticipant[]
+  validations  WaypointValidation[]
+
+  @@index([tripPlanId])
+  @@index([createdById, status])
+  @@map("trips")
+}
+
+model TripParticipant {
+  id       String            @id @default(uuid())
+  tripId   String
+  userId   String
+  status   ParticipantStatus @default(JOINED)
+  badge    TripBadge         @default(NONE)
+  joinedAt DateTime          @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, userId])
+  @@map("trip_participants")
+}
+
+model WaypointValidation {
+  id          String   @id @default(uuid())
+  tripId      String
+  waypointId  String
+  userId      String
+  latitude    Float
+  longitude   Float
+  distanceM   Float
+  isValid     Boolean  @default(false)
+  validatedAt DateTime @default(now())
+
+  trip     Trip         @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  waypoint TripWaypoint @relation(fields: [waypointId], references: [id], onDelete: Cascade)
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, waypointId, userId])
+  @@map("waypoint_validations")
+}
+
+// ─── LEGENDARY RALLIES ──────────────────────────────────────────────
+
+model LegendaryRally {
+  id              String      @id @default(uuid())
+  name            String
+  description     String      @default("")
+  createdById     String
+  latitude        Float
+  longitude       Float
+  placeName       String
+  status          RallyStatus @default(GATHERING)
+  minParticipants Int         @default(3)
+  maxParticipants Int         @default(50)
+  scheduledAt     DateTime?
+  expiresAt       DateTime
+  completedAt     DateTime?
+  createdAt       DateTime    @default(now())
+
+  host         User               @relation("RallyHost", fields: [createdById], references: [id])
+  participants RallyParticipant[]
+
+  @@index([latitude, longitude])
+  @@map("legendary_rallies")
+}
+
+model RallyParticipant {
+  id         String    @id @default(uuid())
+  rallyId    String
+  userId     String
+  hasArrived Boolean   @default(false)
+  arrivedAt  DateTime?
+  joinedAt   DateTime  @default(now())
+
+  rally LegendaryRally @relation(fields: [rallyId], references: [id], onDelete: Cascade)
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([rallyId, userId])
+  @@map("rally_participants")
+}
+
+// ─── SERVICES & GEAR HUBS ───────────────────────────────────────────
+
+model ServiceProvider {
+  id           String   @id @default(uuid())
+  name         String
+  description  String   @default("")
+  category     String
+  rating       Float    @default(4.0)
+  latitude     Float
+  longitude    Float
+  contactPhone String?
+  contactEmail String?
+  websiteUrl   String?
+  imageUrl     String?
+  isVerified   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  listings ServiceListing[]
+
+  @@index([latitude, longitude])
+  @@index([category])
+  @@map("service_providers")
+}
+
+model ServiceListing {
+  id          String   @id @default(uuid())
+  providerId  String
+  name        String
+  description String   @default("")
+  priceRange  String   @default("")
+  category    String
+  imageUrl    String?
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  provider ServiceProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
+  @@map("service_listings")
+}
+
+// ─── NOTIFICATIONS ──────────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  icon      String?
+  actionUrl String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+

@@ -1,0 +1,15 @@
+const express = require('express');
+const router = express.Router();
+const flagsController = require('./flags.controller');
+const { authenticate, optionalAuthenticate } = require('../../middleware/authenticate');
+
+router.get('/explore', optionalAuthenticate, flagsController.exploreFlags);
+router.get('/sub-territories', optionalAuthenticate, flagsController.getSubTerritories);
+router.post('/', authenticate, flagsController.dropFlag);
+
+router.get('/:id', optionalAuthenticate, flagsController.getFlagById);
+router.post('/:id/reactions', authenticate, flagsController.toggleReaction);
+router.post('/:id/comments', authenticate, flagsController.addComment);
+router.post('/:id/kudos', authenticate, flagsController.addKudos);
+
+module.exports = router;
