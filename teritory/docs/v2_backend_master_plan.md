@@ -1,145 +1,163 @@
-# 🏴 Teritory V2 — Backend Master Plan
+# 🏴 Teritory — Standalone Backend Master Plan (Fresh Architecture)
 
-> **Version**: 2.0 | **Date**: 15 Nov 2026  
-> **Stack**: Node.js 22 + Express 5 + Prisma 5 + Neon PostgreSQL + Redis + Socket.IO  
-> **Base URL**: `https://onway-backend-api.onrender.com/api/v2/teritory`  
-> **Auth**: JWT (Bearer token) — shared with existing OnWay auth system
+> **Version**: 2.1 (Fresh Independent Backend)  
+> **Date**: 15 Nov 2026  
+> **Project Name**: `teritory-api`  
+> **Target Base URL**: `https://api.teritory.app/v1` (Dev: `http://localhost:4000/v1`)  
+> **Tech Stack**: Node.js 22 (LTS) • Express 5 • Prisma 5 • Neon PostgreSQL (with PostGIS) • Redis 7 • Socket.IO 4.8  
+> **Scope**: 100% standalone, independent backend dedicated entirely to the Teritory platform (zero coupling or dependencies on OnWay).
 
 ---
 
 ## Table of Contents
 
-1. [Architecture Overview](#1-architecture-overview)
-2. [Database Schema & Relations (Prisma)](#2-database-schema--relations)
-3. [Authentication & User Lifecycle](#3-authentication--user-lifecycle)
-4. [Page-Wise API Endpoints](#4-page-wise-api-endpoints)
+1. [Architecture Overview & Independence](#1-architecture-overview--independence)
+2. [Database Schema & ERD (Prisma + PostGIS)](#2-database-schema--erd)
+3. [Authentication, Security & Session Lifecycle](#3-authentication-security--session-lifecycle)
+4. [Page-Wise API Endpoints (1:1 Screen Mapping)](#4-page-wise-api-endpoints)
 5. [Complete Functionality Lifecycle Flows](#5-complete-functionality-lifecycle-flows)
-6. [Real-Time (Socket.IO) Events](#6-real-time-socketio-events)
-7. [Background Jobs & Scheduled Tasks](#7-background-jobs--scheduled-tasks)
-8. [File Storage & Media](#8-file-storage--media)
-9. [Leaderboard & Scoring Engine](#9-leaderboard--scoring-engine)
-10. [Module Structure & Code Organization](#10-module-structure--code-organization)
-11. [Deployment & Infrastructure](#11-deployment--infrastructure)
-12. [Implementation Phases](#12-implementation-phases)
+6. [Real-Time Socket.IO Architecture](#6-real-time-socketio-architecture)
+7. [Geo-Spatial Query Engine & Algorithms](#7-geo-spatial-query-engine--algorithms)
+8. [Background Workers & Cron Tasks](#8-background-workers--cron-tasks)
+9. [Media Upload & Object Storage](#9-media-upload--object-storage)
+10. [Leaderboard & Scoring Calculation](#10-leaderboard--scoring-calculation)
+11. [Project Structure & Code Organization](#11-project-structure--code-organization)
+12. [Step-by-Step Backend Implementation Roadmap](#12-step-by-step-backend-implementation-roadmap)
 
 ---
 
-## 1. Architecture Overview
+## 1. Architecture Overview & Independence
+
+The **Teritory Backend** is architected from scratch as a high-performance, geo-enabled microservice tailored specifically for social travel, GPS expedition validation, clan community collaboration, and real-time rally coordination.
 
 ```mermaid
 flowchart TD
-    subgraph Client["Flutter App (Teritory)"]
-        A[Home Map] --> API
-        B[Clans] --> API
-        C[Trips] --> API
-        D[Rankings] --> API
-        E[Profile] --> API
-        F[Community Chat] --> WS
+    subgraph Client["Teritory Flutter App"]
+        HM[Explore Map & Flags]
+        CL[Clans & Communities]
+        TR[Trip Planner & Active Mode]
+        LB[Multi-Scope Rankings]
+        PR[Profile & Social Graph]
+        CH[Live Chat & Rally]
     end
 
-    subgraph API["Express API Server"]
-        R[Router /api/v2/teritory/*]
-        MW[Auth Middleware]
-        R --> MW --> Ctrl[Controllers]
-        Ctrl --> Svc[Services]
-        Svc --> Prisma[Prisma ORM]
-        Svc --> RedisC[Redis Cache]
-        Svc --> FCM[Firebase FCM]
+    subgraph Gateway["Teritory API Gateway / Express App (Port 4000)"]
+        RT[API Router /v1/*]
+        AUTH[JWT & Session Auth Middleware]
+        GEO[Geo Middleware / Spatial Validation]
+        RT --> AUTH --> GEO
     end
 
-    subgraph WS["Socket.IO Server"]
-        Chat[Chat Namespace]
-        Trip[Trip Tracking NS]
-        Rally[Rally Live NS]
+    subgraph Sockets["Socket.IO Server"]
+        WS_CHAT["/chat (Community Rooms)"]
+        WS_TRIP["/trip (Live Expeditions)"]
+        WS_RALLY["/rally (Gathering Coordination)"]
     end
 
-    subgraph DB["Neon PostgreSQL"]
-        Tables[(28 Teritory Tables + 18 OnWay Tables)]
+    subgraph Services["Core Application Services"]
+        AUTH_SVC[Auth & Identity Service]
+        FLAG_SVC[Flag & Sub-Territory Service]
+        CLAN_SVC[Clan & Community Service]
+        TRIP_SVC[Expedition & Waypoint Service]
+        RANK_SVC[Leaderboard & Scoring Engine]
+        NOTIF_SVC[FCM Push Notification Service]
     end
 
-    subgraph Cache["Redis"]
-        LB[Leaderboard Sorted Sets]
-        LS[Location Cache]
-        OL[Online Users]
-        TL[Trip Live State]
+    subgraph DataStore["Data & Persistence Tier"]
+        PG[(Neon PostgreSQL + PostGIS)]
+        REDIS[(Redis 7 Cache & Sorted Sets)]
+        S3[(Neon Object Storage / S3)]
     end
 
-    subgraph Storage["File Storage"]
-        S3[Neon Object Storage / S3]
-    end
-
-    Prisma --> DB
-    RedisC --> Cache
-    WS --> Cache
-    Ctrl --> Storage
+    Client -- HTTP / REST --> RT
+    Client -- WebSockets --> Sockets
+    GEO --> Services
+    Services --> PG
+    Services --> REDIS
+    Services --> S3
+    Sockets --> REDIS
 ```
 
-### Key Design Decisions
-
-| Decision | Choice | Rationale |
-|---|---|---|
-| Database | Neon PostgreSQL (same instance) | Existing infra, branching, zero cost |
-| ORM | Prisma (extend existing schema) | Already in use for OnWay V1 |
-| Auth | Shared JWT system | Users can use both OnWay & Teritory with same account |
-| Real-time | Socket.IO (extend existing) | Chat, trip tracking, rally live updates |
-| Cache | Redis sorted sets | Leaderboard rankings, online status, location |
-| File Storage | Neon Object Storage | Avatar uploads, flag photos, trip photos |
-| API Versioning | `/api/v2/teritory/*` | Separate namespace from OnWay APIs |
+### Key Architectural Principles
+1. **Total Isolation**: Independent database, auth schemas, migration history, Redis namespace, and deployment pipelines.
+2. **Native Geospatial Intelligence**: Uses PostgreSQL PostGIS (`GEOMETRY(Point, 4326)`) for spatial indexing, sub-territory discovery (<5km), route corridor buffering (10–50km), and waypoint arrival validation (≤15km radius).
+3. **High-Throughput Caching**: Redis handles active trip locations, community live typing indicators, and atomic sorted sets (`ZSET`) for sub-second multi-scope leaderboard rankings.
+4. **Contract Fidelity**: Backend REST responses map 1:1 to Flutter `fromJson` models (`User`, `FlagItem`, `Clan`, `Community`, `TripPlan`, `Trip`, `LegendaryRally`, etc.).
 
 ---
 
-## 2. Database Schema & Relations
+## 2. Database Schema & ERD
 
 ### 2.1 Entity Relationship Diagram
 
 ```mermaid
 erDiagram
-    TeritoryProfile ||--o{ Flag : "drops"
-    TeritoryProfile ||--o{ FriendRelationship : "has friends"
-    TeritoryProfile ||--o{ ClanMember : "joins clans"
-    TeritoryProfile ||--o{ CommunityMember : "joins communities"
-    TeritoryProfile ||--o{ TripParticipant : "joins trips"
-    TeritoryProfile ||--o{ RallyParticipant : "joins rallies"
-    TeritoryProfile ||--o{ SavedTripPlan : "saves plans"
-    TeritoryProfile ||--o{ Notification : "receives"
+    User ||--o{ RefreshToken : "owns"
+    User ||--o{ Flag : "drops"
+    User ||--o{ FlagReaction : "reacts"
+    User ||--o{ FlagComment : "comments"
+    User ||--o{ FriendRelationship : "initiates/receives"
+    User ||--o{ PassportStamp : "earns"
+    User ||--o{ ClanMember : "joins"
+    User ||--o{ CommunityMember : "joins"
+    User ||--o{ CommunityMessage : "posts"
+    User ||--o{ CommunityActivity : "triggers"
+    User ||--o{ TripPlan : "authors"
+    User ||--o{ TripVote : "casts"
+    User ||--o{ SavedTripPlan : "saves"
+    User ||--o{ TripParticipant : "takes part in"
+    User ||--o{ WaypointValidation : "validates"
+    User ||--o{ RallyParticipant : "attends"
+    User ||--o{ Notification : "receives"
 
-    Clan ||--o{ ClanMember : "has members"
-    Clan ||--o{ Community : "contains"
+    Clan ||--o{ ClanMember : "contains"
+    Clan ||--o{ Community : "branches into"
 
-    Community ||--o{ CommunityMember : "has members"
-    Community ||--o{ CommunityMessage : "has chat"
-    Community ||--o{ CommunityActivity : "has feed"
-    Community ||--o{ TripPlan : "has trip plans"
+    Community ||--o{ CommunityMember : "has"
+    Community ||--o{ CommunityMessage : "chats"
+    Community ||--o{ CommunityActivity : "logs"
+    Community ||--o{ TripPlan : "hosts"
 
-    TripPlan ||--o{ TripWaypoint : "has waypoints"
-    TripPlan ||--o{ TripVote : "receives votes"
-    TripPlan ||--o{ Trip : "spawns trips"
+    TripPlan ||--o{ TripWaypoint : "defines sequence"
+    TripPlan ||--o{ TripVote : "collects"
+    TripPlan ||--o{ Trip : "launches"
+    TripPlan ||--o{ SavedTripPlan : "bookmarked by"
 
-    Trip ||--o{ TripParticipant : "has participants"
-    Trip ||--o{ WaypointValidation : "has validations"
+    Trip ||--o{ TripParticipant : "roster"
+    Trip ||--o{ WaypointValidation : "progress logs"
 
-    Flag ||--o{ FlagReaction : "receives reactions"
-    Flag ||--o{ FlagComment : "has comments"
+    LegendaryRally ||--o{ RallyParticipant : "roster"
 
-    LegendaryRally ||--o{ RallyParticipant : "has participants"
-
-    ServiceProvider ||--o{ ServiceListing : "offers services"
+    ServiceProvider ||--o{ ServiceListing : "offers"
 ```
 
-### 2.2 Complete Prisma Schema (28 new models)
+### 2.2 Complete Standalone Prisma Schema (`schema.prisma`)
 
 ```prisma
-// ═══════════════════════════════════════════════════════════════════
-// TERITORY V2 — Prisma Models
-// Add these to existing prisma/schema.prisma
-// ═══════════════════════════════════════════════════════════════════
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
 
 // ─── ENUMS ─────────────────────────────────────────────────────────
+
+enum AuthProvider {
+  PHONE
+  EMAIL
+  GOOGLE
+  APPLE
+}
 
 enum FriendStatus {
   PENDING
   ACCEPTED
   DECLINED
+  BLOCKED
 }
 
 enum FriendCategory {
@@ -222,7 +240,7 @@ enum LeaderboardPeriod {
   WEEKLY
 }
 
-enum NotifType {
+enum NotificationType {
   FRIEND_REQUEST
   FRIEND_ACCEPTED
   CLAN_INVITE
@@ -237,127 +255,92 @@ enum NotifType {
   SYSTEM
 }
 
-// ─── TERITORY USER PROFILE ─────────────────────────────────────────
+// ─── USER & AUTH ───────────────────────────────────────────────────
 
-model TeritoryProfile {
-  id            String   @id @default(uuid())
-  userId        String   @unique
+model User {
+  id            String       @id @default(uuid())
+  phone         String?      @unique
+  email         String?      @unique
   displayName   String
-  handle        String   @unique
-  email         String?
-  phone         String?
-  bio           String   @default("")
+  handle        String       @unique
   avatarUrl     String?
   coverImageUrl String?
-  authProvider  String   @default("phone")
+  bio           String       @default("")
+  authProvider  AuthProvider @default(PHONE)
+  fcmToken      String?
+  isActive      Boolean      @default(true)
+  isVerified    Boolean      @default(false)
 
-  // Stats (denormalized for fast reads)
-  totalFlags           Int @default(0)
-  majorFlags           Int @default(0)
-  countriesVisited     Int @default(0)
-  continentsVisited    Int @default(0)
-  totalTravelDays      Int @default(0)
-  completedTripsCount  Int @default(0)
+  // Social & Gamification Stats (Aggregated for fast profile retrieval)
+  totalFlags            Int @default(0)
+  majorFlags            Int @default(0)
+  countriesVisited      Int @default(0)
+  continentsVisited     Int @default(0)
+  totalTravelDays       Int @default(0)
+  completedTripsCount   Int @default(0)
   legendaryRalliesCount Int @default(0)
 
-  // Location
-  lastLatitude   Float?
-  lastLongitude  Float?
-  country        String?
-  state          String?
-  district       String?
+  // Geographical Base & Presence
+  country       String?
+  countryCode   String?
+  state         String?
+  district      String?
+  lastLatitude  Float?
+  lastLongitude Float?
+  lastActiveAt  DateTime?
 
-  // Preferences
-  mapStyle       String   @default("midnight_oceanic")
-  isPrivate      Boolean  @default(false)
-  isTripMode     Boolean  @default(false)
+  // Profile Customization & Privacy
+  mapStyle   String  @default("midnight_oceanic") // midnight_oceanic, daylight_white
+  isPrivate  Boolean @default(false)
+  isTripMode Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  flags             Flag[]
-  friendsSent       FriendRelationship[] @relation("FriendSender")
-  friendsReceived   FriendRelationship[] @relation("FriendReceiver")
-  clanMemberships   ClanMember[]
+  // Relations
+  refreshTokens        RefreshToken[]
+  flags                Flag[]
+  flagReactions        FlagReaction[]
+  flagComments         FlagComment[]
+  friendsSent          FriendRelationship[] @relation("SentFriends")
+  friendsReceived      FriendRelationship[] @relation("ReceivedFriends")
+  passportStamps       PassportStamp[]
+  clanMemberships      ClanMember[]
+  clansChieftained     Clan[]               @relation("ClanChieftain")
   communityMemberships CommunityMember[]
-  tripParticipations TripParticipant[]
-  rallyParticipations RallyParticipant[]
-  savedPlans         SavedTripPlan[]
-  notifications      TeritoryNotification[]
-  flagReactions      FlagReaction[]
-  flagComments       FlagComment[]
-  communityMessages  CommunityMessage[]
-  communityActivities CommunityActivity[]
-  tripPlansCreated   TripPlan[]
-  tripsCreated       Trip[]
-  ralliesCreated     LegendaryRally[]
-  tripVotes          TripVote[]
-  passportStamps     PassportStamp[]
+  communityMessages    CommunityMessage[]
+  communityActivities  CommunityActivity[]
+  tripPlansCreated     TripPlan[]           @relation("PlanCreator")
+  tripVotes            TripVote[]
+  savedTripPlans       SavedTripPlan[]
+  tripsCreated         Trip[]               @relation("TripLeader")
+  tripParticipations   TripParticipant[]
+  waypointValidations  WaypointValidation[]
+  ralliesCreated       LegendaryRally[]     @relation("RallyHost")
+  rallyParticipations  RallyParticipant[]
+  notifications        Notification[]
 
-  @@map("teritory_profiles")
+  @@index([handle])
+  @@index([country, state, district])
+  @@map("users")
 }
 
-// ─── FLAGS ──────────────────────────────────────────────────────────
+model RefreshToken {
+  id         String   @id @default(uuid())
+  userId     String
+  tokenHash  String   @unique
+  deviceInfo String?
+  isRevoked  Boolean  @default(false)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
 
-model Flag {
-  id          String  @id @default(uuid())
-  profileId   String
-  placeName   String
-  city        String
-  country     String
-  countryCode String  @default("GL")
-  continent   String  @default("World")
-  latitude    Float
-  longitude   Float
-  isMajorFlag Boolean @default(false)
-  category    String  @default("General")
-  notes       String  @default("")
-  photoUrl    String?
-  kudos       Int     @default(0)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-
-  profile   TeritoryProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  reactions FlagReaction[]
-  comments  FlagComment[]
-
-  @@index([profileId])
-  @@index([latitude, longitude])
-  @@index([country])
-  @@index([continent])
-  @@map("flags")
+  @@index([userId])
+  @@map("refresh_tokens")
 }
 
-model FlagReaction {
-  id        String       @id @default(uuid())
-  flagId    String
-  profileId String
-  type      ReactionType
-  createdAt DateTime     @default(now())
-
-  flag    Flag            @relation(fields: [flagId], references: [id], onDelete: Cascade)
-  profile TeritoryProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-
-  @@unique([flagId, profileId, type])
-  @@map("flag_reactions")
-}
-
-model FlagComment {
-  id        String   @id @default(uuid())
-  flagId    String
-  profileId String
-  text      String
-  createdAt DateTime @default(now())
-
-  flag    Flag            @relation(fields: [flagId], references: [id], onDelete: Cascade)
-  profile TeritoryProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-
-  @@index([flagId])
-  @@map("flag_comments")
-}
-
-// ─── FRIENDS ────────────────────────────────────────────────────────
+// ─── SOCIAL GRAPH & FRIENDS ────────────────────────────────────────
 
 model FriendRelationship {
   id         String          @id @default(uuid())
@@ -366,90 +349,143 @@ model FriendRelationship {
   status     FriendStatus    @default(PENDING)
   category   FriendCategory?
   since      DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
 
-  sender   TeritoryProfile @relation("FriendSender", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver TeritoryProfile @relation("FriendReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender   User @relation("SentFriends", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedFriends", fields: [receiverId], references: [id], onDelete: Cascade)
 
   @@unique([senderId, receiverId])
+  @@index([senderId, status])
+  @@index([receiverId, status])
   @@map("friend_relationships")
 }
 
-// ─── PASSPORT STAMPS (Achievements) ────────────────────────────────
+// ─── FLAGS, SUB-TERRITORIES & INTERACTIONS ──────────────────────────
+
+model Flag {
+  id          String   @id @default(uuid())
+  userId      String
+  placeName   String
+  city        String
+  country     String
+  countryCode String   @default("IN")
+  continent   String   @default("Asia")
+  latitude    Float
+  longitude   Float
+  isMajorFlag Boolean  @default(false)
+  category    String   @default("General") // Scenic, Heritage, Waterfall, Camping, etc.
+  notes       String   @default("")
+  photoUrl    String?
+  kudos       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reactions FlagReaction[]
+  comments  FlagComment[]
+
+  @@index([userId])
+  @@index([latitude, longitude])
+  @@index([country, city])
+  @@map("flags")
+}
+
+model FlagReaction {
+  id        String       @id @default(uuid())
+  flagId    String
+  userId    String
+  type      ReactionType
+  createdAt DateTime     @default(now())
+
+  flag Flag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([flagId, userId, type])
+  @@map("flag_reactions")
+}
+
+model FlagComment {
+  id        String   @id @default(uuid())
+  flagId    String
+  userId    String
+  text      String
+  createdAt DateTime @default(now())
+
+  flag Flag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([flagId, createdAt])
+  @@map("flag_comments")
+}
 
 model PassportStamp {
-  id         String @id @default(uuid())
-  profileId  String
+  id         String   @id @default(uuid())
+  userId     String
   title      String
-  date       String
   category   String
-  badgeColor String @default("#F59E0B")
-  icon       String @default("star")
+  date       String
+  badgeColor String   @default("#F59E0B")
+  icon       String   @default("star")
   createdAt  DateTime @default(now())
 
-  profile TeritoryProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([profileId])
+  @@index([userId])
   @@map("passport_stamps")
 }
 
-// ─── CLANS ──────────────────────────────────────────────────────────
+// ─── CLANS & COMMUNITIES ────────────────────────────────────────────
 
 model Clan {
-  id              String  @id @default(uuid())
-  name            String
-  description     String  @default("")
-  coverImageUrl   String?
-  region          String  @default("")
-  interestTag     String  @default("")
-  chieftainId     String
-  isPublic        Boolean @default(true)
+  id               String   @id @default(uuid())
+  name             String
+  description      String   @default("")
+  coverImageUrl    String?
+  region           String   @default("")
+  interestTag      String   @default("")
+  chieftainId      String
+  isPublic         Boolean  @default(true)
+  memberCount      Int      @default(1)
+  communitiesCount Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  // Denormalized counts
-  memberCount      Int @default(0)
-  communitiesCount Int @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  chieftain   User          @relation("ClanChieftain", fields: [chieftainId], references: [id])
   members     ClanMember[]
   communities Community[]
 
+  @@index([region])
   @@map("clans")
 }
 
 model ClanMember {
-  id        String   @id @default(uuid())
-  clanId    String
-  profileId String
-  role      ClanRole @default(MEMBER)
-  joinedAt  DateTime @default(now())
+  id       String   @id @default(uuid())
+  clanId   String
+  userId   String
+  role     ClanRole @default(MEMBER)
+  joinedAt DateTime @default(now())
 
-  clan    Clan            @relation(fields: [clanId], references: [id], onDelete: Cascade)
-  profile TeritoryProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  clan Clan @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([clanId, profileId])
+  @@unique([clanId, userId])
   @@map("clan_members")
 }
 
-// ─── COMMUNITIES ────────────────────────────────────────────────────
-
 model Community {
-  id                  String  @id @default(uuid())
-  name                String
-  description         String  @default("")
-  coverImageUrl       String?
-  parentClanId        String
-  isPublic            Boolean @default(true)
-  interestTags        String[] @default([])
+  id                   String   @id @default(uuid())
+  name                 String
+  description          String   @default("")
+  coverImageUrl        String?
+  parentClanId         String
+  isPublic             Boolean  @default(true)
+  interestTags         String[] @default([])
+  memberCount          Int      @default(1)
+  activeTripPlansCount Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  // Denormalized counts
-  memberCount          Int @default(0)
-  activeTripPlansCount Int @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  clan       Clan               @relation(fields: [parentClanId], references: [id], onDelete: Cascade)
+  clan       Clan                @relation(fields: [parentClanId], references: [id], onDelete: Cascade)
   members    CommunityMember[]
   messages   CommunityMessage[]
   activities CommunityActivity[]
@@ -462,26 +498,26 @@ model Community {
 model CommunityMember {
   id          String        @id @default(uuid())
   communityId String
-  profileId   String
+  userId      String
   role        CommunityRole @default(MEMBER)
   joinedAt    DateTime      @default(now())
 
-  community Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  profile   TeritoryProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([communityId, profileId])
+  @@unique([communityId, userId])
   @@map("community_members")
 }
 
 model CommunityMessage {
   id          String   @id @default(uuid())
   communityId String
-  profileId   String
+  userId      String
   text        String
   createdAt   DateTime @default(now())
 
-  community Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  profile   TeritoryProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([communityId, createdAt])
   @@map("community_messages")
@@ -490,46 +526,45 @@ model CommunityMessage {
 model CommunityActivity {
   id          String                @id @default(uuid())
   communityId String
-  profileId   String
+  userId      String
   type        CommunityActivityType
   title       String
   description String                @default("")
   createdAt   DateTime              @default(now())
 
-  community Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  profile   TeritoryProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([communityId, createdAt])
   @@map("community_activities")
 }
 
-// ─── TRIP PLANS ─────────────────────────────────────────────────────
+// ─── EXPEDITIONS, TRIP PLANS & VALIDATIONS ─────────────────────────
 
 model TripPlan {
-  id             String         @id @default(uuid())
-  name           String
-  description    String         @default("")
-  createdById    String
-  communityId    String?
-  originName     String
-  destinationName String
-  totalDistanceKm Float         @default(0.0)
-  estimatedDays   Int           @default(1)
-  status          TripPlanStatus @default(DRAFT)
-  voteCount       Int           @default(0)
-  participantLimit Int          @default(50)
+  id               String         @id @default(uuid())
+  name             String
+  description      String         @default("")
+  createdById      String
+  communityId      String?
+  originName       String
+  destinationName  String
+  totalDistanceKm  Float          @default(0.0)
+  estimatedDays    Int            @default(1)
+  status           TripPlanStatus @default(DRAFT)
+  voteCount        Int            @default(0)
+  participantLimit Int            @default(50)
+  startDate        DateTime?
+  endDate          DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
-  startDate DateTime?
-  endDate   DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  createdBy  TeritoryProfile @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  community  Community?      @relation(fields: [communityId], references: [id], onDelete: SetNull)
-  waypoints  TripWaypoint[]
-  votes      TripVote[]
-  trips      Trip[]
-  savedBy    SavedTripPlan[]
+  createdBy User            @relation("PlanCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  community Community?      @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  waypoints TripWaypoint[]
+  votes     TripVote[]
+  trips     Trip[]
+  savedBy   SavedTripPlan[]
 
   @@index([communityId])
   @@index([createdById])
@@ -553,37 +588,35 @@ model TripWaypoint {
   tripPlan    TripPlan             @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
   validations WaypointValidation[]
 
-  @@index([tripPlanId])
+  @@index([tripPlanId, orderIndex])
   @@map("trip_waypoints")
 }
 
 model TripVote {
   id         String   @id @default(uuid())
   tripPlanId String
-  profileId  String
+  userId     String
   createdAt  DateTime @default(now())
 
-  tripPlan TripPlan        @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
-  profile  TeritoryProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  tripPlan TripPlan @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([tripPlanId, profileId])
+  @@unique([tripPlanId, userId])
   @@map("trip_votes")
 }
 
 model SavedTripPlan {
   id         String   @id @default(uuid())
-  profileId  String
+  userId     String
   tripPlanId String
   savedAt    DateTime @default(now())
 
-  profile  TeritoryProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  tripPlan TripPlan        @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tripPlan TripPlan @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
 
-  @@unique([profileId, tripPlanId])
+  @@unique([userId, tripPlanId])
   @@map("saved_trip_plans")
 }
-
-// ─── ACTIVE TRIPS ───────────────────────────────────────────────────
 
 model Trip {
   id          String         @id @default(uuid())
@@ -594,68 +627,69 @@ model Trip {
   completedAt DateTime?
   expiresAt   DateTime
 
-  tripPlan     TripPlan           @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
-  createdBy    TeritoryProfile    @relation(fields: [createdById], references: [id])
+  tripPlan     TripPlan             @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
+  leader       User                 @relation("TripLeader", fields: [createdById], references: [id])
   participants TripParticipant[]
   validations  WaypointValidation[]
 
   @@index([tripPlanId])
-  @@index([createdById])
+  @@index([createdById, status])
   @@map("trips")
 }
 
 model TripParticipant {
-  id        String            @id @default(uuid())
-  tripId    String
-  profileId String
-  status    ParticipantStatus @default(JOINED)
-  badge     TripBadge         @default(NONE)
-  joinedAt  DateTime          @default(now())
+  id       String            @id @default(uuid())
+  tripId   String
+  userId   String
+  status   ParticipantStatus @default(JOINED)
+  badge    TripBadge         @default(NONE)
+  joinedAt DateTime          @default(now())
 
-  trip    Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  profile TeritoryProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([tripId, profileId])
+  @@unique([tripId, userId])
   @@map("trip_participants")
 }
 
 model WaypointValidation {
-  id           String   @id @default(uuid())
-  tripId       String
-  waypointId   String
-  profileId    String
-  latitude     Float
-  longitude    Float
-  distanceM    Float
-  isValid      Boolean  @default(false)
-  validatedAt  DateTime @default(now())
+  id          String   @id @default(uuid())
+  tripId      String
+  waypointId  String
+  userId      String
+  latitude    Float
+  longitude   Float
+  distanceM   Float
+  isValid     Boolean  @default(false)
+  validatedAt DateTime @default(now())
 
   trip     Trip         @relation(fields: [tripId], references: [id], onDelete: Cascade)
   waypoint TripWaypoint @relation(fields: [waypointId], references: [id], onDelete: Cascade)
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([tripId, waypointId, profileId])
+  @@unique([tripId, waypointId, userId])
   @@map("waypoint_validations")
 }
 
 // ─── LEGENDARY RALLIES ──────────────────────────────────────────────
 
 model LegendaryRally {
-  id           String      @id @default(uuid())
-  name         String
-  description  String      @default("")
-  createdById  String
-  latitude     Float
-  longitude    Float
-  placeName    String
-  status       RallyStatus @default(GATHERING)
-  minParticipants Int      @default(3)
-  maxParticipants Int      @default(50)
-  scheduledAt  DateTime?
-  expiresAt    DateTime
-  completedAt  DateTime?
-  createdAt    DateTime    @default(now())
+  id              String      @id @default(uuid())
+  name            String
+  description     String      @default("")
+  createdById     String
+  latitude        Float
+  longitude       Float
+  placeName       String
+  status          RallyStatus @default(GATHERING)
+  minParticipants Int         @default(3)
+  maxParticipants Int         @default(50)
+  scheduledAt     DateTime?
+  expiresAt       DateTime
+  completedAt     DateTime?
+  createdAt       DateTime    @default(now())
 
-  createdBy    TeritoryProfile  @relation(fields: [createdById], references: [id])
+  host         User               @relation("RallyHost", fields: [createdById], references: [id])
   participants RallyParticipant[]
 
   @@index([latitude, longitude])
@@ -663,35 +697,35 @@ model LegendaryRally {
 }
 
 model RallyParticipant {
-  id        String   @id @default(uuid())
-  rallyId   String
-  profileId String
-  hasArrived Boolean @default(false)
-  arrivedAt DateTime?
-  joinedAt  DateTime @default(now())
+  id         String    @id @default(uuid())
+  rallyId    String
+  userId     String
+  hasArrived Boolean   @default(false)
+  arrivedAt  DateTime?
+  joinedAt   DateTime  @default(now())
 
-  rally   LegendaryRally  @relation(fields: [rallyId], references: [id], onDelete: Cascade)
-  profile TeritoryProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  rally LegendaryRally @relation(fields: [rallyId], references: [id], onDelete: Cascade)
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([rallyId, profileId])
+  @@unique([rallyId, userId])
   @@map("rally_participants")
 }
 
-// ─── SERVICE PROVIDERS & GEAR ───────────────────────────────────────
+// ─── SERVICES & GEAR HUBS ───────────────────────────────────────────
 
 model ServiceProvider {
-  id           String @id @default(uuid())
+  id           String   @id @default(uuid())
   name         String
-  description  String @default("")
-  category     String
-  rating       Float  @default(4.0)
+  description  String   @default("")
+  category     String   // Camping Gear, Trekking, Rental, Food
+  rating       Float    @default(4.0)
   latitude     Float
   longitude    Float
   contactPhone String?
   contactEmail String?
   websiteUrl   String?
   imageUrl     String?
-  isVerified   Boolean @default(false)
+  isVerified   Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -703,14 +737,14 @@ model ServiceProvider {
 }
 
 model ServiceListing {
-  id          String  @id @default(uuid())
+  id          String   @id @default(uuid())
   providerId  String
   name        String
-  description String  @default("")
-  priceRange  String  @default("")
+  description String   @default("")
+  priceRange  String   @default("")
   category    String
   imageUrl    String?
-  isAvailable Boolean @default(true)
+  isAvailable Boolean  @default(true)
   createdAt   DateTime @default(now())
 
   provider ServiceProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
@@ -721,956 +755,467 @@ model ServiceListing {
 
 // ─── NOTIFICATIONS ──────────────────────────────────────────────────
 
-model TeritoryNotification {
-  id          String   @id @default(uuid())
-  profileId   String
-  type        NotifType
-  title       String
-  body        String
-  icon        String?
-  actionUrl   String?
-  isRead      Boolean  @default(false)
-  createdAt   DateTime @default(now())
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  icon      String?
+  actionUrl String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
 
-  profile TeritoryProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([profileId, isRead])
-  @@index([profileId, createdAt])
-  @@map("teritory_notifications")
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
 }
 ```
 
-### 2.3 Relationship Summary
-
-| Parent | Child | Relationship | Cascade |
-|---|---|---|---|
-| User (existing) | TeritoryProfile | 1:1 | DELETE |
-| TeritoryProfile | Flag | 1:N | DELETE |
-| TeritoryProfile | FriendRelationship | 1:N (both sides) | DELETE |
-| TeritoryProfile | ClanMember | 1:N | DELETE |
-| TeritoryProfile | CommunityMember | 1:N | DELETE |
-| TeritoryProfile | TripParticipant | 1:N | DELETE |
-| Clan | ClanMember | 1:N | DELETE |
-| Clan | Community | 1:N | DELETE |
-| Community | CommunityMember | 1:N | DELETE |
-| Community | CommunityMessage | 1:N | DELETE |
-| Community | CommunityActivity | 1:N | DELETE |
-| Community | TripPlan | 1:N | SET NULL |
-| TripPlan | TripWaypoint | 1:N | DELETE |
-| TripPlan | TripVote | 1:N | DELETE |
-| TripPlan | Trip | 1:N | DELETE |
-| Trip | TripParticipant | 1:N | DELETE |
-| Trip | WaypointValidation | 1:N | DELETE |
-| Flag | FlagReaction | 1:N | DELETE |
-| Flag | FlagComment | 1:N | DELETE |
-| LegendaryRally | RallyParticipant | 1:N | DELETE |
-| ServiceProvider | ServiceListing | 1:N | DELETE |
-
 ---
 
-## 3. Authentication & User Lifecycle
+## 3. Authentication, Security & Session Lifecycle
 
-### 3.1 Auth Flow (Shared with OnWay)
+### 3.1 Dedicated Auth Flow
 
 ```mermaid
 sequenceDiagram
-    participant App as Teritory App
-    participant API as /api/v2/teritory
-    participant Auth as /api/v1/auth (existing)
-    participant DB as PostgreSQL
-    participant SMS as Twilio
+    participant App as Teritory Flutter App
+    participant API as Teritory API (/v1/auth)
+    participant Redis as Redis Session Cache
+    participant DB as Teritory DB (PostgreSQL)
+    participant SMS as SMS Provider / Twilio
 
-    App->>Auth: POST /send-otp {phone, role: "BUYER"}
-    Auth->>SMS: Send OTP via Twilio Verify
-    SMS-->>App: OTP received via SMS
+    Note over App,SMS: 1. Phone OTP Verification
+    App->>API: POST /v1/auth/send-otp { phone: "+919876543210" }
+    API->>SMS: Dispatch 6-digit OTP
+    API->>Redis: SET otp:+919876543210 "749201" (EX 300)
+    API-->>App: { success: true, message: "OTP sent" }
 
-    App->>Auth: POST /verify-otp {phone, otpCode}
-    Auth->>DB: Create/find User + generate JWT
-    Auth-->>App: {token, user, isNewUser}
-
-    alt New Teritory User
-        App->>API: POST /profile {displayName, handle, ...}
-        API->>DB: Create TeritoryProfile linked to User
-        API-->>App: {profile}
-    else Existing Teritory User
-        App->>API: GET /profile/me
-        API->>DB: Fetch TeritoryProfile by userId
-        API-->>App: {profile, stats}
+    App->>API: POST /v1/auth/verify-otp { phone: "+91...", otp: "749201" }
+    API->>Redis: GET otp:+91...
+    alt OTP Valid
+        API->>DB: Find or Create User by phone
+        API->>API: Issue Access Token (15m) & Refresh Token (30d)
+        API->>DB: Store hashed RefreshToken
+        API-->>App: { accessToken, refreshToken, user, isNewUser }
+    else Invalid
+        API-->>App: { success: false, code: "INVALID_OTP" }
     end
+
+    Note over App,DB: 2. Profile Setup (if isNewUser == true)
+    App->>API: POST /v1/users/profile { displayName, handle, bio, country, state, district }
+    API->>DB: Update User record
+    API-->>App: { success: true, user }
 ```
 
-### 3.2 User States
+### 3.2 Token Strategy
+- **Access Token**: Short-lived JWT (15 mins), payload contains `{ sub: userId, handle, phone }`.
+- **Refresh Token**: Cryptographically secure random UUIDv4 hash stored in DB (`refresh_tokens`), rotation on every `/v1/auth/refresh` invocation.
+- **Revocation**: Logout endpoint marks token `isRevoked = true` and invalidates Redis user session cache.
 
-| State | Description | Can Do |
-|---|---|---|
-| `ANONYMOUS` | No auth token | View public clans, leaderboard |
-| `AUTHENTICATED` | Has JWT, no TeritoryProfile | Must create profile first |
-| `ACTIVE` | Has JWT + TeritoryProfile | Full access |
-| `TRIP_MODE` | Active flag on profile | Shows trip badge in UI, location tracked |
+---
 
-### 3.3 Profile Creation Contract
+## 4. Page-Wise API Endpoints (1:1 Screen Mapping)
 
-```
-POST /api/v2/teritory/profile
-Authorization: Bearer <jwt>
-
+All endpoints conform to standardized JSON envelope:
+```json
 {
-  "displayName": "Arjun Nair",
-  "handle": "arjun_explorer",
-  "bio": "Wanderer from Kerala 🌴",
-  "avatarUrl": "<uploaded-url>",
-  "country": "India",
-  "state": "Kerala",
-  "district": "Palakkad"
-}
-
-Response: {
   "success": true,
-  "data": { ...TeritoryProfile }
+  "data": { ... },
+  "message": "Optional status description",
+  "meta": { "page": 1, "limit": 20, "total": 100 }
 }
 ```
 
 ---
 
-## 4. Page-Wise API Endpoints
+### Tab 1: Explore & Home Map Screen (`/explore`)
 
-### 4.1 Explore / Home Map Screen
-
-| Method | Endpoint | Description | Auth |
+| Endpoint | Method | Purpose & Description | Query / Body Params |
 |---|---|---|---|
-| `GET` | `/flags/nearby?lat=X&lng=Y&radius=50` | Get flags within radius (km) | ✅ |
-| `GET` | `/flags/friends?lat=X&lng=Y` | Get friends' flags near location | ✅ |
-| `GET` | `/flags/:flagId` | Get single flag with reactions/comments | ✅ |
-| `POST` | `/flags` | Drop a new flag | ✅ |
-| `DELETE` | `/flags/:flagId` | Delete own flag | ✅ |
-| `GET` | `/food-spots?lat=X&lng=Y&radius=5` | Nearby food spots from service providers | ✅ |
+| `/v1/flags/explore` | `GET` | Fetch flags within current map viewport & radius | `lat, lng, radiusKm, category` |
+| `/v1/flags/sub-territories` | `GET` | Discover hidden viewpoints & sub-territories near a famous spot (<5km) | `lat, lng, parentPlaceName` |
+| `/v1/flags/friends-feed` | `GET` | Flags dropped by user's travel buddies | `page, limit` |
+| `/v1/flags` | `POST` | Drop a new flag at current GPS coordinates | `{ placeName, city, country, lat, lng, isMajorFlag, category, notes, photoUrl }` |
+| `/v1/services/nearby-food` | `GET` | Find nearby local food spots within 5km radius | `lat, lng` |
 
-**Drop Flag Request:**
-```json
-{
-  "placeName": "Athirappilly Falls",
-  "city": "Thrissur",
-  "country": "India",
-  "countryCode": "IN",
-  "continent": "Asia",
-  "latitude": 10.2850,
-  "longitude": 76.5698,
-  "isMajorFlag": true,
-  "category": "Waterfall",
-  "notes": "Incredible waterfall! Must visit during monsoon.",
-  "photoUrl": "https://storage.../photo.jpg"
+---
+
+### Flag Detail Bottom Sheet
+
+| Endpoint | Method | Purpose & Description |
+|---|---|---|
+| `/v1/flags/:id` | `GET` | Full flag details including author profile, kudos, comments, and reactions |
+| `/v1/flags/:id/reactions` | `POST` | Toggle reaction (`EPIC`, `HIDDEN_GEM`, `GREAT_SHOT`) |
+| `/v1/flags/:id/comments` | `GET` | Paginated list of comments |
+| `/v1/flags/:id/comments` | `POST` | Submit comment `{ text: string }` |
+| `/v1/flags/:id/kudos` | `POST` | Increment kudos count |
+
+---
+
+### Tab 2: Clans Screen (`/clans`)
+
+| Endpoint | Method | Purpose & Description |
+|---|---|---|
+| `/v1/clans` | `GET` | Explore clans list with search and regional filters (`?search=&region=`) |
+| `/v1/clans/my` | `GET` | Clans where the current user is a member |
+| `/v1/clans` | `POST` | Create a new clan `{ name, description, coverImageUrl, region, interestTag }` |
+| `/v1/clans/:clanId` | `GET` | Clan overview, stats, chieftain details, and member list |
+| `/v1/clans/:clanId/join` | `POST` | Join an open clan |
+| `/v1/clans/:clanId/leave` | `POST` | Leave clan |
+| `/v1/clans/:clanId/communities` | `GET` | List all communities under this clan |
+
+---
+
+### Community Screens (`/clans/:clanId/communities/:communityId`)
+
+| Endpoint | Method | Purpose & Description |
+|---|---|---|
+| `/v1/communities` | `POST` | Create community under clan `{ name, description, parentClanId, interestTags, isPublic }` |
+| `/v1/communities/:id` | `GET` | Community details, tabs summary (Feed, Plans, Members, Chat) |
+| `/v1/communities/:id/join` | `POST` | Join community (or validate clan membership) |
+| `/v1/communities/:id/leave` | `POST` | Leave community |
+| `/v1/communities/:id/feed` | `GET` | Activity stream (flag drops, announcements, trip completions) |
+| `/v1/communities/:id/messages` | `GET` | Historical chat messages with cursor pagination (`?before=&limit=50`) |
+| `/v1/communities/:id/messages` | `POST` | Send chat message `{ text }` |
+| `/v1/communities/:id/members` | `GET` | List community members and roles |
+| `/v1/communities/:id/trip-plans` | `GET` | Trip plans proposed within this community |
+
+---
+
+### Tab 3: Trips Hub & Planner (`/trips`)
+
+| Endpoint | Method | Purpose & Description |
+|---|---|---|
+| `/v1/trips/hub` | `GET` | Consolidated view: Active Trip, Proposed Community Plans, Saved Plans |
+| `/v1/trips/plans` | `POST` | Create a new collaborative Trip Plan `{ name, communityId, origin, destination, waypoints: [...] }` |
+| `/v1/trips/plans/:id` | `GET` | Plan details with ordered waypoints, route metrics, and vote tallies |
+| `/v1/trips/plans/:id/vote` | `POST` | Vote for this plan as the community's chosen expedition route |
+| `/v1/trips/plans/:id/start` | `POST` | Launch an Active Trip from this plan (organizer initiates trip mode) |
+| `/v1/trips/plans/:id/save` | `POST` | Save plan to personal bookmark list |
+| `/v1/trips/plans/saved` | `GET` | Get current user's saved trip plans |
+| `/v1/trips/suggest-waypoints` | `GET` | Suggest high-density flag spots between origin and destination |
+
+---
+
+### Active Trip Mode Screen (`/trips/:tripId/active`)
+
+| Endpoint | Method | Purpose & Description |
+|---|---|---|
+| `/v1/trips/:tripId` | `GET` | Live expedition dashboard: participant status, current waypoint, countdown |
+| `/v1/trips/:tripId/join` | `POST` | Join an ongoing community expedition (puts user in `Trip Mode`) |
+| `/v1/trips/:tripId/validate-waypoint` | `POST` | GPS Check-in: Validates user location against waypoint (`{ waypointId, lat, lng }`) |
+| `/v1/trips/:tripId/complete` | `POST` | Mark expedition finished, assign badges, create completion record |
+| `/v1/trips/:tripId/drop` | `POST` | Abandon expedition |
+
+#### 15 km Validation Rule Enforcement:
+```javascript
+// POST /v1/trips/:tripId/validate-waypoint
+async function validateWaypoint(userId, tripId, waypointId, userLat, userLng) {
+  const waypoint = await prisma.tripWaypoint.findUnique({ where: { id: waypointId } });
+  
+  // Haversine distance in meters
+  const distance = haversineDistanceMeters(userLat, userLng, waypoint.latitude, waypoint.longitude);
+  const MAX_RADIUS_METERS = 15000; // 15 km
+
+  const isValid = distance <= MAX_RADIUS_METERS;
+
+  return await prisma.waypointValidation.upsert({
+    where: { tripId_waypointId_userId: { tripId, waypointId, userId } },
+    create: { tripId, waypointId, userId, latitude: userLat, longitude: userLng, distanceM: distance, isValid },
+    update: { latitude: userLat, longitude: userLng, distanceM: distance, isValid, validatedAt: new Date() }
+  });
 }
 ```
 
-**Flag drop triggers:**
-1. Increment `TeritoryProfile.totalFlags` (and `majorFlags` if applicable)
-2. Update `countriesVisited` / `continentsVisited` if first flag in that country/continent
-3. Award PassportStamp if milestone reached (10, 50, 100 flags)
-4. Update leaderboard scores in Redis
-5. If within 15km of a Trip waypoint → auto-validate waypoint
-6. Create CommunityActivity for communities the user is in
+---
 
-### 4.2 Flag Detail Sheet
+### Tab 4: Rankings & Leaderboards (`/rankings`)
 
-| Method | Endpoint | Description | Auth |
+| Endpoint | Method | Purpose & Description |
+|---|---|---|
+| `/v1/leaderboard` | `GET` | Multi-scope leaderboard rankings (`scope=GLOBAL|COUNTRY|STATE|DISTRICT|FRIENDS`) |
+| `/v1/leaderboard/me` | `GET` | Current user's relative ranking and score breakdown in all scopes |
+
+---
+
+### Tab 5: Profile & Social Graph (`/profile`)
+
+| Endpoint | Method | Purpose & Description |
+|---|---|---|
+| `/v1/users/me` | `GET` | Full user profile with stats, stamps, and preferences |
+| `/v1/users/me` | `PATCH` | Update profile fields (`displayName, bio, avatarUrl, mapStyle, isPrivate`) |
+| `/v1/users/me/trip-mode` | `PATCH` | Manually toggle trip mode `{ isTripMode: boolean }` |
+| `/v1/users/:userId` | `GET` | Public profile of friend/user (stats, completed trips, flags) |
+| `/v1/friends` | `GET` | User's friends list (filterable by category: `TRAVEL_BUDDIES, FAVORITES`) |
+| `/v1/friends/request` | `POST` | Send friend request `{ targetUserId }` |
+| `/v1/friends/requests` | `GET` | Pending incoming and outgoing friend requests |
+| `/v1/friends/requests/:id/respond`| `POST` | Accept or decline friend request `{ action: "ACCEPT" | "DECLINE" }` |
+| `/v1/friends/:friendId` | `DELETE` | Remove friend |
+| `/v1/trips/history` | `GET` | Completed expeditions history with full/partial badges |
+
+---
+
+### Modals & Bottom Sheets
+
+| Feature | Endpoint | Method | Description |
 |---|---|---|---|
-| `GET` | `/flags/:flagId` | Full flag with reactions, comments, nearby food | ✅ |
-| `POST` | `/flags/:flagId/reactions` | Add/toggle reaction | ✅ |
-| `DELETE` | `/flags/:flagId/reactions/:type` | Remove reaction | ✅ |
-| `GET` | `/flags/:flagId/comments?page=1&limit=20` | Paginated comments | ✅ |
-| `POST` | `/flags/:flagId/comments` | Add comment | ✅ |
-| `DELETE` | `/flags/:flagId/comments/:commentId` | Delete own comment | ✅ |
-
-### 4.3 Clan Browser Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/clans?search=X&page=1&limit=20` | List/search clans | ✅ |
-| `GET` | `/clans/nearby?lat=X&lng=Y` | Clans by region proximity | ✅ |
-| `GET` | `/clans/my` | User's joined clans | ✅ |
-
-### 4.4 Clan Detail Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/clans/:clanId` | Full clan detail with communities, members | ✅ |
-| `POST` | `/clans/:clanId/join` | Join a public clan | ✅ |
-| `DELETE` | `/clans/:clanId/leave` | Leave clan | ✅ |
-| `GET` | `/clans/:clanId/members?page=1` | Paginated members | ✅ |
-| `GET` | `/clans/:clanId/communities` | Communities in this clan | ✅ |
-| `PATCH` | `/clans/:clanId` | Update clan (chieftain only) | ✅ |
-| `POST` | `/clans/:clanId/invite` | Invite friend to clan | ✅ |
-
-### 4.5 Community Detail Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/communities/:id` | Full detail with feed, trip plans, members | ✅ |
-| `GET` | `/communities/:id/feed?page=1` | Activity feed (paginated) | ✅ |
-| `GET` | `/communities/:id/trip-plans` | Trip plans in community | ✅ |
-| `GET` | `/communities/:id/members?page=1` | Members list | ✅ |
-| `POST` | `/communities/:id/join` | Join community | ✅ |
-| `DELETE` | `/communities/:id/leave` | Leave community | ✅ |
-
-### 4.6 Create Community Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `POST` | `/communities` | Create new community | ✅ |
-
-**Request:**
-```json
-{
-  "name": "Kerala Backpackers",
-  "description": "For solo backpackers exploring Kerala",
-  "parentClanId": "clan_123",
-  "isPublic": true,
-  "interestTags": ["backpacking", "kerala", "budget"],
-  "coverImageUrl": "https://..."
-}
-```
-
-### 4.7 Community Chat Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/communities/:id/messages?before=timestamp&limit=50` | Paginated messages (cursor-based) | ✅ |
-| `POST` | `/communities/:id/messages` | Send message | ✅ |
-| `DELETE` | `/communities/:id/messages/:msgId` | Delete own message | ✅ |
-
-**Real-time:** Socket.IO room `community:<communityId>` for live messages.
-
-### 4.8 Community Members Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/communities/:id/members?page=1&limit=30` | Members with roles | ✅ |
-| `PATCH` | `/communities/:id/members/:profileId/role` | Change member role (creator/mod only) | ✅ |
-| `DELETE` | `/communities/:id/members/:profileId` | Remove member (creator/mod only) | ✅ |
-
-### 4.9 Trips Hub Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/trips/active` | User's active trips | ✅ |
-| `GET` | `/trips/plans/my?status=draft,proposed` | User's trip plans | ✅ |
-| `GET` | `/trips/plans/community/:communityId` | Community trip plans | ✅ |
-| `GET` | `/trips/upcoming` | Upcoming trips user is part of | ✅ |
-
-### 4.10 Trip Planner Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `POST` | `/trips/plans` | Create trip plan | ✅ |
-| `PATCH` | `/trips/plans/:id` | Update trip plan | ✅ |
-| `POST` | `/trips/plans/:id/waypoints` | Add waypoint | ✅ |
-| `PATCH` | `/trips/plans/:id/waypoints/:wpId` | Update waypoint | ✅ |
-| `DELETE` | `/trips/plans/:id/waypoints/:wpId` | Remove waypoint | ✅ |
-| `PUT` | `/trips/plans/:id/waypoints/reorder` | Reorder waypoints | ✅ |
-| `GET` | `/flags/suggested?origin=X,Y&dest=X,Y` | Suggest popular flags along route | ✅ |
-
-**Create Trip Plan:**
-```json
-{
-  "name": "Palakkad to Kanyakumari Expedition",
-  "description": "5-day road trip through Kerala",
-  "communityId": "comm_123",
-  "originName": "Palakkad",
-  "destinationName": "Kanyakumari",
-  "estimatedDays": 5,
-  "startDate": "2026-12-01T06:00:00Z",
-  "endDate": "2026-12-05T18:00:00Z",
-  "waypoints": [
-    {
-      "orderIndex": 0,
-      "placeName": "Palakkad Fort",
-      "latitude": 10.7764,
-      "longitude": 76.6548,
-      "category": "heritage"
-    },
-    {
-      "orderIndex": 1,
-      "placeName": "Athirappilly Falls",
-      "latitude": 10.2850,
-      "longitude": 76.5698,
-      "category": "waterfall"
-    }
-  ]
-}
-```
-
-### 4.11 Trip Plan Detail Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/trips/plans/:id` | Full plan with waypoints, votes, participants | ✅ |
-| `POST` | `/trips/plans/:id/vote` | Vote for this plan | ✅ |
-| `DELETE` | `/trips/plans/:id/vote` | Remove vote | ✅ |
-| `POST` | `/trips/plans/:id/start` | Start trip from plan (creates Trip) | ✅ |
-| `POST` | `/trips/plans/:id/save` | Save plan to personal list | ✅ |
-| `DELETE` | `/trips/plans/:id/save` | Unsave plan | ✅ |
-
-### 4.12 Active Trip Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/trips/:tripId` | Full trip state with participants, validations | ✅ |
-| `POST` | `/trips/:tripId/join` | Join active trip | ✅ |
-| `POST` | `/trips/:tripId/validate` | Validate waypoint arrival (GPS check) | ✅ |
-| `POST` | `/trips/:tripId/complete` | Mark trip as completed | ✅ |
-| `POST` | `/trips/:tripId/drop` | Drop out of trip | ✅ |
-| `GET` | `/trips/:tripId/participants` | Live participant status | ✅ |
-
-**Waypoint Validation (GPS-based):**
-```json
-POST /trips/:tripId/validate
-{
-  "waypointId": "wp_123",
-  "latitude": 10.2851,
-  "longitude": 76.5700
-}
-
-Response:
-{
-  "success": true,
-  "data": {
-    "isValid": true,
-    "distanceM": 120.5,
-    "maxDistanceM": 15000,
-    "waypointName": "Athirappilly Falls",
-    "message": "Waypoint validated! 🎉"
-  }
-}
-```
-
-> [!IMPORTANT]
-> **15km radius rule**: User must be within 15km of waypoint coordinates for validation. Server calculates Haversine distance. If after `trip.expiresAt` the destination is not validated, the trip is erased from trip profilings.
-
-### 4.13 Saved Plans Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/trips/plans/saved?page=1` | User's saved trip plans | ✅ |
-| `DELETE` | `/trips/plans/:id/save` | Remove from saved | ✅ |
-| `POST` | `/trips/plans/:id/clone` | Clone and customize plan | ✅ |
-
-### 4.14 Trip History Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/trips/history?page=1&limit=20` | Completed trips with badges | ✅ |
-| `GET` | `/trips/:tripId/completion` | Trip completion summary (stats, route, badge) | ✅ |
-
-### 4.15 Leaderboard Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/leaderboard?scope=GLOBAL&period=ALL_TIME&page=1&limit=50` | Leaderboard rankings | ✅ |
-| `GET` | `/leaderboard?scope=COUNTRY&country=India&period=MONTHLY` | Country-specific | ✅ |
-| `GET` | `/leaderboard?scope=STATE&state=Kerala&period=WEEKLY` | State-specific | ✅ |
-| `GET` | `/leaderboard?scope=DISTRICT&district=Palakkad` | District-specific | ✅ |
-| `GET` | `/leaderboard?scope=FRIENDS` | Friends circle leaderboard | ✅ |
-| `GET` | `/leaderboard/me` | Current user's rank across all scopes | ✅ |
-
-### 4.16 Friends List Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/friends?search=X&category=X` | List friends (with search/filter) | ✅ |
-| `POST` | `/friends/request` | Send friend request | ✅ |
-| `DELETE` | `/friends/:friendId` | Unfriend | ✅ |
-| `PATCH` | `/friends/:friendId/category` | Set friend category | ✅ |
-| `GET` | `/friends/search?q=arjun` | Search users by name/handle | ✅ |
-
-### 4.17 Friend Profile Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/profile/:userId` | Public profile with stats, trips, flags | ✅ |
-| `GET` | `/profile/:userId/flags?page=1` | Friend's flags | ✅ |
-| `GET` | `/profile/:userId/trips?page=1` | Friend's completed trips | ✅ |
-| `GET` | `/profile/:userId/stamps` | Friend's passport stamps | ✅ |
-
-### 4.18 Friend Requests Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/friends/requests/received` | Incoming friend requests | ✅ |
-| `GET` | `/friends/requests/sent` | Outgoing friend requests | ✅ |
-| `POST` | `/friends/requests/:requestId/accept` | Accept request | ✅ |
-| `POST` | `/friends/requests/:requestId/decline` | Decline request | ✅ |
-| `DELETE` | `/friends/requests/:requestId` | Cancel sent request | ✅ |
-
-### 4.19 Profile Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/profile/me` | Own profile with all stats | ✅ |
-| `PATCH` | `/profile/me` | Update profile fields | ✅ |
-| `GET` | `/profile/me/stats` | Detailed stats breakdown | ✅ |
-| `GET` | `/profile/me/flags?page=1` | Own flags (paginated) | ✅ |
-| `GET` | `/profile/me/stamps` | Passport stamps | ✅ |
-| `POST` | `/profile/me/avatar` | Upload avatar (multipart) | ✅ |
-| `PATCH` | `/profile/me/trip-mode` | Toggle trip mode on/off | ✅ |
-
-### 4.20 Completed Trips Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/trips/completed?page=1` | All completed trips with badges | ✅ |
-
-### 4.21 Settings Screen
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/settings` | Get all settings | ✅ |
-| `PATCH` | `/settings` | Update settings | ✅ |
-| `PATCH` | `/settings/map-style` | Change map style | ✅ |
-| `PATCH` | `/settings/privacy` | Toggle public/private profile | ✅ |
-| `DELETE` | `/profile/me` | Delete account | ✅ |
-
-### 4.22 Legendary Rally Sheet
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `POST` | `/rallies` | Create legendary rally | ✅ |
-| `GET` | `/rallies/nearby?lat=X&lng=Y&radius=50` | Nearby rallies | ✅ |
-| `GET` | `/rallies/:rallyId` | Rally detail with participants | ✅ |
-| `POST` | `/rallies/:rallyId/join` | Join rally | ✅ |
-| `POST` | `/rallies/:rallyId/arrive` | Mark arrival (GPS validated) | ✅ |
-| `POST` | `/rallies/:rallyId/complete` | Complete rally (organizer) | ✅ |
-
-### 4.23 Gear & Service Sheet
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/services/nearby?lat=X&lng=Y&category=camping&radius=25` | Services by location/category | ✅ |
-| `GET` | `/services/:providerId` | Provider detail with listings | ✅ |
-| `GET` | `/services/categories` | List service categories | ✅ |
-
-### 4.24 Invite Friends Sheet
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/friends?forInvite=true` | Friends list for invite picker | ✅ |
-| `POST` | `/invites/community` | Invite friends to community | ✅ |
-| `POST` | `/invites/trip` | Invite friends to trip | ✅ |
-| `POST` | `/invites/rally` | Invite friends to rally | ✅ |
-| `POST` | `/invites/clan` | Invite friends to clan | ✅ |
-
-### 4.25 Notifications
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/notifications?page=1&limit=30` | Paginated notifications | ✅ |
-| `PATCH` | `/notifications/:id/read` | Mark as read | ✅ |
-| `PATCH` | `/notifications/read-all` | Mark all as read | ✅ |
-| `DELETE` | `/notifications/:id` | Delete notification | ✅ |
+| **Legendary Rally** | `/v1/rallies` | `POST` | Initiate a group rally `{ placeName, lat, lng, minParticipants }` |
+| | `/v1/rallies/nearby` | `GET` | Find active gathering rallies nearby |
+| | `/v1/rallies/:id/join` | `POST` | Accept invite and join rally |
+| | `/v1/rallies/:id/arrive` | `POST` | GPS check-in (≤500m of rally coordinate) |
+| | `/v1/rallies/:id/complete`| `POST` | Finalize collective flag drop |
+| **Gear Services** | `/v1/services/gear` | `GET` | Local gear rentals, camping supplies, emergency repairs |
+| **Invite Friends** | `/v1/invites/send` | `POST` | Multi-invite friends to Community, Trip, or Rally |
 
 ---
 
 ## 5. Complete Functionality Lifecycle Flows
 
-### 5.1 Flag Drop → Scoring → Leaderboard Update
+### 5.1 Expedition Trip Lifecycle (Plan → Vote → Execute → Validate → Complete)
 
 ```mermaid
 sequenceDiagram
-    participant App
-    participant API
+    autonumber
+    actor Leader as Trip Organizer
+    actor Buddy as Clan / Friend
+    participant API as Teritory API
     participant DB as PostgreSQL
-    participant Redis
-    participant FCM
+    participant Redis as Redis Cache
+    participant Push as FCM Gateway
 
-    App->>API: POST /flags {lat, lng, placeName, ...}
-    API->>DB: Create Flag record
-    API->>DB: Update TeritoryProfile stats
-    Note over API,DB: totalFlags++, check new country/continent
+    Leader->>API: POST /v1/trips/plans (Origin, Waypoints, Dest)
+    API->>DB: Insert TripPlan & TripWaypoints (DRAFT)
+    API-->>Leader: Plan Created
 
-    API->>DB: Check if flag is near any active trip waypoints
-    alt Near a trip waypoint (<15km)
-        API->>DB: Create WaypointValidation
-        API->>FCM: Push "Waypoint validated!" to user
-    end
+    Leader->>API: PATCH /v1/trips/plans/:id (status: PROPOSED)
+    API->>Push: Notify Community Members: "New Trip Proposed!"
+    Buddy->>API: POST /v1/trips/plans/:id/vote
+    API->>DB: Record TripVote, increment voteCount
 
-    API->>DB: Check achievement milestones
-    alt Milestone reached (10/50/100/500 flags)
-        API->>DB: Create PassportStamp
-        API->>FCM: Push achievement notification
-    end
+    Note over Leader,API: When Voting Threshold Met
+    Leader->>API: POST /v1/trips/plans/:id/start
+    API->>DB: Create Trip (status: ACTIVE, expiresAt: +14 Days)
+    API->>DB: Add Leader to TripParticipant (status: IN_PROGRESS)
+    API->>DB: User.isTripMode = true
+    API->>Push: "Trip Flagged Off! Join now!"
+    Buddy->>API: POST /v1/trips/:id/join
+    API->>DB: Add Buddy to TripParticipant
 
-    API->>Redis: ZADD leaderboard:global user_score
-    API->>Redis: ZADD leaderboard:country:India user_score
-    API->>Redis: ZADD leaderboard:state:Kerala user_score
-
-    API->>DB: Create CommunityActivity for user's communities
-    API-->>App: {flag, newStats, achievements}
-```
-
-### 5.2 Trip Plan → Vote → Execute → Validate → Complete
-
-```mermaid
-sequenceDiagram
-    participant Creator
-    participant Members
-    participant API
-    participant DB
-    participant Redis
-
-    Creator->>API: POST /trips/plans {waypoints, community}
-    API->>DB: Create TripPlan + TripWaypoints (status: DRAFT)
-    API->>DB: Create CommunityActivity "New trip plan!"
-
-    Creator->>API: PATCH /trips/plans/:id {status: "PROPOSED"}
-    API->>DB: Update status
-    API->>FCM: Notify community members
-
-    Members->>API: POST /trips/plans/:id/vote
-    API->>DB: Create TripVote, increment voteCount
-    API-->>Members: {currentVotes}
-
-    Creator->>API: POST /trips/plans/:id/start
-    API->>DB: Create Trip (status: ACTIVE, expiresAt)
-    API->>DB: Create TripParticipant for creator
-    API->>DB: Update TripPlan status → ACTIVE
-    API->>Redis: SET trip:live:<tripId> {participants, progress}
-    API->>FCM: Push "Trip started!" to all voters
-
-    Members->>API: POST /trips/:tripId/join
-    API->>DB: Create TripParticipant
-
-    loop Each Waypoint
-        Members->>API: POST /trips/:tripId/validate {waypointId, lat, lng}
-        API->>API: Haversine distance check (≤15km)
-        alt Valid
-            API->>DB: Create WaypointValidation (isValid: true)
-            API->>Redis: Update trip progress
-            API->>FCM: Push "Waypoint reached!"
-        else Invalid (too far)
-            API-->>Members: {isValid: false, distance: 25000}
+    loop En Route Waypoint Checks (≤15 km)
+        Buddy->>API: POST /v1/trips/:id/validate-waypoint (Lat, Lng)
+        API->>API: Calculate Distance to Waypoint
+        alt Distance ≤ 15,000m
+            API->>DB: Upsert WaypointValidation (isValid = true)
+            API->>Redis: Publish WS event "waypoint_validated"
+        else Distance > 15,000m
+            API-->>Buddy: Validation Rejected (Too Far)
         end
     end
 
-    Creator->>API: POST /trips/:tripId/complete
-    API->>DB: Trip status → COMPLETED
-    API->>DB: Assign TripBadge per participant
-    Note over API,DB: FULL = all waypoints, PARTIAL = some, NONE = none
-    API->>DB: Update TeritoryProfile.completedTripsCount
-    API->>DB: Create PassportStamp for FULL badge holders
-    API->>Redis: Update leaderboard scores
-    API->>FCM: Push completion celebration to all participants
-    API-->>Creator: {tripCompletion, badges, stats}
-```
-
-### 5.3 Trip Expiry (Background Job)
-
-```mermaid
-sequenceDiagram
-    participant Cron as Cron Job (every 15min)
-    participant DB as PostgreSQL
-    participant Redis
-
-    Cron->>DB: SELECT * FROM trips WHERE status='ACTIVE' AND expiresAt < NOW()
-    loop Each expired trip
-        Cron->>DB: Check if destination waypoint is validated for each participant
-        alt Destination NOT validated (>15km away)
-            Cron->>DB: Set participant status → DROPPED, badge → NONE
-            Cron->>DB: Remove trip from participant's profiling
-            Note over Cron,DB: "Erased from trip profilings" per user spec
-        else Destination validated
-            Cron->>DB: Set participant badge → FULL or PARTIAL
-        end
-        Cron->>DB: Trip status → EXPIRED (or COMPLETED if organizer validated)
-        Cron->>Redis: Remove trip:live:<tripId>
+    Note over Leader,DB: Completion & Destination Check
+    Leader->>API: POST /v1/trips/:id/complete
+    API->>DB: Verify Destination Flag within 15km for each participant
+    alt Destination Validated
+        API->>DB: Participant status = COMPLETED, badge = FULL/PARTIAL
+        API->>DB: Increment User.completedTripsCount
+        API->>DB: Award PassportStamp
+    else Destination Not Reached
+        API->>DB: Participant status = DROPPED, badge = NONE
     end
-```
-
-### 5.4 Legendary Rally Lifecycle
-
-```mermaid
-sequenceDiagram
-    participant Creator
-    participant Friends
-    participant API
-    participant DB
-
-    Creator->>API: POST /rallies {placeName, lat, lng, minParticipants: 3}
-    API->>DB: Create LegendaryRally (status: GATHERING)
-    API->>FCM: Notify invited friends
-
-    Friends->>API: POST /rallies/:id/join
-    API->>DB: Create RallyParticipant (hasArrived: false)
-
-    Note over Creator,DB: Once at location...
-    Friends->>API: POST /rallies/:id/arrive {lat, lng}
-    API->>API: Haversine check (≤500m of rally coordinates)
-    alt Within range
-        API->>DB: RallyParticipant.hasArrived = true
-    end
-
-    alt Enough participants arrived (≥minParticipants)
-        Creator->>API: POST /rallies/:id/complete
-        API->>DB: Rally status → COMPLETED
-        API->>DB: All arrived participants get flag credit
-        API->>DB: Create collective Flag at rally location
-        API->>DB: Update legendaryRalliesCount for all
-        API->>DB: Award PassportStamp "Legendary Rally"
-        API->>Redis: Update leaderboard (bonus points)
-    end
-```
-
-### 5.5 Friend Request → Accept → Social Graph
-
-```mermaid
-sequenceDiagram
-    participant UserA
-    participant UserB
-    participant API
-    participant DB
-    participant FCM
-
-    UserA->>API: POST /friends/request {receiverId: "user_b"}
-    API->>DB: Create FriendRelationship (PENDING)
-    API->>DB: Create TeritoryNotification for UserB
-    API->>FCM: Push "Arjun sent you a friend request"
-
-    UserB->>API: POST /friends/requests/:id/accept
-    API->>DB: FriendRelationship.status → ACCEPTED
-    API->>DB: Create reciprocal notification for UserA
-    API->>Redis: Invalidate friends:user_a, friends:user_b cache
-    API->>FCM: Push "Priya accepted your friend request"
+    API-->>Leader: Trip Summary & Stats Card
 ```
 
 ---
 
-## 6. Real-Time (Socket.IO) Events
+## 6. Real-Time Socket.IO Architecture
 
-### 6.1 Namespaces & Rooms
+A dedicated Socket.IO instance attached to the HTTP server with Redis pub/sub adapter for horizontal scalability.
 
-| Namespace | Room Pattern | Purpose |
-|---|---|---|
-| `/teritory` | `user:<profileId>` | Personal notifications, friend updates |
-| `/teritory` | `community:<communityId>` | Community chat messages |
-| `/teritory` | `trip:<tripId>` | Trip live tracking, waypoint validations |
-| `/teritory` | `rally:<rallyId>` | Rally gathering status, arrivals |
-
-### 6.2 Client → Server Events
-
-| Event | Payload | Description |
-|---|---|---|
-| `join_community` | `{communityId}` | Join community chat room |
-| `leave_community` | `{communityId}` | Leave community chat room |
-| `send_message` | `{communityId, text}` | Send chat message |
-| `join_trip` | `{tripId}` | Join trip tracking room |
-| `location_update` | `{tripId, lat, lng}` | Send location during active trip |
-| `join_rally` | `{rallyId}` | Join rally room |
-| `typing_start` | `{communityId}` | Typing indicator start |
-| `typing_stop` | `{communityId}` | Typing indicator stop |
-
-### 6.3 Server → Client Events
-
-| Event | Payload | Description |
-|---|---|---|
-| `new_message` | `{message}` | New community chat message |
-| `message_deleted` | `{messageId}` | Message was deleted |
-| `member_joined` | `{communityId, member}` | New member joined community |
-| `trip_participant_update` | `{tripId, participant, status}` | Participant status change |
-| `waypoint_validated` | `{tripId, waypointId, profileId}` | Someone validated a waypoint |
-| `trip_completed` | `{tripId, completion}` | Trip completed |
-| `rally_participant_arrived` | `{rallyId, profileId}` | Rally participant arrived |
-| `rally_complete` | `{rallyId, stats}` | Rally completed |
-| `friend_request` | `{request}` | Incoming friend request |
-| `notification` | `{notification}` | Any notification |
-| `user_typing` | `{communityId, profileId, displayName}` | Typing indicator |
-
----
-
-## 7. Background Jobs & Scheduled Tasks
-
-| Job | Schedule | Description |
-|---|---|---|
-| `expireTripsCron` | Every 15 min | Check expired trips, enforce 15km validation rule, erase unvalidated |
-| `expireRalliesCron` | Every 30 min | Expire rallies past their expiry time |
-| `updateLeaderboardCron` | Every 1 hour | Recalculate and refresh Redis leaderboard sorted sets |
-| `cleanupNotificationsCron` | Daily at 3 AM | Delete notifications older than 90 days |
-| `updateFlagCountsCron` | Every 6 hours | Recalculate flag counts on waypoints (from nearby flags) |
-| `profileStatsReconcile` | Daily at 4 AM | Reconcile denormalized profile stats with actual counts |
-
----
-
-## 8. File Storage & Media
-
-### 8.1 Upload Flow
+### Namespaces & Event Definitions
 
 ```
-POST /api/v2/teritory/upload
-Content-Type: multipart/form-data
-Authorization: Bearer <jwt>
+/teritory (Default Namespace)
+├── Room: user:<userId>          → Personal notifications, friend requests
+├── Room: community:<commId>     → Community live chat & activities
+├── Room: trip:<tripId>          → Live participant telemetry & waypoint unlocks
+└── Room: rally:<rallyId>        → Rally arrivals countdown & collective flag drop
+```
 
-Fields:
-  - file: <binary>
-  - type: "avatar" | "flag_photo" | "community_cover" | "clan_cover"
+| Event Name | Direction | Payload | Description |
+|---|---|---|---|
+| `chat:send` | Client → Server | `{ communityId, text }` | Send chat message |
+| `chat:message` | Server → Client | `{ id, communityId, user, text, createdAt }` | Broadcast new chat message |
+| `chat:typing` | Both | `{ communityId, userId, isTyping }` | Ephemeral typing indicator |
+| `trip:join_room` | Client → Server | `{ tripId }` | Subscribe to live trip updates |
+| `trip:loc_update` | Client → Server | `{ tripId, lat, lng }` | Stream current location in active trip |
+| `trip:waypoint_unlocked` | Server → Client | `{ tripId, waypointId, userId, placeName }`| Waypoint validated notification |
+| `rally:arrival` | Server → Client | `{ rallyId, userId, currentCount, needed }` | Someone arrived at rally destination |
+| `notif:incoming` | Server → Client | `{ type, title, body, actionUrl }` | In-app real-time banner |
 
-Response:
-{
-  "success": true,
-  "data": {
-    "url": "https://storage.neon.tech/teritory/avatars/uuid.jpg",
-    "key": "teritory/avatars/uuid.jpg"
-  }
+---
+
+## 7. Geo-Spatial Query Engine & Algorithms
+
+### 7.1 Distance Calculation (Haversine Formula)
+Implemented in `src/utils/geo.js`:
+```javascript
+function haversineDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // Earth radius in meters
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
 }
 ```
 
-### 8.2 Storage Structure
-
-```
-teritory/
-├── avatars/          # Profile pictures (max 2MB, jpg/png)
-├── flags/            # Flag photos (max 5MB, jpg/png)
-├── covers/           # Clan/Community covers (max 5MB, jpg/png)
-└── trips/            # Trip completion photos (max 5MB, jpg/png)
-```
-
----
-
-## 9. Leaderboard & Scoring Engine
-
-### 9.1 Score Calculation
-
-```javascript
-function calculateScore(profile) {
-  return (
-    profile.totalFlags * 10 +          // 10 pts per flag
-    profile.majorFlags * 25 +           // 25 bonus for major flags
-    profile.countriesVisited * 100 +    // 100 pts per country
-    profile.continentsVisited * 500 +   // 500 pts per continent
-    profile.completedTripsCount * 50 +  // 50 pts per completed trip
-    profile.legendaryRalliesCount * 200 + // 200 pts per rally
-    profile.passportStamps.length * 30  // 30 pts per stamp
-  );
-}
-```
-
-### 9.2 Redis Sorted Sets Structure
-
-```
-leaderboard:global                    → ZADD score profileId
-leaderboard:country:India             → ZADD score profileId
-leaderboard:state:Kerala              → ZADD score profileId
-leaderboard:district:Palakkad         → ZADD score profileId
-leaderboard:friends:<profileId>       → ZADD score friendProfileId (per-user)
-leaderboard:period:monthly:2026-11    → ZADD monthly_score profileId
-leaderboard:period:weekly:2026-W46    → ZADD weekly_score profileId
-```
-
-### 9.3 Leaderboard Query (efficient)
-
-```javascript
-// GET /leaderboard?scope=GLOBAL&period=ALL_TIME&page=1&limit=50
-const key = `leaderboard:global`;
-const start = (page - 1) * limit;
-const end = start + limit - 1;
-
-// Get rankings (high to low)
-const rankings = await redis.zrevrange(key, start, end, 'WITHSCORES');
-
-// Get user's own rank
-const myRank = await redis.zrevrank(key, currentProfileId);
-const myScore = await redis.zscore(key, currentProfileId);
+### 7.2 PostGIS Sub-Territory Clustering
+Discovers lesser-known viewpoint spots within 5km of a major flag cluster:
+```sql
+SELECT 
+  f.id, f.place_name, f.latitude, f.longitude, f.category, f.photo_url,
+  COUNT(r.id) FILTER (WHERE r.type = 'HIDDEN_GEM') AS gem_score
+FROM flags f
+LEFT JOIN flag_reactions r ON f.id = r.flag_id
+WHERE ST_DWithin(
+  ST_SetSRID(ST_MakePoint(f.longitude, f.latitude), 4326)::geography,
+  ST_SetSRID(ST_MakePoint(:centerLng, :centerLat), 4326)::geography,
+  5000
+)
+AND f.is_major_flag = false
+GROUP BY f.id
+HAVING COUNT(r.id) > 0
+ORDER BY gem_score DESC
+LIMIT 15;
 ```
 
 ---
 
-## 10. Module Structure & Code Organization
+## 8. Background Workers & Cron Tasks
+
+Using `node-cron` or BullMQ worker queue:
+
+| Worker Name | Frequency | Functionality |
+|---|---|---|
+| `TripExpiryWorker` | Every 15 mins | Scans `trips` where `status = ACTIVE` and `expiresAt < NOW()`. Checks if destination was validated within 15 km. If not validated, marks participant as `DROPPED` and **erases trip from their profile**. |
+| `RallyExpiryWorker` | Every 10 mins | Checks `legendary_rallies` past `expiresAt`. If `minParticipants` not reached, sets status to `EXPIRED`. |
+| `LeaderboardSyncWorker`| Hourly | Recalculates Redis sorted sets (`ZSET`) across all scopes and time periods. |
+| `StatsReconciler` | Daily (3:00 AM) | Audits denormalized counts on `User` table against actual rows in `flags`, `trips`, etc. |
+
+---
+
+## 9. Media Upload & Object Storage
+
+- **Storage Provider**: Neon Object Storage (S3 compatible) or AWS S3.
+- **Upload Endpoint**: `POST /v1/media/upload` (multipart/form-data)
+- **Bucket Hierarchy**:
+  ```
+  teritory-media/
+  ├── avatars/             # 512x512 user profile pictures (WebP/JPEG)
+  ├── flags/               # Flag drop photos (max 5MB)
+  ├── covers/              # Clan and community banner covers
+  └── services/            # Gear catalog thumbnails
+  ```
+- **Presigned URLs**: Direct upload support via `GET /v1/media/presigned-url?filename=xyz.jpg&mime=image/jpeg`.
+
+---
+
+## 10. Leaderboard & Scoring Calculation
+
+A composite algorithmic formula calculates a user's prestige score:
+$$\text{Score} = (F_{\text{total}} \times 10) + (F_{\text{major}} \times 25) + (C_{\text{country}} \times 100) + (T_{\text{trips}} \times 50) + (R_{\text{rally}} \times 200) + (S_{\text{stamps}} \times 30)$$
+
+### Redis Sorted Set Keys
+```
+leaderboard:global
+leaderboard:country:{countryCode}
+leaderboard:state:{stateName}
+leaderboard:district:{districtName}
+leaderboard:friends:{userId}
+```
+Queries execute in $\mathcal{O}(\log(N) + M)$ using `ZREVRANGEBYSCORE` and `ZREVRANK`.
+
+---
+
+## 11. Project Structure & Code Organization
+
+The standalone backend will reside in a dedicated folder (e.g. `/home/akhilva/onway-api/teritory-api/`):
 
 ```
-src/
-├── modules/
-│   └── teritory/
-│       ├── teritory.routes.js           # Router: /api/v2/teritory/*
-│       │
-│       ├── profile/
-│       │   ├── profile.controller.js
-│       │   ├── profile.service.js
-│       │   └── profile.validator.js
-│       │
-│       ├── flag/
-│       │   ├── flag.controller.js
-│       │   ├── flag.service.js
-│       │   └── flag.validator.js
-│       │
-│       ├── friend/
-│       │   ├── friend.controller.js
-│       │   ├── friend.service.js
-│       │   └── friend.validator.js
-│       │
-│       ├── clan/
-│       │   ├── clan.controller.js
-│       │   ├── clan.service.js
-│       │   └── clan.validator.js
-│       │
-│       ├── community/
-│       │   ├── community.controller.js
-│       │   ├── community.service.js
-│       │   └── community.validator.js
-│       │
-│       ├── trip/
-│       │   ├── trip.controller.js
-│       │   ├── trip.service.js
-│       │   ├── trip.validator.js
-│       │   └── trip.cron.js             # Trip expiry cron job
-│       │
-│       ├── rally/
-│       │   ├── rally.controller.js
-│       │   ├── rally.service.js
-│       │   └── rally.validator.js
-│       │
-│       ├── leaderboard/
-│       │   ├── leaderboard.controller.js
-│       │   ├── leaderboard.service.js
-│       │   └── leaderboard.cron.js      # Score recalculation
-│       │
-│       ├── service/
-│       │   ├── service.controller.js
-│       │   └── service.service.js
-│       │
-│       ├── notification/
-│       │   ├── notification.controller.js
-│       │   └── notification.service.js
-│       │
-│       ├── upload/
-│       │   ├── upload.controller.js
-│       │   └── upload.service.js
-│       │
-│       └── socket/
-│           ├── teritory.socket.js       # Socket.IO /teritory namespace
-│           └── handlers/
-│               ├── chat.handler.js
-│               ├── trip.handler.js
-│               └── rally.handler.js
-│
-├── utils/
-│   ├── haversine.js                     # GPS distance calculation
-│   └── scoring.js                       # Leaderboard score calculator
+teritory-api/
+├── package.json
+├── .env.example
+├── prisma/
+│   └── schema.prisma
+├── src/
+│   ├── app.js                   # Express application setup & middleware
+│   ├── server.js                # Server entrypoint & Socket.IO initialization
+│   ├── config/
+│   │   ├── env.js               # Validated env variables (Joi)
+│   │   ├── prisma.js            # Prisma client singleton
+│   │   ├── redis.js             # IORedis client with failover
+│   │   └── socket.js            # Socket.IO configuration
+│   ├── middleware/
+│   │   ├── authenticate.js      # JWT verification & user injection
+│   │   ├── validate.js          # Joi request validation middleware
+│   │   ├── errorHandler.js      # Standardized API error responses
+│   │   └── rateLimiter.js       # Express rate limiter
+│   ├── modules/
+│   │   ├── auth/                # Auth controller, service, routes, validator
+│   │   ├── users/               # Profile, stats, settings, friends
+│   │   ├── flags/               # Flag drops, discovery, reactions, comments
+│   │   ├── clans/               # Clan management, roles, communities
+│   │   ├── communities/         # Community feed, chat messages, membership
+│   │   ├── trips/               # Trip plans, waypoints, active trip GPS checks
+│   │   ├── rallies/             # Legendary rally coordination
+│   │   ├── rankings/            # Leaderboard retrieval & Redis ranking
+│   │   ├── services/            # Gear rental & local food spot catalog
+│   │   ├── notifications/       # In-app notifications & push triggers
+│   │   └── media/               # File uploads & S3 storage
+│   ├── sockets/
+│   │   ├── chat.socket.js
+│   │   ├── trip.socket.js
+│   │   └── rally.socket.js
+│   ├── jobs/
+│   │   ├── tripExpiry.cron.js
+│   │   ├── rallyExpiry.cron.js
+│   │   └── leaderboardSync.cron.js
+│   └── utils/
+│       ├── geo.js               # Haversine distance & spatial helpers
+│       ├── ApiResponse.js       # Standardized JSON response envelope
+│       ├── ApiError.js          # Custom HTTP error class
+│       └── scoring.js           # Teritory point calculation
 ```
 
 ---
 
-## 11. Deployment & Infrastructure
+## 12. Step-by-Step Backend Implementation Roadmap
 
-### 11.1 Environment Variables (add to .env)
-
-```env
-# Teritory-specific
-TERITORY_UPLOAD_BUCKET=teritory-media
-TERITORY_UPLOAD_MAX_SIZE=5242880
-TERITORY_RALLY_MIN_DISTANCE_M=500
-TERITORY_WAYPOINT_VALIDATION_RADIUS_M=15000
-TERITORY_TRIP_DEFAULT_EXPIRY_DAYS=30
-TERITORY_LEADERBOARD_REFRESH_INTERVAL_S=3600
+```mermaid
+timeline
+    title Standalone Teritory Backend Roadmap
+    Phase 1 (Setup & Core Identity) : Initialize teritory-api project : Configure Prisma & Neon PostgreSQL : JWT Auth & OTP Verification : User Profile CRUD
+    Phase 2 (Flags & Geo Discovery) : Flag Dropping API : PostGIS / Haversine Spatial Queries : Sub-Territory (<5km) Engine : Reactions & Comments
+    Phase 3 (Clans & Communities) : Clan CRUD & Membership : Communities & Feeds : Real-time Socket.IO Chat : Member Roles
+    Phase 4 (Expedition Engine) : Trip Planner & Waypoints : Community Plan Voting : Active Trip Mode : 15km GPS Validation Rule : Trip Expiry Cron Worker
+    Phase 5 (Social & Rallies) : Friends Graph & Requests : Legendary Rally Coordination : Gear Services Catalog : Multi-Scope Leaderboards (Redis)
+    Phase 6 (Flutter Integration) : Wire Teritory Flutter App to Live API : Full End-to-End Testing on Device
 ```
 
-### 11.2 Database Migration
-
-```bash
-# Add Teritory models to prisma/schema.prisma
-# Then:
-npx prisma migrate dev --name add-teritory-v2-models
-npx prisma generate
-```
-
-### 11.3 Route Registration (add to app.js)
-
-```javascript
-// Teritory V2 Routes
-const teritoryRoutes = require('./modules/teritory/teritory.routes');
-app.use('/api/v2/teritory', teritoryRoutes);
-
-// Teritory Socket.IO namespace
-const { initTeritorySocket } = require('./modules/teritory/socket/teritory.socket');
-initTeritorySocket(io);
-```
-
----
-
-## 12. Implementation Phases
-
-### Phase 1: Foundation (Week 1-2)
-- [ ] Prisma schema migration (all 28 models)
-- [ ] TeritoryProfile CRUD
-- [ ] Auth integration (extend existing JWT)
-- [ ] File upload service
-- [ ] Profile API endpoints
-
-### Phase 2: Social Graph (Week 2-3)
-- [ ] Friends API (request, accept, decline, list, search)
-- [ ] Notifications service
-- [ ] FCM push notification integration
-- [ ] Socket.IO /teritory namespace setup
-
-### Phase 3: Flags & Map (Week 3-4)
-- [ ] Flag CRUD endpoints
-- [ ] Geo-query for nearby flags (PostGIS or Haversine)
-- [ ] Flag reactions & comments
-- [ ] Stats auto-update on flag drop
-- [ ] Achievement/milestone engine (PassportStamps)
-
-### Phase 4: Clans & Communities (Week 4-5)
-- [ ] Clan CRUD + join/leave
-- [ ] Community CRUD + join/leave
-- [ ] Community chat (REST + Socket.IO)
-- [ ] Community activity feed
-- [ ] Invite system
-
-### Phase 5: Trip Planning & Execution (Week 5-7)
-- [ ] TripPlan CRUD with waypoints
-- [ ] Voting system
-- [ ] Trip execution (start, join, validate, complete)
-- [ ] GPS waypoint validation (15km rule)
-- [ ] Trip expiry cron job
-- [ ] Trip badges (FULL/PARTIAL/NONE)
-- [ ] Saved trip plans
-- [ ] Trip history
-
-### Phase 6: Legendary Rallies (Week 7-8)
-- [ ] Rally CRUD
-- [ ] Rally join + GPS arrival check
-- [ ] Rally completion + collective flag
-- [ ] Rally expiry cron
-
-### Phase 7: Leaderboard & Rankings (Week 8-9)
-- [ ] Scoring engine
-- [ ] Redis sorted sets setup
-- [ ] All 5 scopes (global, country, state, district, friends)
-- [ ] Period filters (all-time, yearly, monthly, weekly)
-- [ ] Leaderboard refresh cron
-
-### Phase 8: Services & Gear (Week 9)
-- [ ] ServiceProvider + ServiceListing CRUD (admin)
-- [ ] Geo-query for nearby services
-- [ ] Category filtering
-
-### Phase 9: Flutter Integration (Week 9-10)
-- [ ] Replace MockDataService with real API service
-- [ ] Wire up Socket.IO for chat & live trip tracking
-- [ ] Implement push notification handling
-- [ ] Test end-to-end on device
-
-### Phase 10: Polish & Production (Week 10-11)
-- [ ] Rate limiting per endpoint
-- [ ] Input validation (Joi schemas)
-- [ ] Error handling standardization
-- [ ] API documentation (Swagger)
-- [ ] Load testing
-- [ ] Security audit
-- [ ] Production deployment
-
----
-
-> [!NOTE]
-> **Total API Endpoints**: ~85 endpoints across 12 modules  
-> **Total DB Models**: 28 new Teritory models + 18 existing OnWay models  
-> **Total Socket Events**: 17 events (10 server→client, 7 client→server)  
-> **Total Cron Jobs**: 6 scheduled background tasks
-
-> [!TIP]
-> **Mock → Real Swap Strategy**: Every Flutter model already has `fromJson()`/`toJson()`. The API response format matches the mock data exactly. When backend is ready, replace `MockDataService.instance.method()` calls with `ApiService.instance.method()` in providers — zero UI changes needed.
+### Phase Breakdown
+1. **Phase 1 — Project Initialization & Auth**: Set up `teritory-api`, install dependencies, write Prisma schema, run initial migration, implement phone OTP and JWT token lifecycle.
+2. **Phase 2 — Flags & Geospatial Engine**: Build flag drop APIs, implement coordinate search and sub-territory discovery algorithm.
+3. **Phase 3 — Clans & Community Chat**: Implement clan hierarchy, community activity feed, and Socket.IO real-time chat.
+4. **Phase 4 — Trip Planning & GPS Validation**: Implement collaborative waypoint builder, community voting, active trip state tracking, and the 15km arrival validation algorithm.
+5. **Phase 5 — Legendary Rallies, Rankings & Services**: Implement gathering rallies, multi-scope leaderboard using Redis sorted sets, and gear rental listings.
+6. **Phase 6 — Full Integration**: Connect the Teritory Flutter application to the standalone backend, replacing `MockDataService` with the live HTTP/WebSocket service.
