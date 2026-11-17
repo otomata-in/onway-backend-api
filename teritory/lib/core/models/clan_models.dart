@@ -61,6 +61,21 @@ class Clan {
     );
   }
 
+  Clan copyWith({int? memberCount, int? communitiesCount}) => Clan(
+        id: id,
+        name: name,
+        description: description,
+        coverImageUrl: coverImageUrl,
+        region: region,
+        interestTag: interestTag,
+        memberCount: memberCount ?? this.memberCount,
+        communitiesCount: communitiesCount ?? this.communitiesCount,
+        chieftainId: chieftainId,
+        chieftainName: chieftainName,
+        isPublic: isPublic,
+        createdAt: createdAt,
+      );
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,

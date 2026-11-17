@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/theme/teritory_theme.dart';
-import '../../../core/models/user_models.dart';
-import '../../../core/providers/auth_provider.dart';
-import '../../../core/providers/data_providers.dart';
-import '../../../core/services/mock_data_service.dart';
+import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/models/api_user.dart';
+import '../../../core/services/api_service.dart';
+import '../../../core/services/teritory_repository.dart';
+import '../../../core/theme/teritory_theme.dart';
+import '../application/profile_providers.dart';
+
+/// Live friends list: `GET /users/friends` for the rows and
+/// `GET /users/friends/requests` for the pending badge.
 class FriendsListScreen extends ConsumerStatefulWidget {
   const FriendsListScreen({super.key});
 
@@ -17,9 +20,10 @@ class FriendsListScreen extends ConsumerStatefulWidget {
 
 class _FriendsListScreenState extends ConsumerState<FriendsListScreen>
     with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+  late final TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  String? _removingRelationshipId;
 
   static const List<String> _tabs = [
     'All',
@@ -41,69 +45,91 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen>
     super.dispose();
   }
 
-  FriendCategory? _categoryForTab(int index) {
+  /// The API stores `TRAVEL_BUDDIES` / `FAVORITES` / `FAMILY`.
+  String? _categoryForTab(int index) {
     switch (index) {
       case 1:
-        return FriendCategory.favorites;
+        return 'FAVORITES';
       case 2:
-        return FriendCategory.travelBuddies;
+        return 'TRAVEL_BUDDIES';
       case 3:
-        return FriendCategory.family;
+        return 'FAMILY';
       default:
         return null;
     }
   }
 
-  List<_FriendDisplay> _buildFriendList(
-    List<FriendRelationship> relationships,
-    String currentUserId,
-  ) {
-    final mock = MockDataService.instance;
-    final List<_FriendDisplay> result = [];
-
-    final category = _categoryForTab(_tabController.index);
-
-    for (final rel in relationships) {
-      if (category != null && rel.category != category) continue;
-
-      final friendUserId =
-          rel.userId == currentUserId ? rel.friendId : rel.userId;
-      final user = mock.userById(friendUserId);
-      if (user == null) continue;
-
-      if (_searchQuery.isNotEmpty) {
-        final q = _searchQuery.toLowerCase();
-        if (!user.displayName.toLowerCase().contains(q) &&
-            !user.handle.toLowerCase().contains(q)) {
-          continue;
-        }
-      }
-
-      // Calculate mutual friends count
-      final friendFriends = mock.friendsForUser(friendUserId);
-      final myFriendIds = relationships
-          .map((f) => f.userId == currentUserId ? f.friendId : f.userId)
-          .toSet();
-      final theirFriendIds = friendFriends
-          .map((f) => f.userId == friendUserId ? f.friendId : f.userId)
-          .toSet();
-      final mutualCount = myFriendIds.intersection(theirFriendIds).length;
-
-      result.add(_FriendDisplay(
-        user: user,
-        relationship: rel,
-        mutualCount: mutualCount,
-      ));
+  Future<void> _refresh() async {
+    ref.invalidate(friendsLiveProvider);
+    ref.invalidate(friendRequestsLiveProvider);
+    try {
+      await ref.read(friendsLiveProvider.future);
+    } on ApiException {
+      // The error state renders the message.
     }
+  }
 
-    return result;
+  Future<void> _removeFriend(ApiFriend friend) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove friend?'),
+        content: Text(
+          '${friend.user.displayName} will be removed from your friends.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _removingRelationshipId = friend.relationshipId);
+    try {
+      await TeritoryRepository.instance.removeFriend(friend.relationshipId);
+      ref.invalidate(friendsLiveProvider);
+      ref.invalidate(friendRequestsLiveProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Removed ${friend.user.displayName}')),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } finally {
+      if (mounted) setState(() => _removingRelationshipId = null);
+    }
+  }
+
+  List<ApiFriend> _visibleFriends(List<ApiFriend> friends) {
+    final category = _categoryForTab(_tabController.index);
+    final query = _searchQuery.trim().toLowerCase();
+
+    return friends.where((friend) {
+      if (category != null &&
+          friend.category.toUpperCase() != category) {
+        return false;
+      }
+      if (query.isEmpty) return true;
+      return friend.user.displayName.toLowerCase().contains(query) ||
+          friend.user.handle.toLowerCase().contains(query);
+    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = ref.watch(currentUserProvider);
-    final friends = ref.watch(friendsProvider);
-    final pendingRequests = ref.watch(friendRequestsProvider);
+    final friendsAsync = ref.watch(friendsLiveProvider);
+    final pending =
+        ref.watch(friendRequestsLiveProvider).valueOrNull?.incoming.length ?? 0;
 
     return Scaffold(
       backgroundColor: TeritoryColors.background,
@@ -116,14 +142,14 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen>
           ),
         ),
         actions: [
-          if (pendingRequests.isNotEmpty)
+          if (pending > 0)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: TextButton.icon(
                 onPressed: () => context.go('/profile/friend-requests'),
                 icon: const Icon(Icons.person_add_rounded, size: 18),
                 label: Text(
-                  '${pendingRequests.length} Pending',
+                  '$pending Pending',
                   style: GoogleFonts.plusJakartaSans(
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
@@ -145,7 +171,6 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen>
           preferredSize: const Size.fromHeight(108),
           child: Column(
             children: [
-              // Search bar
               Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -156,7 +181,7 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen>
                   ),
                   child: TextField(
                     controller: _searchController,
-                    onChanged: (val) => setState(() => _searchQuery = val),
+                    onChanged: (value) => setState(() => _searchQuery = value),
                     style: GoogleFonts.plusJakartaSans(fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'Search friends...',
@@ -182,7 +207,6 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen>
                   ),
                 ),
               ),
-              // Category tabs
               TabBar(
                 controller: _tabController,
                 onTap: (_) => setState(() {}),
@@ -201,41 +225,47 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen>
                 indicatorColor: TeritoryColors.primary,
                 indicatorWeight: 3,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                tabs: _tabs.map((t) => Tab(text: t)).toList(),
+                tabs: _tabs.map((tab) => Tab(text: tab)).toList(),
               ),
             ],
           ),
         ),
       ),
-      body: Builder(
-        builder: (context) {
-          final friendList = _buildFriendList(friends, currentUser.id);
-
-          if (friendList.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+      body: friendsAsync.when(
+        loading: () => const Center(
+          child: CircularProgressIndicator(color: TeritoryColors.primary),
+        ),
+        error: (error, _) => _MessageState(
+          icon: Icons.cloud_off_rounded,
+          title: error is ApiException
+              ? error.message
+              : 'Could not load your friends.',
+          actionLabel: 'Retry',
+          onAction: () => ref.invalidate(friendsLiveProvider),
+        ),
+        data: (friends) {
+          final visible = _visibleFriends(friends);
+          if (visible.isEmpty) {
+            return RefreshIndicator(
+              color: TeritoryColors.primary,
+              onRefresh: _refresh,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 children: [
-                  Icon(Icons.people_outline_rounded,
-                      size: 64,
-                      color: TeritoryColors.textMuted.withValues(alpha: 0.5)),
-                  const SizedBox(height: 16),
-                  Text(
-                    _searchQuery.isNotEmpty
-                        ? 'No friends match "$_searchQuery"'
-                        : 'No friends in this category yet',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: TeritoryColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Invite people to explore together!',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 13,
-                      color: TeritoryColors.textMuted,
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.55,
+                    child: _MessageState(
+                      icon: friends.isEmpty
+                          ? Icons.people_outline_rounded
+                          : Icons.search_off_rounded,
+                      title: friends.isEmpty
+                          ? 'No friends yet'
+                          : _searchQuery.isNotEmpty
+                              ? 'No friends match "$_searchQuery"'
+                              : 'No friends in this category yet',
+                      subtitle: friends.isEmpty
+                          ? 'Add travelers from their profile to see them here.'
+                          : null,
                     ),
                   ),
                 ],
@@ -243,17 +273,25 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen>
             );
           }
 
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: friendList.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final friend = friendList[index];
-              return _FriendCard(
-                friend: friend,
-                onTap: () => context.go('/profile/friends/${friend.user.id}'),
-              );
-            },
+          return RefreshIndicator(
+            color: TeritoryColors.primary,
+            onRefresh: _refresh,
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              itemCount: visible.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final friend = visible[index];
+                return _FriendCard(
+                  friend: friend,
+                  isRemoving: _removingRelationshipId == friend.relationshipId,
+                  onTap: () =>
+                      context.go('/profile/friends/${friend.user.id}'),
+                  onRemove: () => _removeFriend(friend),
+                );
+              },
+            ),
           );
         },
       ),
@@ -261,54 +299,46 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen>
   }
 }
 
-class _FriendDisplay {
-  final User user;
-  final FriendRelationship relationship;
-  final int mutualCount;
-
-  const _FriendDisplay({
-    required this.user,
-    required this.relationship,
-    required this.mutualCount,
-  });
-}
-
 class _FriendCard extends StatelessWidget {
-  final _FriendDisplay friend;
-  final VoidCallback onTap;
-
   const _FriendCard({
     required this.friend,
+    required this.isRemoving,
     required this.onTap,
+    required this.onRemove,
   });
 
-  String _timeAgo(DateTime date) {
-    final diff = DateTime.now().difference(date);
-    if (diff.inDays > 365) return '${diff.inDays ~/ 365}y ago';
-    if (diff.inDays > 30) return '${diff.inDays ~/ 30}mo ago';
-    if (diff.inDays > 0) return '${diff.inDays}d ago';
-    if (diff.inHours > 0) return '${diff.inHours}h ago';
-    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
-    return 'Just now';
-  }
+  final ApiFriend friend;
+  final bool isRemoving;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
 
-  String _categoryLabel(FriendCategory? cat) {
-    switch (cat) {
-      case FriendCategory.favorites:
+  String _categoryLabel(String category) {
+    switch (category.toUpperCase()) {
+      case 'FAVORITES':
         return '⭐ Favorite';
-      case FriendCategory.travelBuddies:
+      case 'TRAVEL_BUDDIES':
         return '🎒 Travel Buddy';
-      case FriendCategory.family:
+      case 'FAMILY':
         return '👨‍👩‍👧 Family';
       default:
         return '';
     }
   }
 
+  String _sinceLabel(DateTime? since) {
+    if (since == null) return '';
+    final days = DateTime.now().difference(since).inDays;
+    if (days > 365) return 'Friends ${days ~/ 365}y';
+    if (days > 30) return 'Friends ${days ~/ 30}mo';
+    if (days > 0) return 'Friends ${days}d';
+    return 'Friends today';
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = friend.user;
-    final categoryLabel = _categoryLabel(friend.relationship.category);
+    final categoryLabel = _categoryLabel(friend.category);
+    final sinceLabel = _sinceLabel(friend.since);
 
     return GestureDetector(
       onTap: onTap,
@@ -328,14 +358,18 @@ class _FriendCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Avatar
             CircleAvatar(
               radius: 26,
-              backgroundImage: NetworkImage(user.avatarUrl),
               backgroundColor: TeritoryColors.surfaceContainer,
+              backgroundImage: user.avatarUrl.isNotEmpty
+                  ? NetworkImage(user.avatarUrl)
+                  : null,
+              child: user.avatarUrl.isEmpty
+                  ? const Icon(Icons.person_rounded,
+                      color: TeritoryColors.textMuted)
+                  : null,
             ),
             const SizedBox(width: 12),
-            // Name, handle, mutual
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -377,7 +411,7 @@ class _FriendCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    user.handle,
+                    '@${user.handle}',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 12,
                       color: TeritoryColors.textSecondary,
@@ -386,101 +420,137 @@ class _FriendCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.people_outline_rounded,
+                      const Icon(Icons.flag_rounded,
                           size: 13, color: TeritoryColors.textMuted),
                       const SizedBox(width: 4),
                       Text(
-                        '${friend.mutualCount} mutual',
+                        '${user.totalFlags} flags',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 11,
                           color: TeritoryColors.textMuted,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      const Icon(Icons.access_time_rounded,
-                          size: 13, color: TeritoryColors.textMuted),
-                      const SizedBox(width: 4),
-                      Text(
-                        _timeAgo(user.createdAt),
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          color: TeritoryColors.textMuted,
+                      if (sinceLabel.isNotEmpty) ...[
+                        const SizedBox(width: 12),
+                        const Icon(Icons.handshake_outlined,
+                            size: 13, color: TeritoryColors.textMuted),
+                        const SizedBox(width: 4),
+                        Text(
+                          sinceLabel,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            color: TeritoryColors.textMuted,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ],
               ),
             ),
-            // Actions
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert_rounded,
-                  color: TeritoryColors.textSecondary, size: 20),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              onSelected: (value) {
-                final messenger = ScaffoldMessenger.of(context);
-                switch (value) {
-                  case 'view':
-                    onTap();
-                    break;
-                  case 'remove':
-                    messenger.showSnackBar(
-                      SnackBar(
-                        content:
-                            Text('Removed ${user.displayName} from friends'),
-                      ),
-                    );
-                    break;
-                  case 'invite':
-                    messenger.showSnackBar(
-                      SnackBar(
-                        content:
-                            Text('Invitation sent to ${user.displayName}'),
-                      ),
-                    );
-                    break;
-                }
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  value: 'view',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.person_outline_rounded, size: 18),
-                      const SizedBox(width: 8),
-                      Text('View Profile',
-                          style: GoogleFonts.plusJakartaSans(fontSize: 13)),
-                    ],
+            if (isRemoving)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert_rounded,
+                    color: TeritoryColors.textSecondary, size: 20),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                onSelected: (value) {
+                  if (value == 'view') onTap();
+                  if (value == 'remove') onRemove();
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'view',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.person_outline_rounded, size: 18),
+                        const SizedBox(width: 8),
+                        Text('View Profile',
+                            style: GoogleFonts.plusJakartaSans(fontSize: 13)),
+                      ],
+                    ),
                   ),
-                ),
-                PopupMenuItem(
-                  value: 'invite',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.send_rounded, size: 18),
-                      const SizedBox(width: 8),
-                      Text('Invite to Trip',
-                          style: GoogleFonts.plusJakartaSans(fontSize: 13)),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'remove',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.person_remove_rounded,
-                          size: 18, color: TeritoryColors.expiredRed),
-                      const SizedBox(width: 8),
-                      Text('Remove Friend',
+                  PopupMenuItem(
+                    value: 'remove',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.person_remove_rounded,
+                            size: 18, color: TeritoryColors.expiredRed),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Remove Friend',
                           style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13,
-                              color: TeritoryColors.expiredRed)),
-                    ],
+                              fontSize: 13, color: TeritoryColors.expiredRed),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageState extends StatelessWidget {
+  const _MessageState({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon,
+                size: 56,
+                color: TeritoryColors.textMuted.withValues(alpha: 0.6)),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: TeritoryColors.textSecondary,
+              ),
             ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                subtitle!,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  color: TeritoryColors.textMuted,
+                ),
+              ),
+            ],
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 16),
+              FilledButton(onPressed: onAction, child: Text(actionLabel!)),
+            ],
           ],
         ),
       ),

@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/theme/teritory_theme.dart';
-import '../../../core/providers/data_providers.dart';
+import '../../../core/models/api_trip.dart';
 import '../../../core/models/trip_models.dart';
+import '../../../core/services/api_service.dart';
+import '../../../core/theme/teritory_theme.dart';
+import '../application/trips_provider.dart';
 
 class TripsHubScreen extends ConsumerStatefulWidget {
   const TripsHubScreen({super.key});
@@ -18,6 +20,7 @@ class TripsHubScreen extends ConsumerStatefulWidget {
 class _TripsHubScreenState extends ConsumerState<TripsHubScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  String? _startingPlanId;
 
   @override
   void initState() {
@@ -29,6 +32,34 @@ class _TripsHubScreenState extends ConsumerState<TripsHubScreen>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _startPlan(TripPlan plan) async {
+    if (_startingPlanId != null) return;
+    setState(() => _startingPlanId = plan.id);
+
+    try {
+      final trip = await ref.read(tripsHubProvider.notifier).startTrip(plan.id);
+      if (!mounted) return;
+      _tabController.animateTo(0);
+      context.push('/trips/${trip.id}/active');
+    } on ApiException catch (e) {
+      _toast(e.message);
+    } catch (_) {
+      _toast('Could not start this trip. Check your connection.');
+    } finally {
+      if (mounted) setState(() => _startingPlanId = null);
+    }
+  }
+
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: TeritoryColors.expiredRed,
+      ),
+    );
   }
 
   @override
@@ -43,7 +74,8 @@ class _TripsHubScreenState extends ConsumerState<TripsHubScreen>
                 color: TeritoryColors.tripRoute.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.explore_rounded, color: TeritoryColors.tripRoute, size: 22),
+              child: const Icon(Icons.explore_rounded,
+                  color: TeritoryColors.tripRoute, size: 22),
             ),
             const SizedBox(width: 10),
             Text(
@@ -56,16 +88,6 @@ class _TripsHubScreenState extends ConsumerState<TripsHubScreen>
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search_rounded, color: TeritoryColors.textSecondary),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.filter_list_rounded, color: TeritoryColors.textSecondary),
-            onPressed: () {},
-          ),
-        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: TeritoryColors.primary,
@@ -82,7 +104,7 @@ class _TripsHubScreenState extends ConsumerState<TripsHubScreen>
           ),
           tabs: const [
             Tab(text: 'Active Trips'),
-            Tab(text: 'My Plans'),
+            Tab(text: 'Plans'),
             Tab(text: 'Trip History'),
           ],
         ),
@@ -90,13 +112,16 @@ class _TripsHubScreenState extends ConsumerState<TripsHubScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _ActiveTripsTab(),
-          _MyPlansTab(),
-          _TripHistoryTab(),
+          const _ActiveTripsTab(),
+          _PlansTab(
+            startingPlanId: _startingPlanId,
+            onStart: _startPlan,
+          ),
+          const _TripHistoryTab(),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.go('/trips/planner'),
+        onPressed: () => context.push('/trips/planner'),
         backgroundColor: TeritoryColors.primary,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add_rounded),
@@ -115,52 +140,76 @@ class _TripsHubScreenState extends ConsumerState<TripsHubScreen>
 // ─── Active Trips Tab ──────────────────────────────────────────────────
 
 class _ActiveTripsTab extends ConsumerWidget {
+  const _ActiveTripsTab();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final activeTrips = ref.watch(activeTripProvider);
-    final tripPlans = ref.watch(tripPlansProvider);
+    final hubAsync = ref.watch(tripsHubProvider);
+    final snapshot = hubAsync.valueOrNull;
 
-    if (activeTrips.isEmpty) {
-      return _buildEmptyState(
-        icon: Icons.route_rounded,
-        title: 'No Active Trips',
-        subtitle: 'Start a trip from your plans to see it here.',
+    if (snapshot == null) {
+      return hubAsync.isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: TeritoryColors.tripRoute),
+            )
+          : _ErrorState(
+              message: _errorMessage(hubAsync.error),
+              onRetry: () => ref.read(tripsHubProvider.notifier).refresh(),
+            );
+    }
+
+    final trip = snapshot.activeTrip;
+    if (trip == null) {
+      return RefreshIndicator(
+        color: TeritoryColors.tripRoute,
+        onRefresh: () => ref.read(tripsHubProvider.notifier).refresh(),
+        child: ListView(
+          children: const [
+            SizedBox(height: 120),
+            _EmptyState(
+              icon: Icons.route_rounded,
+              title: 'No Active Trips',
+              subtitle: 'Start a trip from your plans to see it here.',
+            ),
+          ],
+        ),
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: activeTrips.length,
-      itemBuilder: (context, index) {
-        final trip = activeTrips[index];
-        final plan = tripPlans.where((p) => p.id == trip.tripPlanId).firstOrNull;
-        return _ActiveTripCard(trip: trip, plan: plan);
-      },
+    return RefreshIndicator(
+      color: TeritoryColors.tripRoute,
+      onRefresh: () => ref.read(tripsHubProvider.notifier).refresh(),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [_ActiveTripCard(trip: trip)],
+      ),
     );
   }
 }
 
 class _ActiveTripCard extends StatelessWidget {
   final Trip trip;
-  final TripPlan? plan;
 
-  const _ActiveTripCard({required this.trip, this.plan});
+  const _ActiveTripCard({required this.trip});
 
   @override
   Widget build(BuildContext context) {
     final elapsed = DateTime.now().difference(trip.startedAt);
     final elapsedHours = elapsed.inHours;
-    final totalHours = plan?.estimatedDurationHours ?? 48;
+    final totalHours = trip.estimatedDurationHours <= 0
+        ? 48.0
+        : trip.estimatedDurationHours;
     final progress = (elapsedHours / totalHours).clamp(0.0, 1.0);
     final participantCount = trip.participants.length;
-    final activeParticipants =
-        trip.participants.where((p) => p.status == ParticipantStatus.inProgress).length;
-    final totalWaypoints = plan?.waypoints.length ?? 0;
-    final validatedWaypoints =
-        plan?.waypoints.where((w) => w.isValidated).length ?? 0;
+    final activeParticipants = trip.participants
+        .where((p) => p.status == ParticipantStatus.inProgress)
+        .length;
+    final route = trip.originName.isEmpty || trip.destinationName.isEmpty
+        ? null
+        : '${trip.originName} → ${trip.destinationName}';
 
     return GestureDetector(
-      onTap: () => context.go('/trips/${trip.id}/active'),
+      onTap: () => context.push('/trips/${trip.id}/active'),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
@@ -178,7 +227,6 @@ class _ActiveTripCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with gradient
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -188,7 +236,8 @@ class _ActiveTripCard extends StatelessWidget {
                     TeritoryColors.tripRoute.withValues(alpha: 0.02),
                   ],
                 ),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -196,7 +245,8 @@ class _ActiveTripCard extends StatelessWidget {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: TeritoryColors.validatedGreen,
                           borderRadius: BorderRadius.circular(20),
@@ -245,10 +295,10 @@ class _ActiveTripCard extends StatelessWidget {
                       color: TeritoryColors.textPrimary,
                     ),
                   ),
-                  if (plan != null) ...[
+                  if (route != null) ...[
                     const SizedBox(height: 4),
                     Text(
-                      '${plan!.originName} → ${plan!.destinationName}',
+                      route,
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
@@ -259,12 +309,10 @@ class _ActiveTripCard extends StatelessWidget {
                 ],
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  // Progress bar
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -296,14 +344,13 @@ class _ActiveTripCard extends StatelessWidget {
                           value: progress,
                           minHeight: 8,
                           backgroundColor: TeritoryColors.surfaceContainer,
-                          valueColor: const AlwaysStoppedAnimation(TeritoryColors.tripRoute),
+                          valueColor: const AlwaysStoppedAnimation(
+                              TeritoryColors.tripRoute),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
-
-                  // Stats row
                   Row(
                     children: [
                       _StatChip(
@@ -314,24 +361,20 @@ class _ActiveTripCard extends StatelessWidget {
                       const SizedBox(width: 12),
                       _StatChip(
                         icon: Icons.flag_rounded,
-                        label: '$validatedWaypoints/$totalWaypoints waypoints',
+                        label: '${trip.plannedWaypoints} waypoints',
                         color: TeritoryColors.validatedGreen,
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
-
-                  // Participant avatars
                   Row(
                     children: [
-                      ...trip.participants.take(4).map((p) => Padding(
-                        padding: const EdgeInsets.only(right: 4),
-                        child: CircleAvatar(
-                          radius: 16,
-                          backgroundImage: NetworkImage(p.userAvatar),
-                          backgroundColor: TeritoryColors.surfaceContainer,
-                        ),
-                      )),
+                      ...trip.participants.take(4).map(
+                            (p) => Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: _ParticipantAvatar(participant: p),
+                            ),
+                          ),
                       if (participantCount > 4)
                         CircleAvatar(
                           radius: 16,
@@ -347,7 +390,8 @@ class _ActiveTripCard extends StatelessWidget {
                         ),
                       const Spacer(),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
                           color: TeritoryColors.primary,
                           borderRadius: BorderRadius.circular(20),
@@ -355,7 +399,8 @@ class _ActiveTripCard extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.map_rounded, color: Colors.white, size: 16),
+                            const Icon(Icons.map_rounded,
+                                color: Colors.white, size: 16),
                             const SizedBox(width: 6),
                             Text(
                               'View Map',
@@ -380,34 +425,77 @@ class _ActiveTripCard extends StatelessWidget {
   }
 }
 
-// ─── My Plans Tab ──────────────────────────────────────────────────────
+// ─── Plans Tab ─────────────────────────────────────────────────────────
 
-class _MyPlansTab extends ConsumerWidget {
+class _PlansTab extends ConsumerWidget {
+  final String? startingPlanId;
+  final Future<void> Function(TripPlan plan) onStart;
+
+  const _PlansTab({required this.startingPlanId, required this.onStart});
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tripPlans = ref.watch(tripPlansProvider);
+    final hubAsync = ref.watch(tripsHubProvider);
+    final snapshot = hubAsync.valueOrNull;
 
-    if (tripPlans.isEmpty) {
-      return _buildEmptyState(
-        icon: Icons.map_rounded,
-        title: 'No Plans Yet',
-        subtitle: 'Create your first expedition plan!',
+    if (snapshot == null) {
+      return hubAsync.isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: TeritoryColors.tripRoute),
+            )
+          : _ErrorState(
+              message: _errorMessage(hubAsync.error),
+              onRetry: () => ref.read(tripsHubProvider.notifier).refresh(),
+            );
+    }
+
+    final plans = snapshot.proposedPlans;
+    if (plans.isEmpty) {
+      return RefreshIndicator(
+        color: TeritoryColors.tripRoute,
+        onRefresh: () => ref.read(tripsHubProvider.notifier).refresh(),
+        child: ListView(
+          children: const [
+            SizedBox(height: 120),
+            _EmptyState(
+              icon: Icons.map_rounded,
+              title: 'No Plans Yet',
+              subtitle: 'Create your first expedition plan!',
+            ),
+          ],
+        ),
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: tripPlans.length,
-      itemBuilder: (context, index) {
-        return _PlanCard(plan: tripPlans[index]);
-      },
+    return RefreshIndicator(
+      color: TeritoryColors.tripRoute,
+      onRefresh: () => ref.read(tripsHubProvider.notifier).refresh(),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: plans.length,
+        itemBuilder: (context, index) {
+          final plan = plans[index];
+          return _PlanCard(
+            plan: plan,
+            isStarting: startingPlanId == plan.id,
+            onStart: () => onStart(plan),
+          );
+        },
+      ),
     );
   }
 }
 
 class _PlanCard extends StatelessWidget {
   final TripPlan plan;
-  const _PlanCard({required this.plan});
+  final bool isStarting;
+  final VoidCallback onStart;
+
+  const _PlanCard({
+    required this.plan,
+    required this.isStarting,
+    required this.onStart,
+  });
 
   Color _statusColor(TripPlanStatus status) {
     switch (status) {
@@ -444,7 +532,7 @@ class _PlanCard extends StatelessWidget {
     final dateFormat = DateFormat('MMM d, yyyy');
 
     return GestureDetector(
-      onTap: () => context.go('/trips/${plan.id}'),
+      onTap: () => context.push('/trips/${plan.id}'),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
@@ -491,7 +579,8 @@ class _PlanCard extends StatelessWidget {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: _statusColor(plan.status).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
@@ -507,21 +596,21 @@ class _PlanCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Text(
-              plan.description,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: TeritoryColors.textSecondary,
-                height: 1.4,
+            if (plan.description.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                plan.description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: TeritoryColors.textSecondary,
+                  height: 1.4,
+                ),
               ),
-            ),
+            ],
             const SizedBox(height: 14),
-
-            // Info chips row
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -547,31 +636,26 @@ class _PlanCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-
-            // Action buttons
             Row(
               children: [
-                Text(
-                  'by ${plan.createdByName} · ${dateFormat.format(plan.createdAt)}',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: TeritoryColors.textMuted,
+                Expanded(
+                  child: Text(
+                    'by ${plan.createdByName} · ${dateFormat.format(plan.createdAt)}',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: TeritoryColors.textMuted,
+                    ),
                   ),
-                ),
-                const Spacer(),
-                _ActionButton(
-                  icon: Icons.play_arrow_rounded,
-                  label: 'Start',
-                  color: TeritoryColors.validatedGreen,
-                  onTap: () {},
                 ),
                 const SizedBox(width: 8),
                 _ActionButton(
-                  icon: Icons.share_rounded,
-                  label: 'Share',
-                  color: TeritoryColors.sapphireBlue,
-                  onTap: () {},
+                  icon: isStarting
+                      ? Icons.hourglass_top_rounded
+                      : Icons.play_arrow_rounded,
+                  label: isStarting ? 'Starting…' : 'Start',
+                  color: TeritoryColors.validatedGreen,
+                  onTap: isStarting ? null : onStart,
                 ),
               ],
             ),
@@ -585,58 +669,90 @@ class _PlanCard extends StatelessWidget {
 // ─── Trip History Tab ──────────────────────────────────────────────────
 
 class _TripHistoryTab extends ConsumerWidget {
+  const _TripHistoryTab();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final completions = ref.watch(tripHistoryProvider);
+    final historyAsync = ref.watch(tripHistoryLiveProvider);
 
-    if (completions.isEmpty) {
-      return _buildEmptyState(
-        icon: Icons.history_rounded,
-        title: 'No Trip History',
-        subtitle: 'Complete trips to see your expedition log.',
-      );
-    }
+    return historyAsync.when(
+      loading: () => const Center(
+        child: CircularProgressIndicator(color: TeritoryColors.tripRoute),
+      ),
+      error: (error, _) => _ErrorState(
+        message: _errorMessage(error),
+        onRetry: () => ref.invalidate(tripHistoryLiveProvider),
+      ),
+      data: (entries) {
+        if (entries.isEmpty) {
+          return RefreshIndicator(
+            color: TeritoryColors.tripRoute,
+            onRefresh: () async => ref.invalidate(tripHistoryLiveProvider),
+            child: ListView(
+              children: const [
+                SizedBox(height: 120),
+                _EmptyState(
+                  icon: Icons.history_rounded,
+                  title: 'No Trip History',
+                  subtitle: 'Complete trips to see your expedition log.',
+                ),
+              ],
+            ),
+          );
+        }
 
-    final completed = completions.where((c) => c.badge != TripBadge.none).toList();
-    final incomplete = completions.where((c) => c.badge == TripBadge.none).toList();
+        final completed = entries.where((e) => e.isCompleted).toList();
+        final incomplete = entries.where((e) => !e.isCompleted).toList();
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        if (completed.isNotEmpty) ...[
-          _SectionHeader(
-            icon: Icons.check_circle_rounded,
-            label: 'Completed',
-            color: TeritoryColors.validatedGreen,
-            count: completed.length,
+        return RefreshIndicator(
+          color: TeritoryColors.tripRoute,
+          onRefresh: () async => ref.invalidate(tripHistoryLiveProvider),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              if (completed.isNotEmpty) ...[
+                _SectionHeader(
+                  icon: Icons.check_circle_rounded,
+                  label: 'Completed',
+                  color: TeritoryColors.validatedGreen,
+                  count: completed.length,
+                ),
+                const SizedBox(height: 8),
+                ...completed.map(
+                  (entry) => _HistoryCard(entry: entry, isCompleted: true),
+                ),
+              ],
+              if (incomplete.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                _SectionHeader(
+                  icon: Icons.cancel_rounded,
+                  label: 'Incomplete',
+                  color: TeritoryColors.expiredRed,
+                  count: incomplete.length,
+                ),
+                const SizedBox(height: 8),
+                ...incomplete.map(
+                  (entry) => _HistoryCard(entry: entry, isCompleted: false),
+                ),
+              ],
+            ],
           ),
-          const SizedBox(height: 8),
-          ...completed.map((c) => _HistoryCard(completion: c, isCompleted: true)),
-        ],
-        if (incomplete.isNotEmpty) ...[
-          const SizedBox(height: 24),
-          _SectionHeader(
-            icon: Icons.cancel_rounded,
-            label: 'Incomplete',
-            color: TeritoryColors.expiredRed,
-            count: incomplete.length,
-          ),
-          const SizedBox(height: 8),
-          ...incomplete.map((c) => _HistoryCard(completion: c, isCompleted: false)),
-        ],
-      ],
+        );
+      },
     );
   }
 }
 
 class _HistoryCard extends StatelessWidget {
-  final TripCompletion completion;
+  final TripHistoryEntry entry;
   final bool isCompleted;
-  const _HistoryCard({required this.completion, required this.isCompleted});
+
+  const _HistoryCard({required this.entry, required this.isCompleted});
 
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('MMM d, yyyy');
+    final completedAt = entry.completedAt;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -666,7 +782,9 @@ class _HistoryCard extends StatelessWidget {
             ),
             child: Icon(
               isCompleted ? Icons.check_rounded : Icons.close_rounded,
-              color: isCompleted ? TeritoryColors.validatedGreen : TeritoryColors.expiredRed,
+              color: isCompleted
+                  ? TeritoryColors.validatedGreen
+                  : TeritoryColors.expiredRed,
               size: 24,
             ),
           ),
@@ -676,7 +794,9 @@ class _HistoryCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Trip #${completion.tripId}',
+                  entry.tripName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -685,7 +805,9 @@ class _HistoryCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  dateFormat.format(completion.completedAt),
+                  completedAt == null
+                      ? 'Date not recorded'
+                      : dateFormat.format(completedAt),
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
@@ -698,25 +820,28 @@ class _HistoryCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                '${completion.totalDistanceKm.toInt()} km',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: TeritoryColors.textPrimary,
+              if (entry.distanceKm > 0)
+                Text(
+                  '${entry.distanceKm.toInt()} km',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: TeritoryColors.textPrimary,
+                  ),
                 ),
-              ),
               Text(
-                '${completion.waypointsValidated}/${completion.totalWaypoints} ✓',
+                '${entry.totalWaypoints} waypoints',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: isCompleted ? TeritoryColors.validatedGreen : TeritoryColors.expiredRed,
+                  color: isCompleted
+                      ? TeritoryColors.validatedGreen
+                      : TeritoryColors.expiredRed,
                 ),
               ),
             ],
           ),
-          if (completion.badge == TripBadge.full) ...[
+          if (entry.badge == TripBadge.full) ...[
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.all(6),
@@ -724,7 +849,8 @@ class _HistoryCard extends StatelessWidget {
                 color: TeritoryColors.rallyGold.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.emoji_events_rounded, color: TeritoryColors.rallyGold, size: 18),
+              child: const Icon(Icons.emoji_events_rounded,
+                  color: TeritoryColors.rallyGold, size: 18),
             ),
           ],
         ],
@@ -735,11 +861,138 @@ class _HistoryCard extends StatelessWidget {
 
 // ─── Reusable widgets ──────────────────────────────────────────────────
 
+String _errorMessage(Object? error) => error is ApiException
+    ? error.message
+    : 'Could not load your trips. Check the API and retry.';
+
+class _ParticipantAvatar extends StatelessWidget {
+  final TripParticipant participant;
+
+  const _ParticipantAvatar({required this.participant});
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = participant.userName.isEmpty
+        ? '?'
+        : participant.userName[0].toUpperCase();
+    return CircleAvatar(
+      radius: 16,
+      backgroundColor: TeritoryColors.surfaceContainer,
+      backgroundImage: participant.userAvatar.isEmpty
+          ? null
+          : NetworkImage(participant.userAvatar),
+      onBackgroundImageError:
+          participant.userAvatar.isEmpty ? null : (_, _) {},
+      child: participant.userAvatar.isEmpty
+          ? Text(
+              initial,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: TeritoryColors.textSecondary,
+              ),
+            )
+          : null,
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _ErrorState({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_rounded,
+                size: 44, color: TeritoryColors.textMuted),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                color: TeritoryColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              color: TeritoryColors.surfaceContainer,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 48, color: TeritoryColors.textMuted),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: TeritoryColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                color: TeritoryColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StatChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
-  const _StatChip({required this.icon, required this.label, required this.color});
+
+  const _StatChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -772,6 +1025,7 @@ class _InfoChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color? color;
+
   const _InfoChip({required this.icon, required this.label, this.color});
 
   @override
@@ -806,8 +1060,14 @@ class _ActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
-  final VoidCallback onTap;
-  const _ActionButton({required this.icon, required this.label, required this.color, required this.onTap});
+  final VoidCallback? onTap;
+
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -816,20 +1076,21 @@ class _ActionButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
+          color: color.withValues(alpha: onTap == null ? 0.05 : 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: color),
+            Icon(icon,
+                size: 14, color: onTap == null ? color.withValues(alpha: 0.5) : color),
             const SizedBox(width: 4),
             Text(
               label,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                color: color,
+                color: onTap == null ? color.withValues(alpha: 0.5) : color,
               ),
             ),
           ],
@@ -844,7 +1105,13 @@ class _SectionHeader extends StatelessWidget {
   final String label;
   final Color color;
   final int count;
-  const _SectionHeader({required this.icon, required this.label, required this.color, required this.count});
+
+  const _SectionHeader({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.count,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -879,43 +1146,4 @@ class _SectionHeader extends StatelessWidget {
       ],
     );
   }
-}
-
-Widget _buildEmptyState({
-  required IconData icon,
-  required String title,
-  required String subtitle,
-}) {
-  return Center(
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: TeritoryColors.surfaceContainer,
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, size: 48, color: TeritoryColors.textMuted),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          title,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: TeritoryColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          subtitle,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 13,
-            color: TeritoryColors.textSecondary,
-          ),
-        ),
-      ],
-    ),
-  );
 }

@@ -1,45 +1,148 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/models/trip_models.dart';
-import '../../../core/providers/data_providers.dart';
-import '../../../core/services/mock_data_service.dart';
+import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../application/trips_provider.dart';
 
-class TripPlanDetailScreen extends ConsumerWidget {
+class TripPlanDetailScreen extends ConsumerStatefulWidget {
   final String tripPlanId;
 
   const TripPlanDetailScreen({super.key, required this.tripPlanId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final plan = ref.watch(tripPlansProvider)
-            .where((p) => p.id == tripPlanId)
-            .firstOrNull ??
-        MockDataService.instance.tripPlans
-            .where((p) => p.id == tripPlanId)
-            .firstOrNull;
+  ConsumerState<TripPlanDetailScreen> createState() =>
+      _TripPlanDetailScreenState();
+}
 
-    if (plan == null) {
+class _TripPlanDetailScreenState extends ConsumerState<TripPlanDetailScreen> {
+  bool _saving = false;
+  bool _voting = false;
+  bool _starting = false;
+
+  String _errorMessage(Object? error) => error is ApiException
+      ? error.message
+      : 'Could not load this plan. Check the API and retry.';
+
+  void _toast(String message, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: error ? TeritoryColors.expiredRed : null,
+      ),
+    );
+  }
+
+  Future<void> _toggleSave(TripPlan plan) async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      final saved = await TeritoryRepository.instance.togglePlanSaved(plan.id);
+      if (!mounted) return;
+      ref.invalidate(savedPlanIdsProvider);
+      ref.invalidate(tripsHubProvider);
+      _toast(saved ? 'Saved to your plans' : 'Removed from saved plans');
+    } on ApiException catch (e) {
+      _toast(e.message, error: true);
+    } catch (_) {
+      _toast('Could not update your saved plans.', error: true);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _toggleVote(TripPlan plan) async {
+    if (_voting) return;
+    setState(() => _voting = true);
+    try {
+      final voted = await TeritoryRepository.instance.toggleTripPlanVote(plan.id);
+      if (!mounted) return;
+      ref.invalidate(planDetailLiveProvider(widget.tripPlanId));
+      _toast(voted ? 'Vote added' : 'Vote removed');
+    } on ApiException catch (e) {
+      _toast(e.message, error: true);
+    } catch (_) {
+      _toast('Could not save your vote. Check your connection.', error: true);
+    } finally {
+      if (mounted) setState(() => _voting = false);
+    }
+  }
+
+  Future<void> _startTrip(TripPlan plan) async {
+    if (_starting) return;
+    if (plan.status == TripPlanStatus.active) {
+      _toast('This plan is already active.');
+      return;
+    }
+
+    setState(() => _starting = true);
+    try {
+      final trip = await TeritoryRepository.instance.startTrip(plan.id);
+      if (!mounted) return;
+      ref.invalidate(tripsHubProvider);
+      ref.invalidate(planDetailLiveProvider(widget.tripPlanId));
+      context.push('/trips/${trip.id}/active');
+    } on ApiException catch (e) {
+      _toast(e.message, error: true);
+    } catch (_) {
+      _toast('Could not start this trip. Check your connection.', error: true);
+    } finally {
+      if (mounted) setState(() => _starting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final detailAsync = ref.watch(planDetailLiveProvider(widget.tripPlanId));
+    final detail = detailAsync.valueOrNull;
+
+    if (detail == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Trip Plan')),
         body: Center(
-          child: Text(
-            'Plan not found',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 16,
-              color: TeritoryColors.textSecondary,
-            ),
-          ),
+          child: detailAsync.hasError
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.cloud_off_rounded,
+                          size: 44, color: TeritoryColors.textMuted),
+                      const SizedBox(height: 12),
+                      Text(
+                        _errorMessage(detailAsync.error),
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          color: TeritoryColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        onPressed: () => ref
+                            .invalidate(planDetailLiveProvider(widget.tripPlanId)),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+              : const CircularProgressIndicator(
+                  color: TeritoryColors.tripRoute),
         ),
       );
     }
 
-    final isSaved = ref.watch(savedPlansProvider).any((p) => p.id == tripPlanId);
+    final plan = detail.plan;
+    final isSaved = ref.watch(savedPlanIdsProvider).valueOrNull
+            ?.contains(plan.id) ??
+        false;
     final durationHours = plan.estimatedDurationHours.toInt();
     final days = durationHours ~/ 24;
     final hrs = durationHours % 24;
@@ -60,30 +163,21 @@ class TripPlanDetailScreen extends ConsumerWidget {
         ),
         actions: [
           IconButton(
-            icon: Icon(
-              isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-              color: isSaved ? TeritoryColors.primary : null,
-              size: 22,
-            ),
-            onPressed: () async {
-              await ref.read(savedPlansNotifierProvider.notifier).toggleSave(plan.id);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    duration: const Duration(seconds: 1),
-                    content: Text(isSaved ? 'Removed from saved plans' : 'Saved to your expedition plans!'),
+            icon: _saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    isSaved
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_border_rounded,
+                    color: isSaved ? TeritoryColors.primary : null,
+                    size: 22,
                   ),
-                );
-              }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.share_rounded, size: 20),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Sharing trip plan...')),
-              );
-            },
+            tooltip: isSaved ? 'Remove bookmark' : 'Save plan',
+            onPressed: _saving ? null : () => _toggleSave(plan),
           ),
         ],
       ),
@@ -111,8 +205,7 @@ class TripPlanDetailScreen extends ConsumerWidget {
                           userAgentPackageName: 'com.onway.teritory',
                           tileBuilder: (context, tileWidget, tile) =>
                               ColorFiltered(
-                            colorFilter:
-                                const ColorFilter.matrix(<double>[
+                            colorFilter: const ColorFilter.matrix(<double>[
                               -0.20, -0.15, -0.30, 0.0, 140,
                               -0.45, 0.20, -0.35, 0.0, 165,
                               -0.55, 0.05, -0.05, 0.0, 185,
@@ -141,12 +234,12 @@ class TripPlanDetailScreen extends ConsumerWidget {
                                 decoration: BoxDecoration(
                                   color: TeritoryColors.tripRoute,
                                   shape: BoxShape.circle,
-                                  border: Border.all(
-                                      color: Colors.white, width: 2),
+                                  border:
+                                      Border.all(color: Colors.white, width: 2),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black
-                                          .withValues(alpha: 0.2),
+                                      color:
+                                          Colors.black.withValues(alpha: 0.2),
                                       blurRadius: 4,
                                     ),
                                   ],
@@ -169,7 +262,7 @@ class TripPlanDetailScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 16),
 
-                  // ── Trip Stats Card ──
+                  // ── Stats ──
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Container(
@@ -189,20 +282,20 @@ class TripPlanDetailScreen extends ConsumerWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _buildStatItem(
-                            '${plan.estimatedDistanceKm.toInt()} km',
-                            'Distance',
-                            Icons.straighten_rounded,
+                          _StatItem(
+                            value: '${plan.estimatedDistanceKm.toInt()} km',
+                            label: 'Distance',
+                            icon: Icons.straighten_rounded,
                           ),
-                          _buildStatItem(
-                            durationText,
-                            'Duration',
-                            Icons.schedule_rounded,
+                          _StatItem(
+                            value: durationText,
+                            label: 'Duration',
+                            icon: Icons.schedule_rounded,
                           ),
-                          _buildStatItem(
-                            '${plan.waypoints.length}',
-                            'Waypoints',
-                            Icons.flag_rounded,
+                          _StatItem(
+                            value: '${plan.waypoints.length}',
+                            label: 'Waypoints',
+                            icon: Icons.flag_rounded,
                           ),
                         ],
                       ),
@@ -210,7 +303,7 @@ class TripPlanDetailScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 22),
 
-                  // ── Waypoint Timeline ──
+                  // ── Waypoint timeline ──
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
@@ -223,24 +316,34 @@ class TripPlanDetailScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  ListView.builder(
-                    physics: const NeverScrollableScrollPhysics(),
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: plan.waypoints.length,
-                    itemBuilder: (context, index) {
-                      final waypoint = plan.waypoints[index];
-                      final isLast = index == plan.waypoints.length - 1;
-                      return _WaypointTimelineItem(
-                        waypoint: waypoint,
-                        index: index,
-                        isLast: isLast,
-                      );
-                    },
-                  ),
+                  if (plan.waypoints.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'This plan has no waypoints yet.',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          color: TeritoryColors.textMuted,
+                        ),
+                      ),
+                    )
+                  else
+                    ListView.builder(
+                      physics: const NeverScrollableScrollPhysics(),
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: plan.waypoints.length,
+                      itemBuilder: (context, index) {
+                        return _WaypointTimelineItem(
+                          waypoint: plan.waypoints[index],
+                          index: index,
+                          isLast: index == plan.waypoints.length - 1,
+                        );
+                      },
+                    ),
                   const SizedBox(height: 22),
 
-                  // ── Gear Recommendations ──
+                  // ── Gear ──
                   if (plan.gearSuggestions.isNotEmpty) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -276,10 +379,9 @@ class TripPlanDetailScreen extends ConsumerWidget {
                                   .withValues(alpha: 0.4),
                             ),
                             avatar: const Icon(Icons.backpack_rounded,
-                                size: 16,
-                                color: TeritoryColors.gearAmber),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 4),
+                                size: 16, color: TeritoryColors.gearAmber),
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 4),
                           );
                         }).toList(),
                       ),
@@ -291,7 +393,7 @@ class TripPlanDetailScreen extends ConsumerWidget {
             ),
           ),
 
-          // ── Bottom Action Bar ──
+          // ── Bottom actions ──
           Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             decoration: BoxDecoration(
@@ -305,14 +407,8 @@ class TripPlanDetailScreen extends ConsumerWidget {
               child: Row(
                 children: [
                   Expanded(
-                    flex: 2,
                     child: ElevatedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Starting trip...')),
-                        );
-                      },
+                      onPressed: _starting ? null : () => _startTrip(plan),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: TeritoryColors.primary,
                         foregroundColor: Colors.white,
@@ -321,60 +417,42 @@ class TripPlanDetailScreen extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      child: Text(
-                        'Start Trip',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
+                      child: _starting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              plan.status == TripPlanStatus.active
+                                  ? 'Trip Already Active'
+                                  : 'Start Trip',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                              ),
+                            ),
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Expanded(
-                    flex: 2,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Forking plan...')),
-                        );
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(
-                            color: TeritoryColors.border),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: Text(
-                        'Fork & Customize',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                          color: TeritoryColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  // Vote buttons
                   IconButton(
-                    onPressed: () async {
-                      await TeritoryRepository.instance.voteTripPlan(plan.id);
-                      ref.read(tripPlansNotifierProvider.notifier).refresh();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            duration: Duration(seconds: 1),
-                            content: Text('Upvoted! Vote recorded in backend.'),
+                    onPressed: _voting ? null : () => _toggleVote(plan),
+                    icon: _voting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(
+                            detail.hasVoted
+                                ? Icons.thumb_up_rounded
+                                : Icons.thumb_up_outlined,
                           ),
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.thumb_up_outlined),
                     color: TeritoryColors.validatedGreen,
+                    tooltip: detail.hasVoted ? 'Remove vote' : 'Vote for this plan',
                   ),
                   Text(
                     '${plan.voteScore}',
@@ -384,15 +462,6 @@ class TripPlanDetailScreen extends ConsumerWidget {
                       color: TeritoryColors.textPrimary,
                     ),
                   ),
-                  IconButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Downvoted')),
-                      );
-                    },
-                    icon: const Icon(Icons.thumb_down_outlined),
-                    color: TeritoryColors.expiredRed,
-                  ),
                 ],
               ),
             ),
@@ -401,8 +470,21 @@ class TripPlanDetailScreen extends ConsumerWidget {
       ),
     );
   }
+}
 
-  Widget _buildStatItem(String value, String label, IconData icon) {
+class _StatItem extends StatelessWidget {
+  final String value;
+  final String label;
+  final IconData icon;
+
+  const _StatItem({
+    required this.value,
+    required this.label,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       children: [
         Icon(icon, size: 20, color: TeritoryColors.tripRoute),
@@ -444,7 +526,6 @@ class _WaypointTimelineItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Timeline column
           SizedBox(
             width: 36,
             child: Column(
@@ -478,8 +559,6 @@ class _WaypointTimelineItem extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-
-          // Content
           Expanded(
             child: Container(
               margin: const EdgeInsets.only(bottom: 14),

@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/models/clan_models.dart';
-import '../../../core/providers/data_providers.dart';
+import '../../../core/services/api_service.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../application/clans_provider.dart';
+import 'create_clan_sheet.dart';
 
 class ClanBrowserScreen extends ConsumerStatefulWidget {
   const ClanBrowserScreen({super.key});
@@ -16,9 +18,10 @@ class ClanBrowserScreen extends ConsumerStatefulWidget {
 
 class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final Set<String> _pendingClans = {};
+  bool _openingClan = false;
   String _searchQuery = '';
   String _selectedCategory = 'All';
-  final Set<String> _joinedClans = {'clan1'};
 
   static const List<String> _categories = [
     'All',
@@ -70,10 +73,57 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
     return filtered;
   }
 
+  Future<void> _toggleMembership(String clanId) async {
+    if (_pendingClans.contains(clanId)) return;
+    setState(() => _pendingClans.add(clanId));
+    try {
+      await ref.read(clansProvider.notifier).toggleMembership(clanId);
+    } on ApiException catch (e) {
+      _toast(e.message, error: true);
+    } catch (_) {
+      _toast('Could not reach Teritory. Check your connection.', error: true);
+    } finally {
+      if (mounted) setState(() => _pendingClans.remove(clanId));
+    }
+  }
+
+  Future<void> _openCreateClan() async {
+    final clan = await CreateClanSheet.show(context);
+    if (!mounted || clan == null) return;
+    await _openClan(clan.id);
+  }
+
+  /// Guards against a double tap pushing the same detail twice.
+  Future<void> _openClan(String clanId) async {
+    if (_openingClan) return;
+    _openingClan = true;
+    try {
+      await context.push('/clans/$clanId');
+    } finally {
+      _openingClan = false;
+    }
+  }
+
+  void _toast(String message, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: error ? TeritoryColors.expiredRed : null,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final clans = ref.watch(clansProvider);
-    final filteredClans = _filterClans(clans);
+    final clansAsync = ref.watch(clansProvider);
+    final data = clansAsync.valueOrNull;
+    final filteredClans = _filterClans(data?.clans ?? const <Clan>[]);
 
     return Scaffold(
       backgroundColor: TeritoryColors.background,
@@ -93,6 +143,16 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
                 color: TeritoryColors.textPrimary,
               ),
             ),
+            const Spacer(),
+            if (data != null)
+              Text(
+                '${data.myClans.length} joined',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: TeritoryColors.textMuted,
+                ),
+              ),
           ],
         ),
       ),
@@ -193,68 +253,53 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
 
           const SizedBox(height: 12),
 
+          // Stale-data refresh failure: keep the list, offer a retry.
+          if (data != null && clansAsync.hasError)
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: TeritoryColors.expiredRed.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.cloud_off_rounded,
+                      size: 16, color: TeritoryColors.expiredRed),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Could not refresh clans.',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: TeritoryColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => ref.read(clansProvider.notifier).refresh(),
+                    child: Text(
+                      'Retry',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: TeritoryColors.expiredRed,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // Clan list
           Expanded(
-            child: filteredClans.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.search_off_rounded,
-                            size: 48, color: TeritoryColors.textMuted),
-                        const SizedBox(height: 12),
-                        Text(
-                          'No clans found',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: TeritoryColors.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: filteredClans.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 14),
-                    itemBuilder: (context, index) {
-                      final clan = filteredClans[index];
-                      final isJoined = _joinedClans.contains(clan.id);
-                      return _ClanCard(
-                        clan: clan,
-                        isJoined: isJoined,
-                        onTap: () => context.go('/clans/${clan.id}'),
-                        onJoinToggle: () {
-                          setState(() {
-                            if (isJoined) {
-                              _joinedClans.remove(clan.id);
-                            } else {
-                              _joinedClans.add(clan.id);
-                            }
-                          });
-                        },
-                      );
-                    },
-                  ),
+            child: _buildBody(clansAsync, data, filteredClans),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Coming soon',
-                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
-              ),
-              backgroundColor: TeritoryColors.chatBubbleSelf,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-          );
-        },
+        onPressed: _openCreateClan,
         backgroundColor: TeritoryColors.primary,
         icon: const Icon(Icons.add_rounded, color: Colors.white),
         label: Text(
@@ -267,17 +312,138 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
       ),
     );
   }
+
+  Widget _buildBody(
+    AsyncValue<ClansData> clansAsync,
+    ClansData? data,
+    List<Clan> filteredClans,
+  ) {
+    if (data == null) {
+      if (clansAsync.isLoading) {
+        return const Center(
+          child: CircularProgressIndicator(color: TeritoryColors.clanPurple),
+        );
+      }
+      return _MessageState(
+        icon: Icons.cloud_off_rounded,
+        title: 'Could not load clans',
+        detail: clansAsync.error is ApiException
+            ? (clansAsync.error as ApiException).message
+            : 'Teritory is unreachable. Check the API and retry.',
+        onRetry: () => ref.read(clansProvider.notifier).refresh(),
+      );
+    }
+
+    if (filteredClans.isEmpty) {
+      return _MessageState(
+        icon: Icons.search_off_rounded,
+        title: _searchQuery.isNotEmpty || _selectedCategory != 'All'
+            ? 'No clans match this filter'
+            : 'No clans yet',
+        detail: 'Founding one takes a name and a region.',
+      );
+    }
+
+    return RefreshIndicator(
+      color: TeritoryColors.clanPurple,
+      onRefresh: () => ref.read(clansProvider.notifier).refresh(),
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+        itemCount: filteredClans.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 14),
+        itemBuilder: (context, index) {
+          final clan = filteredClans[index];
+          return _ClanCard(
+            clan: clan,
+            isJoined: data.isMember(clan.id),
+            isPending: _pendingClans.contains(clan.id),
+            onTap: () => _openClan(clan.id),
+            onJoinToggle: () => _toggleMembership(clan.id),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _MessageState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String detail;
+  final VoidCallback? onRetry;
+
+  const _MessageState({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 48, color: TeritoryColors.textMuted),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: TeritoryColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              detail,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                color: TeritoryColors.textMuted,
+              ),
+            ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: onRetry,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: TeritoryColors.clanPurple,
+                  side: const BorderSide(color: TeritoryColors.clanPurple),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  'Retry',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _ClanCard extends StatelessWidget {
   final Clan clan;
   final bool isJoined;
+  final bool isPending;
   final VoidCallback onTap;
   final VoidCallback onJoinToggle;
 
   const _ClanCard({
     required this.clan,
     required this.isJoined,
+    required this.isPending,
     required this.onTap,
     required this.onJoinToggle,
   });
@@ -309,7 +475,7 @@ class _ClanCard extends StatelessWidget {
                 Container(
                   height: 120,
                   width: double.infinity,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
                         TeritoryColors.clanPurple,
@@ -319,13 +485,14 @@ class _ClanCard extends StatelessWidget {
                       end: Alignment.bottomRight,
                     ),
                   ),
-                  child: Image.network(
-                    clan.coverImageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                  ),
+                  child: clan.coverImageUrl.isEmpty
+                      ? null
+                      : Image.network(
+                          clan.coverImageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                        ),
                 ),
-                // Dark gradient overlay
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(
@@ -340,7 +507,6 @@ class _ClanCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                // Clan name on cover
                 Positioned(
                   bottom: 12,
                   left: 14,
@@ -364,12 +530,12 @@ class _ClanCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.location_on_rounded,
+                      const Icon(Icons.location_on_rounded,
                           size: 14, color: TeritoryColors.textSecondary),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          clan.region,
+                          clan.region.isEmpty ? 'Region not set' : clan.region,
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 12,
                             color: TeritoryColors.textSecondary,
@@ -395,7 +561,7 @@ class _ClanCard extends StatelessWidget {
                       ),
                       const Spacer(),
                       GestureDetector(
-                        onTap: onJoinToggle,
+                        onTap: isPending ? null : onJoinToggle,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 8),
@@ -405,16 +571,23 @@ class _ClanCard extends StatelessWidget {
                                 : TeritoryColors.primary,
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Text(
-                            isJoined ? 'Joined ✓' : 'Join',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: isJoined
-                                  ? TeritoryColors.textPrimary
-                                  : Colors.white,
-                            ),
-                          ),
+                          child: isPending
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2),
+                                )
+                              : Text(
+                                  isJoined ? 'Joined ✓' : 'Join',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: isJoined
+                                        ? TeritoryColors.textPrimary
+                                        : Colors.white,
+                                  ),
+                                ),
                         ),
                       ),
                     ],

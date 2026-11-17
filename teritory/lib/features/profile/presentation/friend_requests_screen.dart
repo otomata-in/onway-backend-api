@@ -1,33 +1,95 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/models/user_models.dart';
-import '../../../core/providers/data_providers.dart';
-import '../../../core/services/mock_data_service.dart';
+import '../../../core/models/api_user.dart';
+import '../../../core/services/api_service.dart';
+import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../application/profile_providers.dart';
 
-class FriendRequestsScreen extends ConsumerWidget {
+/// Live friend requests: `GET /users/friends/requests` for both directions,
+/// `POST …/:id/respond` to accept/decline and `DELETE …/:id` to cancel a sent
+/// request.
+class FriendRequestsScreen extends ConsumerStatefulWidget {
   const FriendRequestsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final allRelationships = MockDataService.instance.friendRelationships;
+  ConsumerState<FriendRequestsScreen> createState() =>
+      _FriendRequestsScreenState();
+}
 
-    // Incoming: where friendId == 'u1' and status pending
-    final incoming = allRelationships
-        .where((f) => f.friendId == 'u1' && f.status == FriendStatus.pending)
-        .toList();
+class _FriendRequestsScreenState extends ConsumerState<FriendRequestsScreen> {
+  final Set<String> _pendingActionIds = {};
 
-    // Sent: where userId == 'u1' and status pending
-    final sent = allRelationships
-        .where((f) => f.userId == 'u1' && f.status == FriendStatus.pending)
-        .toList();
+  Future<void> _respond(ApiFriendRequest request, bool accept) async {
+    setState(() => _pendingActionIds.add(request.relationshipId));
+    try {
+      await TeritoryRepository.instance.respondToFriendRequest(
+        request.relationshipId,
+        accept: accept,
+      );
+      ref.invalidate(friendRequestsLiveProvider);
+      ref.invalidate(friendsLiveProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            accept
+                ? 'You are now friends with ${request.user.displayName}'
+                : 'Declined ${request.user.displayName}',
+          ),
+        ),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _pendingActionIds.remove(request.relationshipId));
+      }
+    }
+  }
 
-    // Also watch the provider to stay reactive
-    ref.watch(friendRequestsProvider);
+  Future<void> _cancel(ApiFriendRequest request) async {
+    setState(() => _pendingActionIds.add(request.relationshipId));
+    try {
+      await TeritoryRepository.instance
+          .cancelFriendRequest(request.relationshipId);
+      ref.invalidate(friendRequestsLiveProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Cancelled request to ${request.user.displayName}'),
+        ),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _pendingActionIds.remove(request.relationshipId));
+      }
+    }
+  }
 
-    final hasContent = incoming.isNotEmpty || sent.isNotEmpty;
+  Future<void> _refresh() async {
+    ref.invalidate(friendRequestsLiveProvider);
+    try {
+      await ref.read(friendRequestsLiveProvider.future);
+    } on ApiException {
+      // The error state renders the message.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final requestsAsync = ref.watch(friendRequestsLiveProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -39,83 +101,139 @@ class FriendRequestsScreen extends ConsumerWidget {
           ),
         ),
       ),
-      body: !hasContent
-          ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+      body: requestsAsync.when(
+        loading: () => const Center(
+          child: CircularProgressIndicator(color: TeritoryColors.primary),
+        ),
+        error: (error, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off_rounded,
+                    size: 48, color: TeritoryColors.textMuted),
+                const SizedBox(height: 12),
+                Text(
+                  error is ApiException
+                      ? error.message
+                      : 'Could not load friend requests.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    color: TeritoryColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                FilledButton(
+                  onPressed: () => ref.invalidate(friendRequestsLiveProvider),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        data: (snapshot) {
+          if (snapshot.total == 0) {
+            return RefreshIndicator(
+              color: TeritoryColors.primary,
+              onRefresh: _refresh,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 children: [
-                  Icon(Icons.people_outline_rounded,
-                      size: 64, color: TeritoryColors.textMuted),
-                  const SizedBox(height: 12),
-                  Text(
-                    'No pending requests',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: TeritoryColors.textSecondary,
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.6,
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.people_outline_rounded,
+                              size: 64, color: TeritoryColors.textMuted),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No pending requests',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: TeritoryColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Requests you send or receive appear here.',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              color: TeritoryColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
               ),
-            )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Incoming Requests ──
-                  if (incoming.isNotEmpty) ...[
-                    _buildSectionHeader(
-                        'Incoming Requests', Icons.call_received_rounded),
-                    const SizedBox(height: 10),
-                    ListView.separated(
-                      physics: const NeverScrollableScrollPhysics(),
-                      shrinkWrap: true,
-                      itemCount: incoming.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) {
-                        final request = incoming[index];
-                        final sender =
-                            MockDataService.instance.userById(request.userId);
-                        return _IncomingRequestCard(
-                          name: sender?.displayName ?? 'Unknown',
-                          handle: sender?.handle ?? '',
-                          avatarUrl: sender?.avatarUrl ?? '',
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+            );
+          }
 
-                  // ── Sent Requests ──
-                  if (sent.isNotEmpty) ...[
-                    _buildSectionHeader(
-                        'Sent Requests', Icons.call_made_rounded),
-                    const SizedBox(height: 10),
-                    ListView.separated(
-                      physics: const NeverScrollableScrollPhysics(),
-                      shrinkWrap: true,
-                      itemCount: sent.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) {
-                        final request = sent[index];
-                        final receiver = MockDataService.instance
-                            .userById(request.friendId);
-                        return _SentRequestCard(
-                          name: receiver?.displayName ?? 'Unknown',
-                          handle: receiver?.handle ?? '',
-                          avatarUrl: receiver?.avatarUrl ?? '',
-                        );
-                      },
+          return RefreshIndicator(
+            color: TeritoryColors.primary,
+            onRefresh: _refresh,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (snapshot.incoming.isNotEmpty) ...[
+                  _SectionHeader(
+                      title: 'Incoming Requests', icon: Icons.call_received_rounded),
+                  const SizedBox(height: 10),
+                  for (final request in snapshot.incoming) ...[
+                    _RequestCard(
+                      request: request,
+                      isBusy:
+                          _pendingActionIds.contains(request.relationshipId),
+                      isIncoming: true,
+                      onAccept: () => _respond(request, true),
+                      onDecline: () => _respond(request, false),
+                      onCancel: null,
                     ),
+                    const SizedBox(height: 10),
+                  ],
+                  const SizedBox(height: 14),
+                ],
+                if (snapshot.outgoing.isNotEmpty) ...[
+                  _SectionHeader(
+                      title: 'Sent Requests', icon: Icons.call_made_rounded),
+                  const SizedBox(height: 10),
+                  for (final request in snapshot.outgoing) ...[
+                    _RequestCard(
+                      request: request,
+                      isBusy:
+                          _pendingActionIds.contains(request.relationshipId),
+                      isIncoming: false,
+                      onAccept: null,
+                      onDecline: null,
+                      onCancel: () => _cancel(request),
+                    ),
+                    const SizedBox(height: 10),
                   ],
                 ],
-              ),
+              ],
             ),
+          );
+        },
+      ),
     );
   }
+}
 
-  Widget _buildSectionHeader(String title, IconData icon) {
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, required this.icon});
+
+  final String title;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
       children: [
         Icon(icon, size: 18, color: TeritoryColors.textPrimary),
@@ -133,19 +251,27 @@ class FriendRequestsScreen extends ConsumerWidget {
   }
 }
 
-class _IncomingRequestCard extends StatelessWidget {
-  final String name;
-  final String handle;
-  final String avatarUrl;
-
-  const _IncomingRequestCard({
-    required this.name,
-    required this.handle,
-    required this.avatarUrl,
+class _RequestCard extends StatelessWidget {
+  const _RequestCard({
+    required this.request,
+    required this.isBusy,
+    required this.isIncoming,
+    this.onAccept,
+    this.onDecline,
+    this.onCancel,
   });
+
+  final ApiFriendRequest request;
+  final bool isBusy;
+  final bool isIncoming;
+  final VoidCallback? onAccept;
+  final VoidCallback? onDecline;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
+    final user = request.user;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -162,10 +288,18 @@ class _IncomingRequestCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundImage: NetworkImage(avatarUrl),
-            backgroundColor: TeritoryColors.surfaceContainer,
+          GestureDetector(
+            onTap: () => context.go('/profile/friends/${user.id}'),
+            child: CircleAvatar(
+              radius: 24,
+              backgroundColor: TeritoryColors.surfaceContainer,
+              backgroundImage:
+                  user.avatarUrl.isNotEmpty ? NetworkImage(user.avatarUrl) : null,
+              child: user.avatarUrl.isEmpty
+                  ? const Icon(Icons.person_rounded,
+                      color: TeritoryColors.textMuted)
+                  : null,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -173,7 +307,9 @@ class _IncomingRequestCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  name,
+                  user.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
@@ -181,15 +317,15 @@ class _IncomingRequestCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  handle,
+                  '@${user.handle}',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 12,
                     color: TeritoryColors.textSecondary,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
-                  '2 mutual friends',
+                  '${user.totalFlags} flags • ${user.state.isNotEmpty ? user.state : user.country}',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 11,
                     color: TeritoryColors.textMuted,
@@ -198,162 +334,78 @@ class _IncomingRequestCard extends StatelessWidget {
               ],
             ),
           ),
-          ElevatedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Request accepted!')),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: TeritoryColors.validatedGreen,
-              foregroundColor: Colors.white,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: Text(
-              'Accept',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          OutlinedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Request declined')),
-              );
-            },
-            style: OutlinedButton.styleFrom(
-              foregroundColor: TeritoryColors.expiredRed,
-              side: const BorderSide(color: TeritoryColors.expiredRed),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: Text(
-              'Decline',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SentRequestCard extends StatelessWidget {
-  final String name;
-  final String handle;
-  final String avatarUrl;
-
-  const _SentRequestCard({
-    required this.name,
-    required this.handle,
-    required this.avatarUrl,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: TeritoryColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundImage: NetworkImage(avatarUrl),
-            backgroundColor: TeritoryColors.surfaceContainer,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: TeritoryColors.textPrimary,
-                  ),
+          if (isBusy)
+            const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else if (isIncoming) ...[
+            ElevatedButton(
+              onPressed: onAccept,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: TeritoryColors.validatedGreen,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                Text(
-                  handle,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    color: TeritoryColors.textSecondary,
-                  ),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                'Accept',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
                 ),
-              ],
-            ),
-          ),
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: TeritoryColors.surfaceContainer,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              'Pending',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: TeritoryColors.textMuted,
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          OutlinedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Request cancelled')),
-              );
-            },
-            style: OutlinedButton.styleFrom(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              side: const BorderSide(color: TeritoryColors.border),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: onDecline,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: TeritoryColors.expiredRed,
+                side: const BorderSide(color: TeritoryColors.expiredRed),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: TeritoryColors.textSecondary,
+              child: Text(
+                'Decline',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          ),
+          ] else
+            OutlinedButton(
+              onPressed: onCancel,
+              style: OutlinedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                side: const BorderSide(color: TeritoryColors.border),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: TeritoryColors.textSecondary,
+                ),
+              ),
+            ),
         ],
       ),
     );

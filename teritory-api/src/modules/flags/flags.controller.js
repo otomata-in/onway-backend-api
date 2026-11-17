@@ -6,13 +6,17 @@ const { haversineDistanceMeters, haversineDistanceKm } = require('../../utils/ge
 // Explore nearby flags
 const exploreFlags = async (req, res, next) => {
   try {
-    const { lat, lng, radiusKm = 50, category } = req.query;
+    const { lat, lng, radiusKm = 50, category, userId } = req.query;
     const centerLat = parseFloat(lat);
     const centerLng = parseFloat(lng);
 
     const where = {};
     if (category && category !== 'All') {
       where.category = category;
+    }
+    // Profile and friend-profile need one traveler's footprint, not a radius.
+    if (userId) {
+      where.userId = userId;
     }
 
     const allFlags = await prisma.flag.findMany({

@@ -1,25 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
+import '../../../core/models/api_flag.dart';
 import '../../../core/models/teritory_models.dart';
-import '../../../core/services/teritory_data_service.dart';
+import '../../../core/providers/auth_provider.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../../../core/widgets/teritory_logo.dart';
+import '../../explore/application/explore_flags_provider.dart';
 import '../../flag/presentation/drop_flag_modal.dart';
-import '../../flag/presentation/flag_detail_sheet.dart';
+import '../../flag/presentation/live_flag_detail_sheet.dart';
 
-class HomeMapScreen extends StatefulWidget {
+class HomeMapScreen extends ConsumerStatefulWidget {
   const HomeMapScreen({super.key});
 
   @override
-  State<HomeMapScreen> createState() => _HomeMapScreenState();
+  ConsumerState<HomeMapScreen> createState() => _HomeMapScreenState();
 }
 
-class _HomeMapScreenState extends State<HomeMapScreen>
+class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
     with SingleTickerProviderStateMixin {
   late final MapController _mapController;
-  final LatLng _currentLocation = const LatLng(9.9790, 76.2760); // Kochi center
+  // Single source of truth: the explore query and the marker share one centre.
+  static const LatLng _currentLocation = LatLng(
+    ExploreFlagsNotifier.centerLat,
+    ExploreFlagsNotifier.centerLng,
+  );
   String _selectedFilter = 'All';
   bool _isDarkTheme = true; // true: Midnight Oceanic (Teal/Blue/Black mix), false: Daylight White map
   late AnimationController _pulseController;
@@ -45,88 +52,73 @@ class _HomeMapScreenState extends State<HomeMapScreen>
     _mapController.move(_currentLocation, 13.0);
   }
 
-  void _openDropFlag() {
-    DropFlagModal.show(
+  Future<void> _openDropFlag() async {
+    await DropFlagModal.show(
       context,
       coordinates: _currentLocation,
       suggestedPlaceName: 'Marine Drive Waterfront, Kochi',
     );
+    if (!mounted) return;
+    // Refresh unconditionally: a flag may have been created even if the sheet was
+    // dismissed before it could report success.
+    await ref.read(exploreFlagsProvider.notifier).refresh();
   }
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: TeritoryDataService.instance,
-      builder: (context, _) {
-        final dataService = TeritoryDataService.instance;
-        if (!dataService.isLoaded) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(color: TeritoryColors.primary),
-            ),
-          );
-        }
+    final exploreAsync = ref.watch(exploreFlagsProvider);
+    final currentUserId = ref.watch(currentUserProvider).id;
+    final live = exploreAsync.valueOrNull ??
+        const ExploreFlagsData(flags: [], friendIds: <String>{});
 
-        final userFlags = dataService.userFlags;
-        final friendFlags = dataService.friendFlags;
+    // Filters run against live flags only; ownership and friendship are server
+    // facts, not bundled sample data.
+    final visible = switch (_selectedFilter) {
+      'My Flags' => live.mine(currentUserId),
+      'Friends' => live.friends(currentUserId),
+      'Major Wonders' => live.major(),
+      _ => live.flags,
+    };
+    final otherFlags =
+        visible.where((f) => !f.isOwnedBy(currentUserId)).toList();
+    final friendFlags = otherFlags.map((f) => f.toFriendFlag()).toList();
+    // Distinct travelers, not flags: one friend with three pins is one person.
+    final friendsActiveCount =
+        live.friends(currentUserId).map((f) => f.userId).toSet().length;
 
-        // Apply filter
-        List<Marker> markers = [];
+    List<Marker> markers = [];
 
-        // 1. User Current Location Pulsing Pin
-        markers.add(
-          Marker(
-            point: _currentLocation,
-            width: 70,
-            height: 70,
-            alignment: Alignment.center,
-            child: _buildCurrentLocationMarker(),
+    // 1. User Current Location Pulsing Pin
+    markers.add(
+      Marker(
+        point: _currentLocation,
+        width: 70,
+        height: 70,
+        alignment: Alignment.center,
+        child: _buildCurrentLocationMarker(),
+      ),
+    );
+
+    // 2. Live flag pins (own pins + other travelers' pins)
+    for (final flag in visible) {
+      final isMine = flag.isOwnedBy(currentUserId);
+      markers.add(
+        Marker(
+          point: flag.coordinates,
+          width: isMine ? 130 : 140,
+          height: isMine ? 70 : 75,
+          alignment: Alignment.topCenter,
+          child: GestureDetector(
+            onTap: () => LiveFlagDetailSheet.show(context, flag: flag),
+            child: isMine
+                ? _buildUserFlagPin(flag.toFlagItem())
+                : _buildFriendFlagPin(flag.toFriendFlag()),
           ),
-        );
+        ),
+      );
+    }
 
-        // 2. User Flagged Pins
-        if (_selectedFilter == 'All' || _selectedFilter == 'My Flags') {
-          for (final flag in userFlags) {
-            markers.add(
-              Marker(
-                point: flag.coordinates,
-                width: 130,
-                height: 70,
-                alignment: Alignment.topCenter,
-                child: GestureDetector(
-                  onTap: () => FlagDetailSheet.show(context, userFlag: flag),
-                  child: _buildUserFlagPin(flag),
-                ),
-              ),
-            );
-          }
-        }
-
-        // 3. Friend Flags Pins
-        if (_selectedFilter == 'All' ||
-            _selectedFilter == 'Friends' ||
-            _selectedFilter == 'Major Wonders') {
-          for (final fFlag in friendFlags) {
-            if (_selectedFilter == 'Major Wonders' && !fFlag.isMajorFlag) {
-              continue;
-            }
-            markers.add(
-              Marker(
-                point: fFlag.coordinates,
-                width: 140,
-                height: 75,
-                alignment: Alignment.topCenter,
-                child: GestureDetector(
-                  onTap: () =>
-                      FlagDetailSheet.show(context, friendFlag: fFlag),
-                  child: _buildFriendFlagPin(fFlag),
-                ),
-              ),
-            );
-          }
-        }
-
-        return Scaffold(
+    return Scaffold(
           body: Stack(
             children: [
               // ── Interactive Map Canvas (100% Free OSM with Classic Dark Mode) ──
@@ -241,7 +233,7 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                                       color: TeritoryColors.primary),
                                   const SizedBox(width: 4),
                                   Text(
-                                    '${friendFlags.length} Friends Active',
+                                    '$friendsActiveCount Friends Active',
                                     style: GoogleFonts.plusJakartaSans(
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
@@ -396,10 +388,11 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                     separatorBuilder: (_, _) => const SizedBox(width: 10),
                     itemBuilder: (ctx, index) {
                       final f = friendFlags[index];
+                      final apiFlag = otherFlags[index];
                       return GestureDetector(
                         onTap: () {
                           _mapController.move(f.coordinates, 14.5);
-                          FlagDetailSheet.show(context, friendFlag: f);
+                          LiveFlagDetailSheet.show(context, flag: apiFlag);
                         },
                         child: Container(
                           padding: const EdgeInsets.fromLTRB(8, 6, 14, 6),
@@ -523,11 +516,33 @@ class _HomeMapScreenState extends State<HomeMapScreen>
                   ),
                 ),
               ),
+
+              // ── Live data state overlay ──
+              if (exploreAsync.isLoading)
+                const _MapStatusBanner(
+                  icon: Icons.cloud_sync_rounded,
+                  message: 'Loading live flags…',
+                  color: TeritoryColors.sapphireBlue,
+                ),
+              if (exploreAsync.hasError)
+                _MapStatusBanner(
+                  icon: Icons.cloud_off_rounded,
+                  message: 'Teritory is unreachable. Check the API and retry.',
+                  color: TeritoryColors.expiredRed,
+                  onRetry: () =>
+                      ref.read(exploreFlagsProvider.notifier).refresh(),
+                ),
+              if (live.flags.isEmpty &&
+                  !exploreAsync.isLoading &&
+                  !exploreAsync.hasError)
+                const _MapStatusBanner(
+                  icon: Icons.flag_outlined,
+                  message: 'No flags here yet — be the first to drop one.',
+                  color: TeritoryColors.primary,
+                ),
             ],
           ),
         );
-      },
-    );
   }
 
   Widget _buildFilterChip(String label, IconData icon) {
@@ -719,7 +734,14 @@ class _HomeMapScreenState extends State<HomeMapScreen>
             children: [
               CircleAvatar(
                 radius: 12,
-                backgroundImage: NetworkImage(fFlag.friendAvatar),
+                backgroundColor: TeritoryColors.surfaceContainer,
+                backgroundImage: fFlag.friendAvatar.isNotEmpty
+                    ? NetworkImage(fFlag.friendAvatar)
+                    : null,
+                child: fFlag.friendAvatar.isEmpty
+                    ? const Icon(Icons.person_rounded,
+                        size: 14, color: Colors.white)
+                    : null,
               ),
               const SizedBox(width: 6),
               Flexible(
@@ -750,6 +772,68 @@ class _HomeMapScreenState extends State<HomeMapScreen>
           color: pinBorder,
         ),
       ],
+    );
+  }
+}
+
+/// Small floating banner used for loading / error / empty states over the map.
+class _MapStatusBanner extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  final Color color;
+  final VoidCallback? onRetry;
+
+  const _MapStatusBanner({
+    required this.icon,
+    required this.message,
+    required this.color,
+    this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Right inset clears the map's FAB column (right: 16, bottom: 160) so the
+    // banner and its Retry button never sit under those buttons.
+    return Positioned(
+      left: 16,
+      right: 72,
+      bottom: 160,
+      child: Material(
+        color: Colors.white,
+        elevation: 3,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  message,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: TeritoryColors.textPrimary,
+                  ),
+                ),
+              ),
+              if (onRetry != null)
+                TextButton(
+                  onPressed: onRetry,
+                  child: Text(
+                    'Retry',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

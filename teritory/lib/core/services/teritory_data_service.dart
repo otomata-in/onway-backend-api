@@ -70,6 +70,7 @@ class TeritoryDataService extends ChangeNotifier {
     required String category,
     required String notes,
     String? photoUrl,
+    bool persistToBackend = true,
   }) {
     final newFlag = FlagItem(
       id: 'f_user_${DateTime.now().millisecondsSinceEpoch}',
@@ -108,21 +109,31 @@ class TeritoryDataService extends ChangeNotifier {
 
     notifyListeners();
 
-    // Asynchronously persist to standalone backend
-    TeritoryRepository.instance.dropFlag(
-      placeName: placeName,
-      latitude: coordinates.latitude,
-      longitude: coordinates.longitude,
-      city: city,
-      country: country,
-      countryCode: country.length >= 2
-          ? country.substring(0, 2).toUpperCase()
-          : 'IN',
-      isMajorFlag: isMajorFlag,
-      category: category,
-      notes: notes,
-      photoUrl: newFlag.photoUrl,
-    );
+    // Persist to the standalone backend unless the caller already posted it
+    // (the drop-flag modal awaits POST /flags itself and then refreshes the map).
+    if (persistToBackend) {
+      // Fire-and-forget cache path for screens still on local data. The API
+      // failure is swallowed here on purpose; interactive callers (the drop-flag
+      // modal) await dropFlag and surface the error themselves.
+      TeritoryRepository.instance
+          .dropFlag(
+            placeName: placeName,
+            latitude: coordinates.latitude,
+            longitude: coordinates.longitude,
+            city: city,
+            country: country,
+            countryCode: country.length >= 2
+                ? country.substring(0, 2).toUpperCase()
+                : 'IN',
+            isMajorFlag: isMajorFlag,
+            category: category,
+            notes: notes,
+            photoUrl: newFlag.photoUrl,
+          )
+          .catchError((Object error) {
+            debugPrint('⚠️ Background flag sync failed: $error');
+          });
+    }
   }
 }
 

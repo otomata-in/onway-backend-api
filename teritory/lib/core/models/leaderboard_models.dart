@@ -10,12 +10,77 @@ enum LeaderboardScope {
 
 enum LeaderboardPeriod { alltime, month, week }
 
+/// Everything one rankings request needs. Equality is defined so the provider
+/// family caches per filter combination instead of refetching on rebuild.
+class LeaderboardQuery {
+  final LeaderboardScope scope;
+  final LeaderboardPeriod period;
+  final String? country;
+  final String? state;
+  final String? district;
+
+  const LeaderboardQuery({
+    this.scope = LeaderboardScope.global,
+    this.period = LeaderboardPeriod.alltime,
+    this.country,
+    this.state,
+    this.district,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      other is LeaderboardQuery &&
+      other.scope == scope &&
+      other.period == period &&
+      other.country == country &&
+      other.state == state &&
+      other.district == district;
+
+  @override
+  int get hashCode => Object.hash(scope, period, country, state, district);
+}
+
+/// `GET /rankings/me`: the signed-in traveler's standing and the server's score
+/// breakdown (the list endpoint does not return the breakdown).
+class MyRank {
+  final int score;
+  final int globalRank;
+  final int totalUsers;
+  final Map<String, int> breakdown;
+
+  const MyRank({
+    required this.score,
+    required this.globalRank,
+    required this.totalUsers,
+    this.breakdown = const {},
+  });
+
+  factory MyRank.fromJson(Map<String, dynamic> json) {
+    final rawBreakdown = json['breakdown'];
+    final breakdown = <String, int>{};
+    if (rawBreakdown is Map) {
+      rawBreakdown.forEach((key, value) {
+        if (key is String && value is num) breakdown[key] = value.toInt();
+      });
+    }
+    return MyRank(
+      score: (json['score'] as num?)?.toInt() ?? 0,
+      globalRank: (json['globalRank'] as num?)?.toInt() ?? 0,
+      totalUsers: (json['totalUsers'] as num?)?.toInt() ?? 0,
+      breakdown: breakdown,
+    );
+  }
+}
+
 class LeaderboardEntry {
   final String id;
   final String userId;
   final String userName;
   final String userHandle;
   final String userAvatar;
+  final String country;
+  final String state;
+  final String district;
   final LeaderboardScope scope;
   final LeaderboardPeriod period;
   final int rank;
@@ -35,6 +100,9 @@ class LeaderboardEntry {
     required this.userName,
     required this.userHandle,
     required this.userAvatar,
+    this.country = '',
+    this.state = '',
+    this.district = '',
     this.scope = LeaderboardScope.global,
     this.period = LeaderboardPeriod.alltime,
     required this.rank,
@@ -56,6 +124,9 @@ class LeaderboardEntry {
       userName: json['userName'] as String? ?? json['displayName'] as String? ?? 'Traveler',
       userHandle: json['userHandle'] as String? ?? json['handle'] as String? ?? 'traveler',
       userAvatar: json['userAvatar'] as String? ?? json['avatarUrl'] as String? ?? '',
+      country: json['country'] as String? ?? '',
+      state: json['state'] as String? ?? '',
+      district: json['district'] as String? ?? '',
       scope: LeaderboardScope.values.firstWhere(
         (e) => e.name.toLowerCase() == (json['scope'] as String? ?? 'global').toLowerCase(),
         orElse: () => LeaderboardScope.global,

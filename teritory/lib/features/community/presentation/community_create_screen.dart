@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../core/providers/data_providers.dart';
 import '../../../core/services/teritory_repository.dart';
+import '../../clans/application/clans_provider.dart';
 import '../../../core/theme/teritory_theme.dart';
 
 class CommunityCreateScreen extends ConsumerStatefulWidget {
@@ -62,30 +62,31 @@ class _CommunityCreateScreenState extends ConsumerState<CommunityCreateScreen> {
     );
 
     if (!mounted) return;
-    if (created != null) {
-      ref.read(communitiesNotifierProvider.notifier).refresh();
+    if (created == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '🛡️ Community "$name" founded successfully!',
-            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
-          ),
-          backgroundColor: TeritoryColors.emeraldGreen,
-        ),
-      );
-      Navigator.pop(context);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Community "$name" created successfully!',
+            'Could not create "$name". Check the API and try again.',
             style: GoogleFonts.plusJakartaSans(),
           ),
-          backgroundColor: TeritoryColors.emeraldGreen,
+          backgroundColor: TeritoryColors.expiredRed,
         ),
       );
-      Navigator.pop(context);
+      return;
     }
+
+    // The clan header renders its communities from `GET /clans/:id`.
+    ref.invalidate(clanDetailProvider(parentClan));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '🛡️ Community "$name" founded successfully!',
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
+        ),
+        backgroundColor: TeritoryColors.emeraldGreen,
+      ),
+    );
+    Navigator.pop(context);
   }
 
   @override

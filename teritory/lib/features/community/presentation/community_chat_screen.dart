@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../../../core/models/community_models.dart';
-import '../../../core/providers/data_providers.dart';
+import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/api_service.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../application/community_detail_provider.dart';
 
 class CommunityChatScreen extends ConsumerStatefulWidget {
   final String communityId;
@@ -17,7 +20,7 @@ class CommunityChatScreen extends ConsumerStatefulWidget {
 
 class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
   final TextEditingController _controller = TextEditingController();
-  final String _currentUserId = 'u1';
+  bool _sending = false;
 
   @override
   void dispose() {
@@ -33,10 +36,41 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     return 'just now';
   }
 
+  Future<void> _send() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty || _sending) return;
+
+    setState(() => _sending = true);
+    try {
+      await ref
+          .read(communityMessagesProvider(widget.communityId).notifier)
+          .sendMessage(text);
+      if (!mounted) return;
+      _controller.clear();
+    } on ApiException catch (e) {
+      _toast(e.message);
+    } catch (_) {
+      _toast('Could not send your message. Check your connection.');
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: TeritoryColors.expiredRed,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final messages =
+    final messagesAsync =
         ref.watch(communityMessagesProvider(widget.communityId));
+    final currentUserId = ref.watch(currentUserProvider).id;
 
     return Scaffold(
       appBar: AppBar(
@@ -50,21 +84,67 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       ),
       body: Column(
         children: [
-          // ── Messages List ──
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: messages.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final msg = messages[index];
-                final isSelf = msg.userId == _currentUserId;
-                return _buildBubble(msg, isSelf);
+            child: messagesAsync.when(
+              loading: () => const Center(
+                child: CircularProgressIndicator(
+                    color: TeritoryColors.communityIndigo),
+              ),
+              error: (error, _) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.cloud_off_rounded,
+                          size: 40, color: TeritoryColors.textMuted),
+                      const SizedBox(height: 10),
+                      Text(
+                        error is ApiException
+                            ? error.message
+                            : 'Could not load messages.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          color: TeritoryColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      OutlinedButton(
+                        onPressed: () => ref.invalidate(
+                            communityMessagesProvider(widget.communityId)),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              data: (messages) {
+                if (messages.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'No messages yet — say hello',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: TeritoryColors.textMuted,
+                      ),
+                    ),
+                  );
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: messages.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final message = messages[index];
+                    return _buildBubble(
+                      message,
+                      message.userId == currentUserId,
+                    );
+                  },
+                );
               },
             ),
           ),
-
-          // ── Input Bar ──
           SafeArea(
             top: false,
             child: Container(
@@ -81,6 +161,8 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
                   Expanded(
                     child: TextField(
                       controller: _controller,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _send(),
                       style: GoogleFonts.plusJakartaSans(fontSize: 14),
                       decoration: InputDecoration(
                         hintText: 'Type a message...',
@@ -112,14 +194,14 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
                   ),
                   const SizedBox(width: 8),
                   IconButton(
-                    onPressed: () {
-                      final text = _controller.text.trim();
-                      if (text.isNotEmpty) {
-                        ref.read(communityMessagesNotifierProvider(widget.communityId).notifier).sendMessage(text);
-                        _controller.clear();
-                      }
-                    },
-                    icon: const Icon(Icons.send_rounded),
+                    onPressed: _sending ? null : _send,
+                    icon: _sending
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send_rounded),
                     color: TeritoryColors.primary,
                   ),
                 ],
@@ -137,13 +219,10 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
           isSelf ? MainAxisAlignment.end : MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        if (!isSelf) ...[
-          CircleAvatar(
-            radius: 14,
-            backgroundImage: NetworkImage(msg.userAvatar),
-          ),
+        if (!isSelf) ...{
+          _BubbleAvatar(name: msg.userName, avatarUrl: msg.userAvatar),
           const SizedBox(width: 8),
-        ],
+        },
         Flexible(
           child: Container(
             padding:
@@ -178,8 +257,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
                   msg.text,
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 13,
-                    color:
-                        isSelf ? Colors.white : TeritoryColors.textPrimary,
+                    color: isSelf ? Colors.white : TeritoryColors.textPrimary,
                     height: 1.4,
                   ),
                 ),
@@ -198,6 +276,33 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _BubbleAvatar extends StatelessWidget {
+  final String name;
+  final String avatarUrl;
+
+  const _BubbleAvatar({required this.name, required this.avatarUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return CircleAvatar(
+      radius: 14,
+      backgroundColor: TeritoryColors.communityIndigo.withValues(alpha: 0.15),
+      backgroundImage: avatarUrl.isEmpty ? null : NetworkImage(avatarUrl),
+      onBackgroundImageError: avatarUrl.isEmpty ? null : (_, _) {},
+      child: avatarUrl.isEmpty
+          ? Text(
+              name.isEmpty ? '?' : name[0].toUpperCase(),
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: TeritoryColors.communityIndigo,
+              ),
+            )
+          : null,
     );
   }
 }

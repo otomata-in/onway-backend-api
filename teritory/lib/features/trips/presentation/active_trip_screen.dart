@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../../../core/providers/data_providers.dart';
-import '../../../core/services/mock_data_service.dart';
-import '../../../core/services/teritory_repository.dart';
+import '../../../core/models/api_trip.dart';
+import '../../../core/services/api_service.dart';
 import '../../../core/services/socket_service.dart';
+import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../application/trips_provider.dart';
 
 class ActiveTripScreen extends ConsumerStatefulWidget {
   final String? tripId;
@@ -23,6 +25,8 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
+  bool _validating = false;
+  bool _completing = false;
 
   @override
   void initState() {
@@ -34,27 +38,116 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
     _pulseAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+    if (widget.tripId != null) {
+      SocketService.instance.joinTrip(widget.tripId!);
+    }
   }
 
   @override
   void dispose() {
+    if (widget.tripId != null) {
+      SocketService.instance.leaveTrip(widget.tripId!);
+    }
     _pulseController.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // Find the active trip from live provider
-    final trips = ref.watch(activeTripProvider);
-    final trip = widget.tripId != null
-        ? trips.where((t) => t.id == widget.tripId).firstOrNull ?? trips.firstOrNull
-        : trips.firstOrNull;
+  void _toast(String message, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: error ? TeritoryColors.expiredRed : null,
+      ),
+    );
+  }
 
-    if (trip != null) {
-      SocketService.instance.joinTrip(trip.id);
+  String _errorMessage(Object? error) => error is ApiException
+      ? error.message
+      : 'Could not load this trip. Check the API and retry.';
+
+  Future<void> _validateWaypoint(
+    ActiveTripDetail detail,
+    String tripId,
+    String waypointId,
+  ) async {
+    if (_validating) return;
+    if (!detail.hasPosition) {
+      _toast(
+        'No GPS position recorded for this trip yet, so this stop cannot be '
+        'validated.',
+        error: true,
+      );
+      return;
     }
 
-    if (trip == null) {
+    setState(() => _validating = true);
+    try {
+      final result = await TeritoryRepository.instance.validateWaypointAt(
+        tripId: tripId,
+        waypointId: waypointId,
+        latitude: detail.currentLat!,
+        longitude: detail.currentLng!,
+      );
+      if (!mounted) return;
+      ref.invalidate(activeTripDetailProvider(tripId));
+      ref.invalidate(tripsHubProvider);
+      _toast(result.message, error: !result.isValid);
+    } on ApiException catch (e) {
+      _toast(e.message, error: true);
+    } catch (_) {
+      _toast('Could not validate this stop. Check your connection.',
+          error: true);
+    } finally {
+      if (mounted) setState(() => _validating = false);
+    }
+  }
+
+  Future<void> _completeTrip(String tripId) async {
+    if (_completing) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Complete this trip?'),
+        content: const Text(
+            'Stops you have not validated will count as missed.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Complete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _completing = true);
+    try {
+      await TeritoryRepository.instance.completeTrip(tripId);
+      if (!mounted) return;
+      ref.invalidate(tripsHubProvider);
+      ref.invalidate(tripHistoryLiveProvider);
+      _toast('Trip completed');
+      if (context.canPop()) context.pop();
+    } on ApiException catch (e) {
+      _toast(e.message, error: true);
+    } catch (_) {
+      _toast('Could not complete this trip. Check your connection.',
+          error: true);
+    } finally {
+      if (mounted) setState(() => _completing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tripId = widget.tripId;
+    if (tripId == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Active Trip')),
         body: Center(
@@ -69,39 +162,69 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
       );
     }
 
-    // Get the associated plan for waypoints from live provider
-    final allPlans = ref.watch(tripPlansProvider);
-    final plan = allPlans.where((p) => p.id == trip.tripPlanId).firstOrNull ??
-        MockDataService.instance.tripPlans.where((p) => p.id == trip.tripPlanId).firstOrNull;
+    final detailAsync = ref.watch(activeTripDetailProvider(tripId));
+    final detail = detailAsync.valueOrNull;
 
-    final waypoints = plan?.waypoints ?? [];
+    if (detail == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Active Trip')),
+        body: Center(
+          child: detailAsync.hasError
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.cloud_off_rounded,
+                          size: 44, color: TeritoryColors.textMuted),
+                      const SizedBox(height: 12),
+                      Text(
+                        _errorMessage(detailAsync.error),
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          color: TeritoryColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        onPressed: () =>
+                            ref.invalidate(activeTripDetailProvider(tripId)),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+              : const CircularProgressIndicator(
+                  color: TeritoryColors.validatedGreen),
+        ),
+      );
+    }
+
+    final trip = detail.trip;
+    final waypoints = detail.waypoints;
     final waypointPoints =
         waypoints.map((w) => LatLng(w.latitude, w.longitude)).toList();
-
-    // Mock: 2 of the waypoints are validated
-    final validatedCount = 2;
+    final validatedCount = detail.validatedWaypointIds.length;
     final totalCount = waypoints.length;
-
-    // Current position from first participant
-    final currentParticipant = trip.participants.isNotEmpty
-        ? trip.participants.first
-        : null;
-    final currentPos = currentParticipant != null &&
-            currentParticipant.currentLat != null &&
-            currentParticipant.currentLng != null
-        ? LatLng(currentParticipant.currentLat!, currentParticipant.currentLng!)
-        : waypointPoints.isNotEmpty
+    final nextWaypoint = detail.nextWaypoint;
+    final currentPos = detail.hasPosition
+        ? LatLng(detail.currentLat!, detail.currentLng!)
+        : (waypointPoints.isNotEmpty
             ? waypointPoints[0]
-            : const LatLng(10.0889, 77.0595);
+            : const LatLng(10.0889, 77.0595));
 
-    // Next waypoint is the one after validated ones
-    final nextWaypointIndex = validatedCount < waypoints.length ? validatedCount : waypoints.length - 1;
-    final nextWaypoint = waypoints.isNotEmpty ? waypoints[nextWaypointIndex] : null;
+    final nextDistanceKm = nextWaypoint != null && detail.hasPosition
+        ? const Distance().as(
+            LengthUnit.Kilometer,
+            currentPos,
+            LatLng(nextWaypoint.latitude, nextWaypoint.longitude),
+          )
+        : null;
 
     return Scaffold(
       body: Stack(
         children: [
-          // ── Full-screen map ──
           FlutterMap(
             options: MapOptions(
               initialCenter: currentPos,
@@ -132,7 +255,6 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                     ),
                   ],
                 ),
-              // Waypoint radius circles (rendered as circle markers)
               CircleLayer(
                 circles: waypoints.map((w) {
                   return CircleMarker(
@@ -145,10 +267,9 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                   );
                 }).toList(),
               ),
-              // Waypoint markers
               MarkerLayer(
                 markers: waypoints.map((w) {
-                  final isValidated = w.orderIndex < validatedCount;
+                  final isValidated = detail.validatedWaypointIds.contains(w.id);
                   return Marker(
                     point: LatLng(w.latitude, w.longitude),
                     width: 30,
@@ -183,46 +304,46 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                   );
                 }).toList(),
               ),
-              // Current position beacon
-              MarkerLayer(
-                markers: [
-                  Marker(
-                    point: currentPos,
-                    width: 36,
-                    height: 36,
-                    child: AnimatedBuilder(
-                      animation: _pulseAnimation,
-                      builder: (context, child) {
-                        return Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: TeritoryColors.primary
-                                .withValues(alpha: _pulseAnimation.value * 0.3),
-                            border: Border.all(
-                              color: TeritoryColors.primary,
-                              width: 2,
-                            ),
-                          ),
-                          child: Center(
-                            child: Container(
-                              width: 12,
-                              height: 12,
-                              decoration: const BoxDecoration(
+              if (detail.hasPosition)
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: currentPos,
+                      width: 36,
+                      height: 36,
+                      child: AnimatedBuilder(
+                        animation: _pulseAnimation,
+                        builder: (context, child) {
+                          return Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: TeritoryColors.primary.withValues(
+                                  alpha: _pulseAnimation.value * 0.3),
+                              border: Border.all(
                                 color: TeritoryColors.primary,
-                                shape: BoxShape.circle,
+                                width: 2,
                               ),
                             ),
-                          ),
-                        );
-                      },
+                            child: Center(
+                              child: Container(
+                                width: 12,
+                                height: 12,
+                                decoration: const BoxDecoration(
+                                  color: TeritoryColors.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
             ],
           ),
 
-          // ── Progress bar at top ──
+          // ── Progress header ──
           Positioned(
             top: 0,
             left: 0,
@@ -249,8 +370,15 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                     Row(
                       children: [
                         IconButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                          onPressed: () {
+                            if (context.canPop()) {
+                              context.pop();
+                            } else {
+                              context.go('/trips');
+                            }
+                          },
+                          icon:
+                              const Icon(Icons.arrow_back_rounded, size: 20),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                           color: TeritoryColors.textPrimary,
@@ -268,7 +396,7 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                           ),
                         ),
                         Text(
-                          '$validatedCount of $totalCount waypoints validated',
+                          '$validatedCount of $totalCount stops validated',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -281,9 +409,7 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                     ClipRRect(
                       borderRadius: BorderRadius.circular(6),
                       child: LinearProgressIndicator(
-                        value: totalCount > 0
-                            ? validatedCount / totalCount
-                            : 0,
+                        value: totalCount > 0 ? validatedCount / totalCount : 0,
                         minHeight: 6,
                         backgroundColor: TeritoryColors.surfaceContainer,
                         valueColor: const AlwaysStoppedAnimation(
@@ -296,7 +422,7 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
             ),
           ),
 
-          // ── Participant avatars ──
+          // ── Participants ──
           Positioned(
             top: 0,
             left: 0,
@@ -311,26 +437,9 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                           padding: const EdgeInsets.only(right: 4),
                           child: Column(
                             children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                      color: Colors.white, width: 2),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color:
-                                          Colors.black.withValues(alpha: 0.15),
-                                      blurRadius: 4,
-                                    ),
-                                  ],
-                                ),
-                                child: CircleAvatar(
-                                  radius: 16,
-                                  backgroundImage:
-                                      NetworkImage(p.userAvatar),
-                                  backgroundColor:
-                                      TeritoryColors.surfaceContainer,
-                                ),
+                              _ParticipantAvatar(
+                                name: p.userName,
+                                avatarUrl: p.userAvatar,
                               ),
                               const SizedBox(height: 2),
                               Text(
@@ -382,7 +491,6 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Handle bar
                     Center(
                       child: Container(
                         width: 40,
@@ -395,7 +503,20 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                     ),
                     const SizedBox(height: 14),
 
-                    if (nextWaypoint != null) ...[
+                    if (nextWaypoint == null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          waypoints.isEmpty
+                              ? 'This trip has no waypoints.'
+                              : 'All stops validated. Complete the trip to log it.',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13,
+                            color: TeritoryColors.textSecondary,
+                          ),
+                        ),
+                      )
+                    else ...[
                       Text(
                         'NEXT WAYPOINT',
                         style: GoogleFonts.plusJakartaSans(
@@ -422,19 +543,9 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                               color: TeritoryColors.textSecondary),
                           const SizedBox(width: 4),
                           Text(
-                            '2.4 km away',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 12,
-                              color: TeritoryColors.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          const Icon(Icons.schedule_rounded,
-                              size: 14,
-                              color: TeritoryColors.textSecondary),
-                          const SizedBox(width: 4),
-                          Text(
-                            '~15 min',
+                            nextDistanceKm == null
+                                ? 'Live position unavailable'
+                                : '${nextDistanceKm.toStringAsFixed(1)} km away',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 12,
                               color: TeritoryColors.textSecondary,
@@ -448,45 +559,29 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        onPressed: () async {
-                          if (nextWaypoint == null) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              duration: Duration(seconds: 1),
-                              content: Text('Validating waypoint via GPS...'),
-                            ),
-                          );
-                          final result = await TeritoryRepository.instance.validateWaypoint(
-                            trip.id,
-                            nextWaypoint.id,
-                            nextWaypoint.latitude,
-                            nextWaypoint.longitude,
-                          );
-                          if (!context.mounted) return;
-                          if (result != null && result['isWithinRadius'] == true) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                backgroundColor: TeritoryColors.validatedGreen,
-                                content: Text('🎯 ${nextWaypoint.placeName} Validated! Flag added to passport.'),
-                              ),
-                            );
-                            ref.read(activeTripNotifierProvider.notifier).refresh();
-                          } else {
-                            final dist = result?['distanceMeters'] != null
-                                ? '${((result!['distanceMeters'] as num) / 1000).toStringAsFixed(1)}km'
-                                : 'beyond 15km';
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                backgroundColor: Colors.orange.shade800,
-                                content: Text('📍 Out of radius ($dist). Must be within 15km to flag!'),
-                              ),
-                            );
-                          }
-                        },
-                        icon:
-                            const Icon(Icons.flag_rounded, size: 20),
+                        onPressed: nextWaypoint == null ||
+                                _validating ||
+                                !detail.hasPosition
+                            ? null
+                            : () => _validateWaypoint(
+                                  detail,
+                                  tripId,
+                                  nextWaypoint.id,
+                                ),
+                        icon: _validating
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.flag_rounded, size: 20),
                         label: Text(
-                          'Flag This Stop',
+                          detail.hasPosition
+                              ? 'Flag This Stop'
+                              : 'Live position unavailable',
                           style: GoogleFonts.plusJakartaSans(
                             fontWeight: FontWeight.w700,
                             fontSize: 15,
@@ -495,12 +590,41 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                         style: ElevatedButton.styleFrom(
                           backgroundColor: TeritoryColors.primary,
                           foregroundColor: Colors.white,
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 14),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: _completing ? null : () => _completeTrip(tripId),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          side: const BorderSide(
+                              color: TeritoryColors.border),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: _completing
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Text(
+                                'Complete Trip',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                  color: TeritoryColors.textPrimary,
+                                ),
+                              ),
                       ),
                     ),
                   ],
@@ -509,6 +633,45 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ParticipantAvatar extends StatelessWidget {
+  final String name;
+  final String avatarUrl;
+
+  const _ParticipantAvatar({required this.name, required this.avatarUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 4,
+          ),
+        ],
+      ),
+      child: CircleAvatar(
+        radius: 16,
+        backgroundColor: TeritoryColors.surfaceContainer,
+        backgroundImage: avatarUrl.isEmpty ? null : NetworkImage(avatarUrl),
+        onBackgroundImageError: avatarUrl.isEmpty ? null : (_, _) {},
+        child: avatarUrl.isEmpty
+            ? Text(
+                name.isEmpty ? '?' : name[0].toUpperCase(),
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: TeritoryColors.textSecondary,
+                ),
+              )
+            : null,
       ),
     );
   }

@@ -306,6 +306,12 @@ class Trip {
   final DateTime? completedAt;
   final List<TripParticipant> participants;
 
+  // Flattened from the nested `tripPlan` so cards do not need a second lookup.
+  final String originName;
+  final String destinationName;
+  final int plannedWaypoints;
+  final double estimatedDurationHours;
+
   const Trip({
     required this.id,
     required this.tripPlanId,
@@ -315,6 +321,10 @@ class Trip {
     required this.startedAt,
     this.completedAt,
     this.participants = const [],
+    this.originName = '',
+    this.destinationName = '',
+    this.plannedWaypoints = 0,
+    this.estimatedDurationHours = 48,
   });
 
   factory Trip.fromJson(Map<String, dynamic> json) {
@@ -325,6 +335,14 @@ class Trip {
 
     final orgId = json['organizerId'] as String? ?? json['createdById'] as String? ?? '';
     final statusStr = (json['status'] as String? ?? 'active').toLowerCase();
+
+    final plan =
+        json['tripPlan'] is Map ? json['tripPlan'] as Map<String, dynamic> : null;
+    final waypoints = plan?['waypoints'] as List<dynamic>? ?? const [];
+    final duration = (plan?['estimatedDurationHours'] as num?)?.toDouble() ??
+        ((plan?['estimatedDays'] as num?)?.toDouble() != null
+            ? (plan!['estimatedDays'] as num).toDouble() * 8
+            : 48.0);
 
     return Trip(
       id: json['id'] as String,
@@ -346,6 +364,20 @@ class Trip {
                   TripParticipant.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
+      originName: plan?['originName'] as String? ??
+          (waypoints.isNotEmpty
+              ? (waypoints.first as Map<String, dynamic>)['placeName']
+                      as String? ??
+                  ''
+              : ''),
+      destinationName: plan?['destinationName'] as String? ??
+          (waypoints.isNotEmpty
+              ? (waypoints.last as Map<String, dynamic>)['placeName']
+                      as String? ??
+                  ''
+              : ''),
+      plannedWaypoints: waypoints.length,
+      estimatedDurationHours: duration,
     );
   }
 
@@ -358,6 +390,10 @@ class Trip {
         'startedAt': startedAt.toIso8601String(),
         'completedAt': completedAt?.toIso8601String(),
         'participants': participants.map((e) => e.toJson()).toList(),
+        'originName': originName,
+        'destinationName': destinationName,
+        'plannedWaypoints': plannedWaypoints,
+        'estimatedDurationHours': estimatedDurationHours,
       };
 }
 

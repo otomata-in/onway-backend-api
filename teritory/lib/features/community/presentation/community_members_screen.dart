@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../../../core/models/community_models.dart';
-import '../../../core/providers/data_providers.dart';
+import '../../../core/services/api_service.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../application/community_detail_provider.dart';
+import 'invite_friends_sheet.dart';
 
 class CommunityMembersScreen extends ConsumerWidget {
   final String communityId;
@@ -42,7 +45,8 @@ class CommunityMembersScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final members = ref.watch(communityMembersProvider(communityId));
+    final membersAsync =
+        ref.watch(communityMembersLiveProvider(communityId));
 
     return Scaffold(
       appBar: AppBar(
@@ -56,15 +60,23 @@ class CommunityMembersScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
-          // ── Invite Button ──
           Padding(
             padding: const EdgeInsets.all(16),
             child: SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () {
+                onPressed: () async {
+                  final invited = await InviteFriendsSheet.show(
+                    context,
+                    communityId: communityId,
+                  );
+                  if (invited == null || !context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Invite link copied!')),
+                    SnackBar(
+                      content: Text(invited == 1
+                          ? 'Invitation sent'
+                          : '$invited invitations sent'),
+                    ),
                   );
                 },
                 icon:
@@ -86,74 +98,146 @@ class CommunityMembersScreen extends ConsumerWidget {
               ),
             ),
           ),
-
-          // ── Members List ──
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: members.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final member = members[index];
-                final badgeColor = _roleBadgeColor(member.role);
-
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Row(
+            child: membersAsync.when(
+              loading: () => const Center(
+                child: CircularProgressIndicator(
+                    color: TeritoryColors.communityIndigo),
+              ),
+              error: (error, _) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      CircleAvatar(
-                        radius: 22,
-                        backgroundImage:
-                            NetworkImage(member.userAvatar),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              member.userName,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: TeritoryColors.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Joined ${_formatDate(member.joinedAt)}',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 11,
-                                color: TeritoryColors.textMuted,
-                              ),
-                            ),
-                          ],
+                      const Icon(Icons.cloud_off_rounded,
+                          size: 40, color: TeritoryColors.textMuted),
+                      const SizedBox(height: 10),
+                      Text(
+                        error is ApiException
+                            ? error.message
+                            : 'Could not load members.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          color: TeritoryColors.textSecondary,
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: badgeColor.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          _roleLabel(member.role),
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: badgeColor,
-                          ),
-                        ),
+                      const SizedBox(height: 10),
+                      OutlinedButton(
+                        onPressed: () => ref
+                            .invalidate(communityMembersLiveProvider(communityId)),
+                        child: const Text('Retry'),
                       ),
                     ],
                   ),
+                ),
+              ),
+              data: (members) {
+                if (members.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'No members yet',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: TeritoryColors.textMuted,
+                      ),
+                    ),
+                  );
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: members.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final member = members[index];
+                    final badgeColor = _roleBadgeColor(member.role);
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(
+                        children: [
+                          _MemberAvatar(member: member),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  member.userName,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: TeritoryColors.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Joined ${_formatDate(member.joinedAt)}',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    color: TeritoryColors.textMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: badgeColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              _roleLabel(member.role),
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: badgeColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 );
               },
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _MemberAvatar extends StatelessWidget {
+  final CommunityMember member;
+
+  const _MemberAvatar({required this.member});
+
+  @override
+  Widget build(BuildContext context) {
+    return CircleAvatar(
+      radius: 22,
+      backgroundColor: TeritoryColors.communityIndigo.withValues(alpha: 0.15),
+      backgroundImage: member.userAvatar.isEmpty
+          ? null
+          : NetworkImage(member.userAvatar),
+      onBackgroundImageError:
+          member.userAvatar.isEmpty ? null : (_, _) {},
+      child: member.userAvatar.isEmpty
+          ? Text(
+              member.userName.isEmpty
+                  ? '?'
+                  : member.userName[0].toUpperCase(),
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: TeritoryColors.communityIndigo,
+              ),
+            )
+          : null,
     );
   }
 }

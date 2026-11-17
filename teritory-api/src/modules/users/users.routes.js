@@ -9,8 +9,11 @@ router.patch('/me/trip-mode', authenticate, usersController.toggleTripMode);
 
 // Social & Friends
 router.get('/friends', authenticate, usersController.getFriends);
+router.get('/friends/requests', authenticate, usersController.getFriendRequests);
 router.post('/friends/request', authenticate, usersController.sendFriendRequest);
 router.post('/friends/requests/:id/respond', authenticate, usersController.respondFriendRequest);
+router.delete('/friends/requests/:id', authenticate, usersController.cancelFriendRequest);
+router.delete('/friends/:id', authenticate, usersController.removeFriend);
 
 // Search & Invites
 router.get('/search', authenticate, usersController.searchUsers);

@@ -4,416 +4,485 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../../../core/services/mock_data_service.dart';
+import '../../../core/models/api_flag.dart';
+import '../../../core/models/api_user.dart';
+import '../../../core/services/api_service.dart';
+import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../flag/presentation/live_flag_detail_sheet.dart';
+import '../application/profile_providers.dart';
 
-class FriendProfileScreen extends ConsumerWidget {
+/// Live public profile: `GET /users/:userId` plus `GET /flags?userId=` for the
+/// footprint, with real friend actions against the relationship endpoints.
+class FriendProfileScreen extends ConsumerStatefulWidget {
   final String userId;
 
   const FriendProfileScreen({super.key, required this.userId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final user = MockDataService.instance.userById(userId);
+  ConsumerState<FriendProfileScreen> createState() =>
+      _FriendProfileScreenState();
+}
 
-    if (user == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Profile')),
-        body: Center(
-          child: Text(
-            'User not found',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 16,
-              color: TeritoryColors.textSecondary,
-            ),
-          ),
-        ),
+class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
+  bool _busy = false;
+
+  Future<void> _run(Future<void> Function() action) async {
+    setState(() => _busy = true);
+    try {
+      await action();
+      ref.invalidate(friendsLiveProvider);
+      ref.invalidate(friendRequestsLiveProvider);
+      ref.invalidate(userProfileProvider(widget.userId));
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
       );
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profileAsync = ref.watch(userProfileProvider(widget.userId));
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          user.displayName,
+          profileAsync.valueOrNull?.displayName ?? 'Profile',
           style: GoogleFonts.plusJakartaSans(
             fontSize: 18,
             fontWeight: FontWeight.w800,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert_rounded, size: 20),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('More options coming soon')),
-              );
-            },
-          ),
-        ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Profile Header ──
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 48,
-                    backgroundImage: NetworkImage(user.avatarUrl),
-                    backgroundColor: TeritoryColors.surfaceContainer,
+      body: profileAsync.when(
+        loading: () => const Center(
+          child: CircularProgressIndicator(color: TeritoryColors.primary),
+        ),
+        error: (error, _) => _MessageState(
+          message: error is ApiException
+              ? error.message
+              : 'Could not load this traveler.',
+          actionLabel: 'Retry',
+          onAction: () => ref.invalidate(userProfileProvider(widget.userId)),
+        ),
+        data: (profile) {
+          final flagsAsync = ref.watch(userFlagsProvider(profile.id));
+          return RefreshIndicator(
+            color: TeritoryColors.primary,
+            onRefresh: () async {
+              ref.invalidate(userProfileProvider(widget.userId));
+              ref.invalidate(userFlagsProvider(profile.id));
+              try {
+                await ref.read(userProfileProvider(widget.userId).future);
+              } on ApiException {
+                // The error state renders the message.
+              }
+            },
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 32),
+              children: [
+                _Header(profile: profile),
+                const SizedBox(height: 14),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _FriendActionRow(
+                    profile: profile,
+                    busy: _busy,
+                    onAdd: () => _run(() async {
+                      await TeritoryRepository.instance
+                          .sendFriendRequest(profile.id);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Friend request sent')),
+                      );
+                    }),
+                    onAccept: (relationshipId) => _run(() async {
+                      await TeritoryRepository.instance
+                          .respondToFriendRequest(relationshipId, accept: true);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Friend request accepted')),
+                      );
+                    }),
+                    onRemove: (relationshipId) => _run(() async {
+                      await TeritoryRepository.instance
+                          .removeFriend(relationshipId);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Friend removed')),
+                      );
+                    }),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    user.displayName,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: TeritoryColors.textPrimary,
+                ),
+                const SizedBox(height: 18),
+                _StatsRow(profile: profile),
+                const SizedBox(height: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.map_rounded,
+                          size: 18, color: TeritoryColors.textPrimary),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Flag Map',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: TeritoryColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: flagsAsync.when(
+                    loading: () => const SizedBox(
+                      height: 220,
+                      child: Center(child: CircularProgressIndicator()),
                     ),
+                    error: (error, _) => SizedBox(
+                      height: 220,
+                      child: Center(
+                        child: Text(
+                          error is ApiException
+                              ? error.message
+                              : 'Could not load this traveler\'s flags.',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13,
+                            color: TeritoryColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                    data: (flags) => _FootprintMap(flags: flags),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    user.handle,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 13,
-                      color: TeritoryColors.textSecondary,
+                ),
+                if (profile.passportStamps.isNotEmpty) ...[
+                  const SizedBox(height: 22),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      'Passport Stamps (${profile.passportStamps.length})',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: TeritoryColors.textPrimary,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    user.bio,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 13,
-                      color: TeritoryColors.textPrimary,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Nomad rank badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: TeritoryColors.majorGoldLight,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      'Nomad Rank: Explorer • Lvl 5',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: TeritoryColors.majorGoldDark,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Add / Remove Friend button
                   SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Friend request sent!')),
+                    height: 78,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: profile.passportStamps.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 10),
+                      itemBuilder: (context, index) {
+                        final stamp = profile.passportStamps[index];
+                        return Container(
+                          width: 150,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: TeritoryColors.majorGold
+                                  .withValues(alpha: 0.5),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                stamp.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: TeritoryColors.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                '${stamp.category} • ${stamp.date}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 9,
+                                  color: TeritoryColors.textMuted,
+                                ),
+                              ),
+                            ],
+                          ),
                         );
                       },
-                      icon: const Icon(Icons.person_add_rounded, size: 18),
-                      label: Text(
-                        'Add Friend',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: TeritoryColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
                     ),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(height: 18),
-
-            // ── Stats Row ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildStatItem('42', 'Total Flags'),
-                  _buildStatItem('8', 'Major Flags'),
-                  _buildStatItem('5', 'Countries'),
-                  _buildStatItem('2', 'Continents'),
-                  _buildStatItem('3', 'Trips'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // ── Map Section ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  const Icon(Icons.map_rounded,
-                      size: 18, color: TeritoryColors.textPrimary),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Flag Map',
+                const SizedBox(height: 22),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Flags',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
                       color: TeritoryColors.textPrimary,
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                height: 220,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: TeritoryColors.border),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: FlutterMap(
-                    options: const MapOptions(
-                      initialCenter: LatLng(10.0889, 77.0595),
-                      initialZoom: 8.0,
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.onway.teritory',
-                        tileBuilder: (context, tileWidget, tile) =>
-                            ColorFiltered(
-                          colorFilter: const ColorFilter.matrix(<double>[
-                            -0.20, -0.15, -0.30, 0.0, 140,
-                            -0.45, 0.20, -0.35, 0.0, 165,
-                            -0.55, 0.05, -0.05, 0.0, 185,
-                            0.0, 0.0, 0.0, 1.0, 0,
-                          ]),
-                          child: tileWidget,
+                const SizedBox(height: 8),
+                flagsAsync.when(
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, _) => const SizedBox.shrink(),
+                  data: (flags) {
+                    if (flags.isEmpty) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'No flags dropped yet.',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            color: TeritoryColors.textMuted,
+                          ),
                         ),
-                      ),
-                      MarkerLayer(
-                        markers: [
-                          _buildFlagMarker(
-                              const LatLng(10.0889, 77.0595), true),
-                          _buildFlagMarker(
-                              const LatLng(10.1262, 77.2354), false),
-                          _buildFlagMarker(
-                              const LatLng(9.9312, 76.2673), false),
-                          _buildFlagMarker(
-                              const LatLng(10.3000, 77.1833), true),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 22),
-
-            // ── Trip Profiling Section ──
-            _buildSectionHeader('Trip Profiling'),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                children: [
-                  _buildCompletedTripCard(
-                    'Munnar Ridge Trek',
-                    'Sep 15, 2026',
-                    '92 km',
-                  ),
-                  const SizedBox(height: 10),
-                  _buildCompletedTripCard(
-                    'Wayanad Forest Circuit',
-                    'Aug 20, 2026',
-                    '45 km',
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 22),
-
-            // ── Legendary Rally Badges ──
-            _buildSectionHeader('Legendary Rally Badges'),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: TeritoryColors.rallyGold,
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: TeritoryColors.rallyGold.withValues(alpha: 0.15),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: TeritoryColors.majorGoldLight,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.emoji_events_rounded,
-                          color: TeritoryColors.rallyGold, size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Munnar Sunrise Rally',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: TeritoryColors.textPrimary,
+                      );
+                    }
+                    return Column(
+                      children: [
+                        for (final flag in flags)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                            child: _FlagRow(
+                              flag: flag,
+                              onTap: () =>
+                                  LiveFlagDetailSheet.show(context, flag: flag),
                             ),
                           ),
-                          Text(
-                            '8 participants',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 11,
-                              color: TeritoryColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                      ],
+                    );
+                  },
                 ),
-              ),
+              ],
             ),
-            const SizedBox(height: 22),
+          );
+        },
+      ),
+    );
+  }
+}
 
-            // ── Action Buttons ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Coming soon')),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: TeritoryColors.communityIndigo,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        'Invite to Community',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Coming soon')),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: TeritoryColors.tripRoute,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        'Invite to Trip',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Coming soon')),
-                        );
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        side: const BorderSide(color: TeritoryColors.border),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        'Send Message',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: TeritoryColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+class _Header extends StatelessWidget {
+  const _Header({required this.profile});
+
+  final ApiUser profile;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Column(
+        children: [
+          CircleAvatar(
+            radius: 48,
+            backgroundColor: TeritoryColors.surfaceContainer,
+            backgroundImage: profile.avatarUrl.isNotEmpty
+                ? NetworkImage(profile.avatarUrl)
+                : null,
+            child: profile.avatarUrl.isEmpty
+                ? const Icon(Icons.person_rounded,
+                    size: 44, color: TeritoryColors.textMuted)
+                : null,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            profile.displayName,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: TeritoryColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '@${profile.handle}',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 13,
+              color: TeritoryColors.textSecondary,
+            ),
+          ),
+          if (profile.locationLabel.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              profile.locationLabel,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                color: TeritoryColors.textMuted,
               ),
             ),
-            const SizedBox(height: 32),
           ],
-        ),
+          if (profile.bio.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              profile.bio,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                color: TeritoryColors.textPrimary,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Resolves the relationship state from the live friend/request lists and
+/// renders exactly one honest action.
+class _FriendActionRow extends ConsumerWidget {
+  const _FriendActionRow({
+    required this.profile,
+    required this.busy,
+    required this.onAdd,
+    required this.onAccept,
+    required this.onRemove,
+  });
+
+  final ApiUser profile;
+  final bool busy;
+  final VoidCallback onAdd;
+  final ValueChanged<String> onAccept;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final friends = ref.watch(friendsLiveProvider).valueOrNull;
+    final requests = ref.watch(friendRequestsLiveProvider).valueOrNull;
+
+    Widget child(String label, VoidCallback? onPressed,
+        {bool outlined = false, IconData icon = Icons.person_add_rounded}) {
+      final button = outlined
+          ? OutlinedButton.icon(
+              onPressed: busy ? null : onPressed,
+              icon: Icon(icon, size: 18),
+              label: Text(
+                label,
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: TeritoryColors.textPrimary,
+                side: const BorderSide(color: TeritoryColors.border),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            )
+          : ElevatedButton.icon(
+              onPressed: busy ? null : onPressed,
+              icon: Icon(icon, size: 18),
+              label: Text(
+                label,
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: TeritoryColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            );
+
+      return SizedBox(width: double.infinity, child: button);
+    }
+
+    if (friends == null || requests == null) {
+      return busy
+          ? const Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          : child('Loading relationship…', null, outlined: true);
+    }
+
+    for (final friend in friends) {
+      if (friend.user.id == profile.id) {
+        return child(
+          'Remove friend',
+          () => onRemove(friend.relationshipId),
+          outlined: true,
+          icon: Icons.person_remove_rounded,
+        );
+      }
+    }
+
+    for (final request in requests.incoming) {
+      if (request.user.id == profile.id) {
+        return child(
+          'Accept friend request',
+          () => onAccept(request.relationshipId),
+          icon: Icons.how_to_reg_rounded,
+        );
+      }
+    }
+
+    for (final request in requests.outgoing) {
+      if (request.user.id == profile.id) {
+        return child('Request pending', null, outlined: true,
+            icon: Icons.hourglass_top_rounded);
+      }
+    }
+
+    return child('Add Friend', onAdd);
+  }
+}
+
+class _StatsRow extends StatelessWidget {
+  const _StatsRow({required this.profile});
+
+  final ApiUser profile;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _stat('${profile.totalFlags}', 'Flags'),
+          _stat('${profile.majorFlags}', 'Major'),
+          _stat('${profile.countriesVisited}', 'Countries'),
+          _stat('${profile.continentsVisited}', 'Continents'),
+          _stat('${profile.completedTripsCount}', 'Trips'),
+        ],
       ),
     );
   }
 
-  Widget _buildStatItem(String value, String label) {
+  Widget _stat(String value, String label) {
     return Column(
       children: [
         Text(
@@ -436,27 +505,23 @@ class FriendProfileScreen extends ConsumerWidget {
       ],
     );
   }
+}
 
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Text(
-        title,
-        style: GoogleFonts.plusJakartaSans(
-          fontSize: 15,
-          fontWeight: FontWeight.w800,
-          color: TeritoryColors.textPrimary,
-        ),
-      ),
-    );
-  }
+class _FootprintMap extends StatelessWidget {
+  const _FootprintMap({required this.flags});
 
-  Widget _buildCompletedTripCard(String name, String date, String distance) {
+  final List<ApiFlag> flags;
+
+  @override
+  Widget build(BuildContext context) {
+    final center = flags.isNotEmpty
+        ? flags.first.coordinates
+        : const LatLng(10.0889, 77.0595);
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      height: 220,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: TeritoryColors.border),
         boxShadow: [
           BoxShadow(
@@ -466,72 +531,178 @@ class FriendProfileScreen extends ConsumerWidget {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Stack(
+          children: [
+            FlutterMap(
+              options: MapOptions(initialCenter: center, initialZoom: 6.0),
               children: [
-                Text(
-                  name,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: TeritoryColors.textPrimary,
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.onway.teritory',
+                  tileBuilder: (context, tileWidget, tile) => ColorFiltered(
+                    colorFilter: const ColorFilter.matrix(<double>[
+                      -0.20, -0.15, -0.30, 0.0, 140,
+                      -0.45, 0.20, -0.35, 0.0, 165,
+                      -0.55, 0.05, -0.05, 0.0, 185,
+                      0.0, 0.0, 0.0, 1.0, 0,
+                    ]),
+                    child: tileWidget,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '$date • $distance',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    color: TeritoryColors.textSecondary,
-                  ),
+                MarkerLayer(
+                  markers: flags.map((flag) {
+                    return Marker(
+                      point: flag.coordinates,
+                      width: 28,
+                      height: 28,
+                      child: GestureDetector(
+                        onTap: () =>
+                            LiveFlagDetailSheet.show(context, flag: flag),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: flag.isMajorFlag
+                                ? TeritoryColors.majorGold
+                                : TeritoryColors.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: Icon(
+                            flag.isMajorFlag
+                                ? Icons.military_tech_rounded
+                                : Icons.flag_rounded,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ],
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: TeritoryColors.validatedGreen.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              '✅ Completed',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: TeritoryColors.validatedGreen,
+            if (flags.isEmpty)
+              const Center(
+                child: Text(
+                  'No flags on the map yet',
+                  style: TextStyle(color: TeritoryColors.textSecondary),
+                ),
               ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
+}
 
-  Marker _buildFlagMarker(LatLng point, bool isMajor) {
-    return Marker(
-      point: point,
-      width: 28,
-      height: 28,
+class _FlagRow extends StatelessWidget {
+  const _FlagRow({required this.flag, required this.onTap});
+
+  final ApiFlag flag;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final location = [flag.city, flag.country]
+        .where((part) => part.trim().isNotEmpty)
+        .join(', ');
+
+    return GestureDetector(
+      onTap: onTap,
       child: Container(
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isMajor ? TeritoryColors.majorGold : TeritoryColors.primary,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.25),
-              blurRadius: 4,
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: TeritoryColors.border),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              flag.isMajorFlag
+                  ? Icons.military_tech_rounded
+                  : Icons.flag_rounded,
+              color: flag.isMajorFlag
+                  ? TeritoryColors.majorGold
+                  : TeritoryColors.primary,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    flag.placeName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: TeritoryColors.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    location.isEmpty ? flag.continent : location,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      color: TeritoryColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              flag.category,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 10,
+                color: TeritoryColors.primary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ),
-        child: Icon(
-          isMajor ? Icons.military_tech_rounded : Icons.flag_rounded,
-          color: Colors.white,
-          size: 14,
+      ),
+    );
+  }
+}
+
+class _MessageState extends StatelessWidget {
+  const _MessageState({
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.person_off_outlined,
+                size: 52, color: TeritoryColors.textMuted),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 14,
+                color: TeritoryColors.textSecondary,
+              ),
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 14),
+              FilledButton(onPressed: onAction, child: Text(actionLabel!)),
+            ],
+          ],
         ),
       ),
     );

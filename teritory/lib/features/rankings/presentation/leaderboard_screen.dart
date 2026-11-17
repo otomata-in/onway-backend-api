@@ -4,58 +4,122 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/models/leaderboard_models.dart';
 import '../../../core/providers/auth_provider.dart';
-import '../../../core/providers/data_providers.dart';
+import '../../../core/services/api_service.dart';
 import '../../../core/theme/teritory_theme.dart';
-
-// ─── Local state providers ──────────────────────────────────────────────────
-
-final _selectedScopeProvider =
-    StateProvider<LeaderboardScope>((ref) => LeaderboardScope.global);
-
-final _selectedPeriodProvider =
-    StateProvider<LeaderboardPeriod>((ref) => LeaderboardPeriod.alltime);
-
-final _scoreBreakdownExpandedProvider = StateProvider<bool>((ref) => false);
+import '../application/rankings_provider.dart';
 
 // ─── Screen ─────────────────────────────────────────────────────────────────
 
-class LeaderboardScreen extends ConsumerWidget {
+class LeaderboardScreen extends ConsumerStatefulWidget {
   const LeaderboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final scope = ref.watch(_selectedScopeProvider);
-    final period = ref.watch(_selectedPeriodProvider);
-    final entries = ref.watch(
-      leaderboardProvider((scope: scope, period: period)),
-    );
+  ConsumerState<LeaderboardScreen> createState() => _LeaderboardScreenState();
+}
+
+class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
+  LeaderboardScope _scope = LeaderboardScope.global;
+  LeaderboardPeriod _period = LeaderboardPeriod.alltime;
+  String? _country;
+  String? _state;
+  String? _district;
+  bool _breakdownExpanded = false;
+
+  LeaderboardQuery get _query => LeaderboardQuery(
+        scope: _scope,
+        period: _period,
+        country: _scope == LeaderboardScope.country ? _country : null,
+        state: _scope == LeaderboardScope.state ? _state : null,
+        district: _scope == LeaderboardScope.district ? _district : null,
+      );
+
+  String? get _missingGeoValue {
+    switch (_scope) {
+      case LeaderboardScope.country:
+        return (_country ?? '').isEmpty ? 'country' : null;
+      case LeaderboardScope.state:
+        return (_state ?? '').isEmpty ? 'state' : null;
+      case LeaderboardScope.district:
+        return (_district ?? '').isEmpty ? 'district' : null;
+      default:
+        return null;
+    }
+  }
+
+  /// Picks the first live option when a geo scope has no selection yet, so the
+  /// list never sits empty waiting for a tap.
+  void _applyFacetDefaults(RankingsFacets facets) {
+    if (!mounted) return;
+    setState(() {
+      switch (_scope) {
+        case LeaderboardScope.country:
+          _country ??= facets.countries.firstOrNull;
+        case LeaderboardScope.state:
+          _state ??= facets.states.firstOrNull;
+        case LeaderboardScope.district:
+          _district ??= facets.districts.firstOrNull;
+        default:
+          break;
+      }
+    });
+  }
+
+  void _changeScope(LeaderboardScope scope) {
+    setState(() => _scope = scope);
+    final facets = ref.read(rankingsFacetsProvider).valueOrNull;
+    if (facets != null) _applyFacetDefaults(facets);
+  }
+
+  Future<void> _refresh(LeaderboardQuery query) async {
+    ref.invalidate(rankingsFacetsProvider);
+    ref.invalidate(myRankProvider);
+    ref.invalidate(rankingsProvider(query));
+    try {
+      await ref.read(rankingsProvider(query).future);
+    } on ApiException {
+      // The error state renders the message; refresh just ends here.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Keep geo defaults in sync when the live facets finish loading.
+    ref.listen(rankingsFacetsProvider, (previous, next) {
+      next.whenData(_applyFacetDefaults);
+    });
+
+    final facetsAsync = ref.watch(rankingsFacetsProvider);
+    final query = _query;
+    final missingGeo = _missingGeoValue;
+    final entriesAsync = missingGeo == null ? ref.watch(rankingsProvider(query)) : null;
+    final myRankAsync = ref.watch(myRankProvider);
     final currentUser = ref.watch(currentUserProvider);
 
-    // Find the current user's entry
+    final entries = entriesAsync?.valueOrNull ?? const <LeaderboardEntry>[];
     LeaderboardEntry? myEntry;
-    for (final e in entries) {
-      if (e.userId == currentUser.id) {
-        myEntry = e;
+    for (final entry in entries) {
+      if (entry.userId == currentUser.id) {
+        myEntry = entry;
         break;
       }
     }
 
-    // Top 3 and rest
     final top3 = entries.where((e) => e.rank <= 3).toList()
       ..sort((a, b) => a.rank.compareTo(b.rank));
     final rest = entries.where((e) => e.rank > 3).toList()
       ..sort((a, b) => a.rank.compareTo(b.rank));
 
-    // Nearest competitor (person ranked directly above the current user)
     LeaderboardEntry? nearestCompetitor;
     if (myEntry != null && myEntry.rank > 1) {
-      for (final e in entries) {
-        if (e.rank == myEntry.rank - 1) {
-          nearestCompetitor = e;
+      for (final entry in entries) {
+        if (entry.rank == myEntry.rank - 1) {
+          nearestCompetitor = entry;
           break;
         }
       }
     }
+
+    final myRank = myRankAsync.valueOrNull;
 
     return Scaffold(
       backgroundColor: TeritoryColors.background,
@@ -91,110 +155,351 @@ class LeaderboardScreen extends ConsumerWidget {
       ),
       body: Stack(
         children: [
-          CustomScrollView(
-            slivers: [
-              // ── Scope pills ────────────────────────────────────────
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                  child: _ScopePills(
-                    selected: scope,
-                    onChanged: (s) =>
-                        ref.read(_selectedScopeProvider.notifier).state = s,
-                  ),
-                ),
-              ),
-
-              // ── Time filter ────────────────────────────────────────
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: _TimeFilter(
-                    selected: period,
-                    onChanged: (p) =>
-                        ref.read(_selectedPeriodProvider.notifier).state = p,
-                  ),
-                ),
-              ),
-
-              // ── Empty state ────────────────────────────────────────
-              if (entries.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: _EmptyState(scope: scope, period: period),
-                )
-              else ...[
-                // ── Top 3 Podium ─────────────────────────────────────
-                if (top3.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-                      child: _PodiumSection(top3: top3),
+          RefreshIndicator(
+            color: TeritoryColors.primary,
+            onRefresh: () => _refresh(query),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: _ScopePills(
+                      selected: _scope,
+                      onChanged: _changeScope,
                     ),
                   ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: _TimeFilter(
+                      selected: _period,
+                      onChanged: (period) =>
+                          setState(() => _period = period),
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: _GeoFilterBar(
+                    scope: _scope,
+                    facetsAsync: facetsAsync,
+                    country: _country,
+                    state: _state,
+                    district: _district,
+                    onCountryChanged: (value) =>
+                        setState(() => _country = value),
+                    onStateChanged: (value) => setState(() => _state = value),
+                    onDistrictChanged: (value) =>
+                        setState(() => _district = value),
+                    onRetryFacets: () =>
+                        ref.invalidate(rankingsFacetsProvider),
+                  ),
+                ),
 
-                // ── Ranked list ──────────────────────────────────────
-                if (rest.isNotEmpty)
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    sliver: SliverToBoxAdapter(
-                      child: Text(
-                        'Rankings',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: TeritoryColors.textPrimary,
+                if (entriesAsync == null)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _MissingFilterState(missing: missingGeo!),
+                  )
+                else
+                  ...entriesAsync.when(
+                    loading: () => [
+                      const SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                              color: TeritoryColors.primary),
                         ),
                       ),
-                    ),
-                  ),
-
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) =>
-                          _RankedTile(entry: rest[index]),
-                      childCount: rest.length,
-                    ),
-                  ),
-                ),
-
-                // ── Score breakdown ──────────────────────────────────
-                if (myEntry != null)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                      child: _ScoreBreakdownSection(
-                        entry: myEntry,
-                        isExpanded: ref.watch(_scoreBreakdownExpandedProvider),
-                        onToggle: () => ref
-                            .read(_scoreBreakdownExpandedProvider.notifier)
-                            .state = !ref.read(_scoreBreakdownExpandedProvider),
+                    ],
+                    error: (error, _) => [
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: _ErrorState(
+                          message: error is ApiException
+                              ? error.message
+                              : 'Could not load the rankings. Check the API and retry.',
+                          onRetry: () =>
+                              ref.invalidate(rankingsProvider(query)),
+                        ),
                       ),
-                    ),
+                    ],
+                    data: (entries) {
+                      if (entries.isEmpty) {
+                        return [
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: _EmptyState(scope: _scope, period: _period),
+                          ),
+                        ];
+                      }
+                      return [
+                        if (top3.isNotEmpty)
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                              child: _PodiumSection(top3: top3),
+                            ),
+                          ),
+                        if (rest.isNotEmpty)
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                            sliver: SliverToBoxAdapter(
+                              child: Text(
+                                'Rankings',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: TeritoryColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                          sliver: SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) =>
+                                  _RankedTile(entry: rest[index]),
+                              childCount: rest.length,
+                            ),
+                          ),
+                        ),
+                        if (myEntry != null)
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                              child: _ScoreBreakdownSection(
+                                myRankAsync: myRankAsync,
+                                isExpanded: _breakdownExpanded,
+                                onToggle: () => setState(
+                                    () => _breakdownExpanded = !_breakdownExpanded),
+                                onRetry: () => ref.invalidate(myRankProvider),
+                              ),
+                            ),
+                          ),
+                        const SliverToBoxAdapter(child: SizedBox(height: 120)),
+                      ];
+                    },
                   ),
-
-                // Bottom padding for the floating card
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 120),
-                ),
               ],
-            ],
+            ),
           ),
 
-          // ── My Rank floating card ──────────────────────────────────
-          if (myEntry != null)
+          if (myEntry != null || myRank != null)
             Positioned(
               left: 16,
               right: 16,
               bottom: MediaQuery.of(context).padding.bottom + 16,
               child: _MyRankCard(
                 entry: myEntry,
+                myRank: myRank,
+                fallbackName: currentUser.displayName,
+                fallbackAvatar: currentUser.avatarUrl,
                 nearestCompetitor: nearestCompetitor,
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Geo filters ────────────────────────────────────────────────────────────
+
+class _GeoFilterBar extends StatelessWidget {
+  const _GeoFilterBar({
+    required this.scope,
+    required this.facetsAsync,
+    required this.country,
+    required this.state,
+    required this.district,
+    required this.onCountryChanged,
+    required this.onStateChanged,
+    required this.onDistrictChanged,
+    required this.onRetryFacets,
+  });
+
+  final LeaderboardScope scope;
+  final AsyncValue<RankingsFacets> facetsAsync;
+  final String? country;
+  final String? state;
+  final String? district;
+  final ValueChanged<String?> onCountryChanged;
+  final ValueChanged<String?> onStateChanged;
+  final ValueChanged<String?> onDistrictChanged;
+  final VoidCallback onRetryFacets;
+
+  @override
+  Widget build(BuildContext context) {
+    final isGeoScope = scope == LeaderboardScope.country ||
+        scope == LeaderboardScope.state ||
+        scope == LeaderboardScope.district;
+    if (!isGeoScope) return const SizedBox(height: 4);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: facetsAsync.when(
+        loading: () => const LinearProgressIndicator(minHeight: 2),
+        error: (_, _) => Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Could not load filter options.',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  color: TeritoryColors.textSecondary,
+                ),
+              ),
+            ),
+            TextButton(onPressed: onRetryFacets, child: const Text('Retry')),
+          ],
+        ),
+        data: (facets) {
+          final options = scope == LeaderboardScope.country
+              ? facets.countries
+              : scope == LeaderboardScope.state
+                  ? facets.states
+                  : facets.districts;
+          final selected = scope == LeaderboardScope.country
+              ? country
+              : scope == LeaderboardScope.state
+                  ? state
+                  : district;
+          final label = scope == LeaderboardScope.country
+              ? 'Country'
+              : scope == LeaderboardScope.state
+                  ? 'State'
+                  : 'District';
+          final onChanged = scope == LeaderboardScope.country
+              ? onCountryChanged
+              : scope == LeaderboardScope.state
+                  ? onStateChanged
+                  : onDistrictChanged;
+
+          if (options.isEmpty) {
+            return Text(
+              'No ${label.toLowerCase()} data in the rankings yet.',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                color: TeritoryColors.textSecondary,
+              ),
+            );
+          }
+
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: TeritoryColors.border),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.filter_alt_rounded,
+                  size: 16,
+                  color: TeritoryColors.textSecondary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: TeritoryColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      key: ValueKey('$label-${options.length}'),
+                      value: options.contains(selected) ? selected : null,
+                      isExpanded: true,
+                      hint: Text(
+                        'Select ${label.toLowerCase()}',
+                        style: GoogleFonts.plusJakartaSans(fontSize: 13),
+                      ),
+                      items: options
+                          .map((option) => DropdownMenuItem(
+                                value: option,
+                                child: Text(
+                                  option,
+                                  style:
+                                      GoogleFonts.plusJakartaSans(fontSize: 13),
+                                ),
+                              ))
+                          .toList(),
+                      onChanged: onChanged,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─── State widgets ──────────────────────────────────────────────────────────
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_rounded,
+                size: 48, color: TeritoryColors.textMuted),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                color: TeritoryColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MissingFilterState extends StatelessWidget {
+  const _MissingFilterState({required this.missing});
+
+  final String missing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Text(
+          'Choose a $missing to see its rankings.',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 13,
+            color: TeritoryColors.textSecondary,
+          ),
+        ),
       ),
     );
   }
@@ -371,6 +676,12 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final periodLabel = switch (period) {
+      LeaderboardPeriod.alltime => 'all time',
+      LeaderboardPeriod.month => 'this month',
+      LeaderboardPeriod.week => 'this week',
+    };
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(48),
@@ -390,7 +701,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Be the first to earn points in this category!\nDrop flags, complete trips, and join rallies.',
+              'Nobody has scored in this filter for $periodLabel.\nDrop flags, complete trips, and join rallies to appear here.',
               textAlign: TextAlign.center,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 14,
@@ -405,6 +716,63 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
+// ─── Avatars ────────────────────────────────────────────────────────────────
+
+class _Avatar extends StatelessWidget {
+  const _Avatar({
+    required this.url,
+    required this.name,
+    required this.radius,
+    this.borderColor,
+    this.borderWidth = 2,
+    this.shadowColor,
+  });
+
+  final String url;
+  final String name;
+  final double radius;
+  final Color? borderColor;
+  final double borderWidth;
+  final Color? shadowColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: borderColor == null
+            ? null
+            : Border.all(color: borderColor!, width: borderWidth),
+        boxShadow: shadowColor == null
+            ? null
+            : [
+                BoxShadow(
+                  color: shadowColor!.withValues(alpha: 0.4),
+                  blurRadius: 12,
+                  spreadRadius: 1,
+                ),
+              ],
+      ),
+      child: CircleAvatar(
+        radius: radius,
+        backgroundColor: TeritoryColors.surfaceContainer,
+        backgroundImage: url.isEmpty ? null : NetworkImage(url),
+        onBackgroundImageError: url.isEmpty ? null : (_, _) {},
+        child: url.isEmpty
+            ? Text(
+                name.isEmpty ? '?' : name[0].toUpperCase(),
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: radius * 0.8,
+                  fontWeight: FontWeight.w800,
+                  color: TeritoryColors.textSecondary,
+                ),
+              )
+            : null,
+      ),
+    );
+  }
+}
+
 // ─── Top 3 Podium ───────────────────────────────────────────────────────────
 
 class _PodiumSection extends StatelessWidget {
@@ -414,12 +782,11 @@ class _PodiumSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Layout: [Rank 2] [Rank 1 (taller)] [Rank 3]
     LeaderboardEntry? rank1, rank2, rank3;
-    for (final e in top3) {
-      if (e.rank == 1) rank1 = e;
-      if (e.rank == 2) rank2 = e;
-      if (e.rank == 3) rank3 = e;
+    for (final entry in top3) {
+      if (entry.rank == 1) rank1 = entry;
+      if (entry.rank == 2) rank2 = entry;
+      if (entry.rank == 3) rank3 = entry;
     }
 
     return Container(
@@ -441,7 +808,6 @@ class _PodiumSection extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Title
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -459,12 +825,9 @@ class _PodiumSection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-
-          // Podium columns
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Rank 2 — left
               Expanded(
                 child: rank2 != null
                     ? _PodiumColumn(
@@ -478,8 +841,6 @@ class _PodiumSection extends StatelessWidget {
                       )
                     : const SizedBox.shrink(),
               ),
-
-              // Rank 1 — center (tallest)
               Expanded(
                 child: rank1 != null
                     ? _PodiumColumn(
@@ -494,8 +855,6 @@ class _PodiumSection extends StatelessWidget {
                       )
                     : const SizedBox.shrink(),
               ),
-
-              // Rank 3 — right
               Expanded(
                 child: rank3 != null
                     ? _PodiumColumn(
@@ -539,7 +898,6 @@ class _PodiumColumn extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Crown for rank 1
         if (showCrown)
           ShaderMask(
             shaderCallback: (bounds) => const LinearGradient(
@@ -552,29 +910,15 @@ class _PodiumColumn extends StatelessWidget {
             ),
           ),
         if (showCrown) const SizedBox(height: 4),
-
-        // Avatar
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: medalColor, width: 3),
-            boxShadow: [
-              BoxShadow(
-                color: medalColor.withValues(alpha: 0.4),
-                blurRadius: 12,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-          child: CircleAvatar(
-            radius: avatarSize / 2,
-            backgroundColor: TeritoryColors.surfaceContainer,
-            backgroundImage: NetworkImage(entry.userAvatar),
-          ),
+        _Avatar(
+          url: entry.userAvatar,
+          name: entry.userName,
+          radius: avatarSize / 2,
+          borderColor: medalColor,
+          borderWidth: 3,
+          shadowColor: medalColor,
         ),
         const SizedBox(height: 8),
-
-        // Name
         Text(
           entry.userName,
           textAlign: TextAlign.center,
@@ -587,8 +931,6 @@ class _PodiumColumn extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 2),
-
-        // Handle
         Text(
           entry.userHandle,
           textAlign: TextAlign.center,
@@ -600,8 +942,6 @@ class _PodiumColumn extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-
-        // Score badge
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
@@ -618,8 +958,6 @@ class _PodiumColumn extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-
-        // Podium bar
         Container(
           height: height,
           width: double.infinity,
@@ -684,7 +1022,6 @@ class _RankedTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Rank number
           SizedBox(
             width: 36,
             child: Text(
@@ -696,16 +1033,8 @@ class _RankedTile extends StatelessWidget {
               ),
             ),
           ),
-
-          // Avatar
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: TeritoryColors.surfaceContainer,
-            backgroundImage: NetworkImage(entry.userAvatar),
-          ),
+          _Avatar(url: entry.userAvatar, name: entry.userName, radius: 22),
           const SizedBox(width: 12),
-
-          // Name and handle
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -727,7 +1056,6 @@ class _RankedTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-                // Stat badges
                 Wrap(
                   spacing: 6,
                   runSpacing: 4,
@@ -738,28 +1066,20 @@ class _RankedTile extends StatelessWidget {
                       color: TeritoryColors.primary,
                     ),
                     _StatBadge(
-                      icon: Icons.public_rounded,
-                      label: '${entry.countriesVisited}',
-                      color: TeritoryColors.sapphireBlue,
+                      icon: Icons.star_rounded,
+                      label: '${entry.majorFlags}',
+                      color: TeritoryColors.majorGold,
                     ),
                     _StatBadge(
                       icon: Icons.route_rounded,
                       label: '${entry.completedTrips}',
                       color: TeritoryColors.tripRoute,
                     ),
-                    if (entry.legendaryRallies > 0)
-                      _StatBadge(
-                        icon: Icons.flash_on_rounded,
-                        label: '${entry.legendaryRallies}',
-                        color: TeritoryColors.rallyGold,
-                      ),
                   ],
                 ),
               ],
             ),
           ),
-
-          // Score
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -786,8 +1106,6 @@ class _RankedTile extends StatelessWidget {
     );
   }
 }
-
-// ─── Stat Badge ─────────────────────────────────────────────────────────────
 
 class _StatBadge extends StatelessWidget {
   const _StatBadge({
@@ -827,21 +1145,35 @@ class _StatBadge extends StatelessWidget {
   }
 }
 
-// ─── Score Breakdown Section ────────────────────────────────────────────────
+// ─── Score Breakdown ────────────────────────────────────────────────────────
 
 class _ScoreBreakdownSection extends StatelessWidget {
   const _ScoreBreakdownSection({
-    required this.entry,
+    required this.myRankAsync,
     required this.isExpanded,
     required this.onToggle,
+    required this.onRetry,
   });
 
-  final LeaderboardEntry entry;
+  final AsyncValue<MyRank> myRankAsync;
   final bool isExpanded;
   final VoidCallback onToggle;
+  final VoidCallback onRetry;
+
+  static const _labels = <String, (String, IconData, Color)>{
+    'flagsPoints': ('Flags', Icons.flag_rounded, TeritoryColors.primary),
+    'majorFlagsPoints': ('Major flags', Icons.star_rounded, TeritoryColors.majorGold),
+    'countriesPoints': ('Countries', Icons.public_rounded, TeritoryColors.sapphireBlue),
+    'continentsPoints': ('Continents', Icons.explore_rounded, TeritoryColors.communityIndigo),
+    'tripsPoints': ('Completed trips', Icons.route_rounded, TeritoryColors.tripRoute),
+    'ralliesPoints': ('Legendary rallies', Icons.flash_on_rounded, TeritoryColors.rallyGold),
+    'stampsPoints': ('Passport stamps', Icons.verified_rounded, TeritoryColors.validatedGreen),
+  };
 
   @override
   Widget build(BuildContext context) {
+    final myRank = myRankAsync.valueOrNull;
+
     return Container(
       decoration: BoxDecoration(
         color: TeritoryColors.surface,
@@ -857,7 +1189,6 @@ class _ScoreBreakdownSection extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Header (tap to toggle)
           InkWell(
             onTap: onToggle,
             borderRadius: BorderRadius.circular(16),
@@ -889,7 +1220,7 @@ class _ScoreBreakdownSection extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'See how your score is calculated',
+                          'How the API calculates your score',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 12,
                             color: TeritoryColors.textSecondary,
@@ -908,8 +1239,6 @@ class _ScoreBreakdownSection extends StatelessWidget {
               ),
             ),
           ),
-
-          // Expandable content
           AnimatedCrossFade(
             firstChild: const SizedBox(width: double.infinity),
             secondChild: Padding(
@@ -918,84 +1247,69 @@ class _ScoreBreakdownSection extends StatelessWidget {
                 children: [
                   const Divider(height: 1, color: TeritoryColors.border),
                   const SizedBox(height: 12),
-                  _BreakdownRow(
-                    icon: Icons.flag_rounded,
-                    label: 'Total Flags',
-                    value: entry.totalFlags,
-                    color: TeritoryColors.primary,
-                  ),
-                  _BreakdownRow(
-                    icon: Icons.star_rounded,
-                    label: 'Major Flags',
-                    value: entry.majorFlags,
-                    color: TeritoryColors.majorGold,
-                  ),
-                  _BreakdownRow(
-                    icon: Icons.public_rounded,
-                    label: 'Countries Visited',
-                    value: entry.countriesVisited,
-                    color: TeritoryColors.sapphireBlue,
-                  ),
-                  _BreakdownRow(
-                    icon: Icons.explore_rounded,
-                    label: 'Continents Explored',
-                    value: entry.continentsExplored,
-                    color: TeritoryColors.communityIndigo,
-                  ),
-                  _BreakdownRow(
-                    icon: Icons.route_rounded,
-                    label: 'Completed Trips',
-                    value: entry.completedTrips,
-                    color: TeritoryColors.tripRoute,
-                  ),
-                  _BreakdownRow(
-                    icon: Icons.flash_on_rounded,
-                    label: 'Legendary Rallies',
-                    value: entry.legendaryRallies,
-                    color: TeritoryColors.rallyGold,
-                  ),
-                  _BreakdownRow(
-                    icon: Icons.groups_rounded,
-                    label: 'Community Contributions',
-                    value: entry.communityContributions,
-                    color: TeritoryColors.validatedGreen,
-                  ),
-                  _BreakdownRow(
-                    icon: Icons.local_fire_department_rounded,
-                    label: 'Streak Days',
-                    value: entry.streakDays,
-                    color: TeritoryColors.foodOrange,
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: TeritoryColors.primary.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  if (myRankAsync.isLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: CircularProgressIndicator(
+                          color: TeritoryColors.rallyGold),
+                    )
+                  else if (myRankAsync.hasError)
+                    Column(
                       children: [
                         Text(
-                          'Composite Score',
+                          myRankAsync.error is ApiException
+                              ? (myRankAsync.error as ApiException).message
+                              : 'Could not load your score breakdown.',
+                          textAlign: TextAlign.center,
                           style: GoogleFonts.plusJakartaSans(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: TeritoryColors.primary,
+                            fontSize: 12,
+                            color: TeritoryColors.textSecondary,
                           ),
                         ),
-                        Text(
-                          _formatScore(entry.compositeScore),
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            color: TeritoryColors.primary,
-                          ),
-                        ),
+                        TextButton(
+                            onPressed: onRetry, child: const Text('Retry')),
                       ],
+                    )
+                  else if (myRank != null) ...[
+                    for (final entry in _labels.entries)
+                      if (myRank.breakdown.containsKey(entry.key))
+                        _BreakdownRow(
+                          icon: entry.value.$2,
+                          label: entry.value.$1,
+                          value: myRank.breakdown[entry.key]!,
+                          color: entry.value.$3,
+                        ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: TeritoryColors.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Composite Score',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: TeritoryColors.primary,
+                            ),
+                          ),
+                          Text(
+                            _formatScore(myRank.score),
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: TeritoryColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -1048,7 +1362,7 @@ class _BreakdownRow extends StatelessWidget {
             ),
           ),
           Text(
-            '$value',
+            '$value pts',
             style: GoogleFonts.plusJakartaSans(
               fontSize: 14,
               fontWeight: FontWeight.w700,
@@ -1064,15 +1378,30 @@ class _BreakdownRow extends StatelessWidget {
 // ─── My Rank Floating Card ──────────────────────────────────────────────────
 
 class _MyRankCard extends StatelessWidget {
-  const _MyRankCard({required this.entry, this.nearestCompetitor});
+  const _MyRankCard({
+    required this.entry,
+    required this.myRank,
+    required this.fallbackName,
+    required this.fallbackAvatar,
+    this.nearestCompetitor,
+  });
 
-  final LeaderboardEntry entry;
+  final LeaderboardEntry? entry;
+  final MyRank? myRank;
+  final String fallbackName;
+  final String fallbackAvatar;
   final LeaderboardEntry? nearestCompetitor;
 
   @override
   Widget build(BuildContext context) {
-    final gap = nearestCompetitor != null
-        ? nearestCompetitor!.compositeScore - entry.compositeScore
+    final rank = entry?.rank ?? myRank?.globalRank;
+    final score = entry?.compositeScore ?? myRank?.score;
+    final name = entry?.userName ?? fallbackName;
+    final avatar = entry?.userAvatar ?? fallbackAvatar;
+    if (rank == null || score == null) return const SizedBox.shrink();
+
+    final gap = nearestCompetitor != null && entry != null
+        ? nearestCompetitor!.compositeScore - entry!.compositeScore
         : 0;
 
     return Container(
@@ -1093,7 +1422,6 @@ class _MyRankCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Rank badge
           Container(
             width: 44,
             height: 44,
@@ -1107,7 +1435,7 @@ class _MyRankCard extends StatelessWidget {
             ),
             child: Center(
               child: Text(
-                '#${entry.rank}',
+                '#$rank',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 16,
                   fontWeight: FontWeight.w900,
@@ -1117,16 +1445,8 @@ class _MyRankCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-
-          // Name and avatar
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: TeritoryColors.surfaceContainer,
-            backgroundImage: NetworkImage(entry.userAvatar),
-          ),
+          _Avatar(url: avatar, name: name, radius: 18),
           const SizedBox(width: 10),
-
-          // Info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1143,7 +1463,7 @@ class _MyRankCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  entry.userName,
+                  name,
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -1164,14 +1484,12 @@ class _MyRankCard extends StatelessWidget {
               ],
             ),
           ),
-
-          // Score
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                _formatScore(entry.compositeScore),
+                _formatScore(score),
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 18,
                   fontWeight: FontWeight.w900,
@@ -1201,7 +1519,6 @@ String _formatScore(int score) {
     return '${k.toStringAsFixed(k.truncateToDouble() == k ? 0 : 1)}K';
   }
   if (score >= 1000) {
-    // Add comma: e.g. 9,850
     final s = score.toString();
     return '${s.substring(0, s.length - 3)},${s.substring(s.length - 3)}';
   }

@@ -6,9 +6,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../../../core/theme/teritory_theme.dart';
-import '../../../core/providers/data_providers.dart';
+import '../../../core/models/api_flag.dart';
+import '../../../core/models/community_models.dart';
+import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
+import '../../../core/theme/teritory_theme.dart';
+import '../application/trips_provider.dart';
 
 class TripPlannerScreen extends ConsumerStatefulWidget {
   const TripPlannerScreen({super.key});
@@ -18,147 +21,54 @@ class TripPlannerScreen extends ConsumerStatefulWidget {
 }
 
 class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
-  final _originController = TextEditingController();
-  final _destController = TextEditingController();
   final _nameController = TextEditingController();
   final _descController = TextEditingController();
   final MapController _mapController = MapController();
 
-  LatLng? _origin;
-  LatLng? _destination;
+  ApiFlag? _origin;
+  ApiFlag? _destination;
   final List<_EditableWaypoint> _waypoints = [];
   bool _showDetailsForm = false;
+  bool _saving = false;
+  String? _communityId;
+  String? _communityName;
 
-  // Waypoint suggestions (simulated)
-  static final List<_WaypointSuggestion> _suggestions = [
-    _WaypointSuggestion('Lockhart Gap', LatLng(10.0712, 77.0523), 'viewpoint', 8),
-    _WaypointSuggestion('Top Station', LatLng(10.1262, 77.2354), 'viewpoint', 12),
-    _WaypointSuggestion('Chinnar Wildlife Sanctuary', LatLng(10.3000, 77.1833), 'wildlife', 5),
-    _WaypointSuggestion('Marayoor Sandalwood Forest', LatLng(10.2762, 77.1625), 'forest', 3),
-    _WaypointSuggestion('Berijam Lake', LatLng(10.2167, 77.4333), 'lake', 6),
-    _WaypointSuggestion('Edakkal Caves', LatLng(11.6308, 76.0297), 'heritage', 10),
-    _WaypointSuggestion('Meenmutty Falls', LatLng(11.6833, 76.0167), 'waterfall', 7),
-    _WaypointSuggestion('Varkala Cliff', LatLng(8.7379, 76.7163), 'cliff', 11),
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    // Default origin/destination for demo
-    _origin = LatLng(10.0889, 77.0595);
-    _destination = LatLng(10.2381, 77.4892);
-    _originController.text = 'Munnar Town';
-    _destController.text = 'Kodaikanal';
-  }
+  /// Typical road day. Kept explicit so the ETA is a stated assumption rather
+  /// than a number pulled out of the air.
+  static const double _kmPerDay = 150;
 
   @override
   void dispose() {
-    _originController.dispose();
-    _destController.dispose();
     _nameController.dispose();
     _descController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleSavePlan() async {
-    final origin = _originController.text.trim();
-    final dest = _destController.text.trim();
-    final name = _nameController.text.trim().isNotEmpty
-        ? _nameController.text.trim()
-        : '$origin to $dest Expedition';
-
-    if (origin.isEmpty || dest.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please specify origin and destination')),
-      );
-      return;
-    }
-
-    final List<Map<String, dynamic>> wpList = [];
-    int idx = 0;
-    if (_origin != null) {
-      wpList.add({
-        'orderIndex': idx++,
-        'placeName': origin,
-        'latitude': _origin!.latitude,
-        'longitude': _origin!.longitude,
-        'category': 'Origin',
-      });
-    }
-    for (final wp in _waypoints) {
-      wpList.add({
-        'orderIndex': idx++,
-        'placeName': wp.name,
-        'latitude': wp.location.latitude,
-        'longitude': wp.location.longitude,
-        'category': wp.category,
-      });
-    }
-    if (_destination != null) {
-      wpList.add({
-        'orderIndex': idx++,
-        'placeName': dest,
-        'latitude': _destination!.latitude,
-        'longitude': _destination!.longitude,
-        'category': 'Destination',
-      });
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        duration: Duration(seconds: 1),
-        content: Text('Saving expedition plan to backend...'),
-      ),
-    );
-
-    final created = await TeritoryRepository.instance.createTripPlan(
-      name: name,
-      originName: origin,
-      destinationName: dest,
-      description: _descController.text.trim(),
-      totalDistanceKm: 145.0,
-      estimatedDays: 3,
-      waypoints: wpList,
-    );
-
-    if (!mounted) return;
-    if (created != null) {
-      ref.read(tripPlansNotifierProvider.notifier).refresh();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '🎯 "$name" successfully created!',
-            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
-          ),
-          backgroundColor: TeritoryColors.validatedGreen,
-        ),
-      );
-      Navigator.of(context).pop();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Trip plan saved!',
-            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
-          ),
-          backgroundColor: TeritoryColors.validatedGreen,
-        ),
-      );
-    }
-  }
-
   List<LatLng> get _routePoints {
     final points = <LatLng>[];
-    if (_origin != null) points.add(_origin!);
+    if (_origin != null) points.add(_origin!.coordinates);
     for (final wp in _waypoints) {
       points.add(wp.location);
     }
-    if (_destination != null) points.add(_destination!);
+    if (_destination != null) points.add(_destination!.coordinates);
     return points;
   }
 
+  double get _distanceKm {
+    final points = _routePoints;
+    if (points.length < 2) return 0;
+    const distance = Distance();
+    var total = 0.0;
+    for (var i = 1; i < points.length; i++) {
+      total += distance.as(LengthUnit.Kilometer, points[i - 1], points[i]);
+    }
+    return total;
+  }
+
+  int get _estimatedDays => (_distanceKm / _kmPerDay).ceil().clamp(1, 30);
+
   LatLng get _mapCenter {
-    if (_routePoints.isEmpty) return LatLng(10.15, 77.25);
+    if (_routePoints.isEmpty) return const LatLng(10.15, 77.25);
     final lats = _routePoints.map((p) => p.latitude);
     final lngs = _routePoints.map((p) => p.longitude);
     return LatLng(
@@ -167,20 +77,173 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
     );
   }
 
-  void _addWaypoint(_WaypointSuggestion suggestion) {
+  void _toast(String message, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: error ? TeritoryColors.expiredRed : null,
+      ),
+    );
+  }
+
+  Future<void> _pickPlace({required bool isOrigin}) async {
+    final places = ref.read(plannerPlacesProvider).valueOrNull;
+    if (places == null || places.isEmpty) {
+      _toast(
+        'Flagged places are still loading. Check the API and try again.',
+        error: true,
+      );
+      return;
+    }
+
+    final selected = await showModalBottomSheet<ApiFlag>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _PlacePickerSheet(
+        title: isOrigin ? 'Choose origin' : 'Choose destination',
+        places: places,
+      ),
+    );
+    if (selected == null || !mounted) return;
+
     setState(() {
-      _waypoints.add(_EditableWaypoint(
-        name: suggestion.name,
-        location: suggestion.location,
-        category: suggestion.category,
-      ));
+      if (isOrigin) {
+        _origin = selected;
+      } else {
+        _destination = selected;
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _mapController.move(_mapCenter, 9);
+    });
+  }
+
+  Future<void> _pickCommunity() async {
+    final communities = ref.read(plannerCommunitiesProvider).valueOrNull;
+    if (communities == null) {
+      _toast(
+        'Communities are still loading. Plan without one for now.',
+        error: true,
+      );
+      return;
+    }
+
+    final selection = await showModalBottomSheet<_CommunityChoice>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CommunityPickerSheet(communities: communities),
+    );
+    if (selection == null || !mounted) return;
+
+    setState(() {
+      _communityId = selection.id;
+      _communityName = selection.name;
+    });
+  }
+
+  Future<void> _handleSavePlan() async {
+    if (_saving) return;
+
+    final origin = _origin;
+    final destination = _destination;
+    if (origin == null || destination == null) {
+      _toast('Pick an origin and a destination from flagged places.',
+          error: true);
+      return;
+    }
+
+    final name = _nameController.text.trim().isNotEmpty
+        ? _nameController.text.trim()
+        : '${origin.placeName} to ${destination.placeName}';
+
+    final waypoints = <Map<String, dynamic>>[];
+    var index = 0;
+    waypoints.add({
+      'orderIndex': index++,
+      'placeName': origin.placeName,
+      'latitude': origin.latitude,
+      'longitude': origin.longitude,
+      'category': 'origin',
+    });
+    double previousLat = origin.latitude;
+    double previousLng = origin.longitude;
+    const distance = Distance();
+    for (final waypoint in _waypoints) {
+      final stepKm = distance.as(
+        LengthUnit.Kilometer,
+        LatLng(previousLat, previousLng),
+        waypoint.location,
+      );
+      waypoints.add({
+        'orderIndex': index++,
+        'placeName': waypoint.name,
+        'latitude': waypoint.location.latitude,
+        'longitude': waypoint.location.longitude,
+        'category': waypoint.category,
+        'distanceFromPrevKm': double.parse(stepKm.toStringAsFixed(1)),
+      });
+      previousLat = waypoint.location.latitude;
+      previousLng = waypoint.location.longitude;
+    }
+    waypoints.add({
+      'orderIndex': index++,
+      'placeName': destination.placeName,
+      'latitude': destination.latitude,
+      'longitude': destination.longitude,
+      'category': 'destination',
+      'distanceFromPrevKm': double.parse(
+        distance
+            .as(
+              LengthUnit.Kilometer,
+              LatLng(previousLat, previousLng),
+              destination.coordinates,
+            )
+            .toStringAsFixed(1),
+      ),
+    });
+
+    setState(() => _saving = true);
+    try {
+      await TeritoryRepository.instance.createPlan(
+        name: name,
+        originName: origin.placeName,
+        destinationName: destination.placeName,
+        description: _descController.text.trim(),
+        communityId: _communityId,
+        totalDistanceKm: double.parse(_distanceKm.toStringAsFixed(1)),
+        estimatedDays: _estimatedDays,
+        waypoints: waypoints,
+      );
+      if (!mounted) return;
+      ref.invalidate(tripsHubProvider);
+      ref.invalidate(savedPlanIdsProvider);
+      _toast('“$name” created');
+      context.pop();
+    } on ApiException catch (e) {
+      _toast(e.message, error: true);
+    } catch (_) {
+      _toast('Could not save this plan. Check your connection.', error: true);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  void _addWaypoint(ApiFlag place) {
+    setState(() {
+      _waypoints.add(
+        _EditableWaypoint(
+          name: place.placeName,
+          location: place.coordinates,
+          category: place.category.isEmpty ? 'general' : place.category,
+        ),
+      );
     });
   }
 
   void _removeWaypoint(int index) {
-    setState(() {
-      _waypoints.removeAt(index);
-    });
+    setState(() => _waypoints.removeAt(index));
   }
 
   @override
@@ -202,8 +265,14 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
         ),
         actions: [
           TextButton.icon(
-            onPressed: _handleSavePlan,
-            icon: const Icon(Icons.save_rounded, size: 18),
+            onPressed: _saving ? null : _handleSavePlan,
+            icon: _saving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save_rounded, size: 18),
             label: Text(
               'Save',
               style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
@@ -213,30 +282,30 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
       ),
       body: Column(
         children: [
-          // Origin & Destination inputs
           Container(
             color: Colors.white,
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             child: Column(
               children: [
-                _LocationInput(
-                  controller: _originController,
+                _PlaceField(
+                  place: _origin,
                   label: 'Origin',
                   icon: Icons.trip_origin_rounded,
                   iconColor: TeritoryColors.validatedGreen,
+                  onTap: () => _pickPlace(isOrigin: true),
                 ),
                 const SizedBox(height: 8),
-                _LocationInput(
-                  controller: _destController,
+                _PlaceField(
+                  place: _destination,
                   label: 'Destination',
                   icon: Icons.location_on_rounded,
                   iconColor: TeritoryColors.expiredRed,
+                  onTap: () => _pickPlace(isOrigin: false),
                 ),
               ],
             ),
           ),
 
-          // Map with oceanic theme
           Expanded(
             flex: 3,
             child: Stack(
@@ -256,7 +325,9 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                     ),
                     children: [
                       TileLayer(
-                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.onway.teritory',
                       ),
                       if (_routePoints.length >= 2)
                         PolylineLayer(
@@ -273,60 +344,39 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                         markers: [
                           if (_origin != null)
                             Marker(
-                              point: _origin!,
+                              point: _origin!.coordinates,
                               width: 36,
                               height: 36,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: TeritoryColors.validatedGreen,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 3),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: TeritoryColors.validatedGreen.withValues(alpha: 0.4),
-                                      blurRadius: 8,
-                                    ),
-                                  ],
-                                ),
-                                child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18),
+                              child: _MapPin(
+                                color: TeritoryColors.validatedGreen,
+                                icon: Icons.play_arrow_rounded,
                               ),
                             ),
                           if (_destination != null)
                             Marker(
-                              point: _destination!,
+                              point: _destination!.coordinates,
                               width: 36,
                               height: 36,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: TeritoryColors.expiredRed,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 3),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: TeritoryColors.expiredRed.withValues(alpha: 0.4),
-                                      blurRadius: 8,
-                                    ),
-                                  ],
-                                ),
-                                child: const Icon(Icons.flag_rounded, color: Colors.white, size: 18),
+                              child: _MapPin(
+                                color: TeritoryColors.expiredRed,
+                                icon: Icons.flag_rounded,
                               ),
                             ),
                           ..._waypoints.asMap().entries.map((entry) {
-                            final idx = entry.key;
-                            final wp = entry.value;
                             return Marker(
-                              point: wp.location,
+                              point: entry.value.location,
                               width: 32,
                               height: 32,
                               child: Container(
                                 decoration: BoxDecoration(
                                   color: TeritoryColors.rallyGold,
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2),
+                                  border:
+                                      Border.all(color: Colors.white, width: 2),
                                 ),
                                 child: Center(
                                   child: Text(
-                                    '${idx + 1}',
+                                    '${entry.key + 1}',
                                     style: GoogleFonts.plusJakartaSans(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w800,
@@ -343,13 +393,13 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                   ),
                 ),
 
-                // Corridor indicator overlay
-                if (_origin != null && _destination != null)
+                if (_routePoints.length >= 2)
                   Positioned(
                     top: 12,
                     left: 12,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E293B).withValues(alpha: 0.85),
                         borderRadius: BorderRadius.circular(20),
@@ -357,10 +407,11 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.route_rounded, color: TeritoryColors.tripRoute, size: 16),
+                          const Icon(Icons.route_rounded,
+                              color: TeritoryColors.tripRoute, size: 16),
                           const SizedBox(width: 6),
                           Text(
-                            'Route Corridor',
+                            '~${_distanceKm.toStringAsFixed(1)} km',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -375,7 +426,6 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
             ),
           ),
 
-          // Waypoint suggestions panel
           Expanded(
             flex: 4,
             child: Container(
@@ -402,8 +452,6 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-
-                  // Toggle between suggestions and form
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
@@ -412,7 +460,8 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                           label: 'Waypoints',
                           icon: Icons.add_location_alt_rounded,
                           isSelected: !_showDetailsForm,
-                          onTap: () => setState(() => _showDetailsForm = false),
+                          onTap: () =>
+                              setState(() => _showDetailsForm = false),
                         ),
                         const SizedBox(width: 8),
                         _ToggleChip(
@@ -425,7 +474,6 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-
                   Expanded(
                     child: _showDetailsForm
                         ? _buildDetailsForm()
@@ -440,48 +488,35 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.share_rounded, size: 18),
-                  label: Text(
-                    'Share',
-                    style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: TeritoryColors.sapphireBlue,
-                    side: const BorderSide(color: TeritoryColors.sapphireBlue),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _saving ? null : _handleSavePlan,
+              icon: _saving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.save_rounded, size: 18),
+              label: Text(
+                'Save Plan',
+                style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w700),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: ElevatedButton.icon(
-                  onPressed: _handleSavePlan,
-                  icon: const Icon(Icons.save_rounded, size: 18),
-                  label: Text(
-                    'Save Plan',
-                    style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: TeritoryColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    elevation: 0,
-                  ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: TeritoryColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
                 ),
+                elevation: 0,
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -489,9 +524,10 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
   }
 
   Widget _buildWaypointPanel() {
+    final placesAsync = ref.watch(plannerPlacesProvider);
+
     return Column(
       children: [
-        // Current waypoints (reorderable)
         if (_waypoints.isNotEmpty) ...[
           SizedBox(
             height: 52,
@@ -511,11 +547,13 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                 return Container(
                   key: ValueKey('wp_${wp.name}_$index'),
                   margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: TeritoryColors.tripRoute.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: TeritoryColors.tripRoute.withValues(alpha: 0.3)),
+                    border: Border.all(
+                        color: TeritoryColors.tripRoute.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -544,7 +582,8 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                       const SizedBox(width: 4),
                       GestureDetector(
                         onTap: () => _removeWaypoint(index),
-                        child: const Icon(Icons.close_rounded, size: 16, color: TeritoryColors.textMuted),
+                        child: const Icon(Icons.close_rounded,
+                            size: 16, color: TeritoryColors.textMuted),
                       ),
                     ],
                   ),
@@ -555,13 +594,12 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
           const SizedBox(height: 8),
         ],
 
-        // Suggestions
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              'Suggested Waypoints',
+              'Flagged Places',
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
@@ -573,64 +611,110 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
         const SizedBox(height: 8),
 
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _suggestions.length,
-            itemBuilder: (context, index) {
-              final s = _suggestions[index];
-              final isAdded = _waypoints.any((w) => w.name == s.name);
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: isAdded
-                      ? TeritoryColors.tripRoute.withValues(alpha: 0.06)
-                      : TeritoryColors.surfaceContainer,
-                  borderRadius: BorderRadius.circular(12),
-                  border: isAdded
-                      ? Border.all(color: TeritoryColors.tripRoute.withValues(alpha: 0.3))
-                      : null,
-                ),
-                child: ListTile(
-                  dense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                  leading: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: TeritoryColors.rallyGold.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
+          child: placesAsync.when(
+            loading: () => const Center(
+              child: CircularProgressIndicator(color: TeritoryColors.tripRoute),
+            ),
+            error: (error, _) => Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Could not load flagged places.',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        color: TeritoryColors.textSecondary,
+                      ),
                     ),
-                    child: const Icon(Icons.place_rounded, color: TeritoryColors.rallyGold, size: 20),
-                  ),
-                  title: Text(
-                    s.name,
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: () => ref.invalidate(plannerPlacesProvider),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            data: (places) {
+              final candidates = places.where((place) {
+                if (place.id == _origin?.id || place.id == _destination?.id) {
+                  return false;
+                }
+                return !_waypoints.any((w) => w.name == place.placeName);
+              }).toList();
+
+              if (candidates.isEmpty) {
+                return Center(
+                  child: Text(
+                    'No other flagged places nearby to add.',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: TeritoryColors.textPrimary,
-                    ),
-                  ),
-                  subtitle: Text(
-                    '${s.category} · ${s.flagCount} flags nearby',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
                       color: TeritoryColors.textMuted,
                     ),
                   ),
-                  trailing: isAdded
-                      ? const Icon(Icons.check_circle_rounded, color: TeritoryColors.tripRoute, size: 22)
-                      : GestureDetector(
-                          onTap: () => _addWaypoint(s),
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: TeritoryColors.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(Icons.add_rounded, color: TeritoryColors.primary, size: 18),
-                          ),
+                );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: candidates.length,
+                itemBuilder: (context, index) {
+                  final place = candidates[index];
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: TeritoryColors.surfaceContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 2),
+                      leading: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color:
+                              TeritoryColors.rallyGold.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                ),
+                        child: const Icon(Icons.place_rounded,
+                            color: TeritoryColors.rallyGold, size: 20),
+                      ),
+                      title: Text(
+                        place.placeName,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: TeritoryColors.textPrimary,
+                        ),
+                      ),
+                      subtitle: Text(
+                        [place.city, place.category]
+                            .where((part) => part.isNotEmpty)
+                            .join(' · '),
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          color: TeritoryColors.textMuted,
+                        ),
+                      ),
+                      trailing: GestureDetector(
+                        onTap: () => _addWaypoint(place),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: TeritoryColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.add_rounded,
+                              color: TeritoryColors.primary, size: 18),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -656,7 +740,8 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
           const SizedBox(height: 6),
           TextField(
             controller: _nameController,
-            style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w600),
+            style: GoogleFonts.plusJakartaSans(
+                fontSize: 14, fontWeight: FontWeight.w600),
             decoration: InputDecoration(
               hintText: 'e.g. Western Ghats Ridge Run',
               hintStyle: GoogleFonts.plusJakartaSans(
@@ -669,7 +754,8 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             ),
           ),
           const SizedBox(height: 16),
@@ -685,7 +771,8 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
           TextField(
             controller: _descController,
             maxLines: 3,
-            style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w500),
+            style: GoogleFonts.plusJakartaSans(
+                fontSize: 14, fontWeight: FontWeight.w500),
             decoration: InputDecoration(
               hintText: 'Describe the trek, terrain, and highlights...',
               hintStyle: GoogleFonts.plusJakartaSans(
@@ -703,7 +790,6 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Estimated stats
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -714,8 +800,8 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
               children: [
                 _EstimateField(
                   icon: Icons.straighten_rounded,
-                  label: 'Distance',
-                  value: '~145 km',
+                  label: 'Est. distance',
+                  value: '~${_distanceKm.toStringAsFixed(0)} km',
                 ),
                 Container(
                   width: 1,
@@ -724,8 +810,8 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                 ),
                 _EstimateField(
                   icon: Icons.schedule_rounded,
-                  label: 'Duration',
-                  value: '~72 hrs',
+                  label: 'Est. days',
+                  value: '~$_estimatedDays',
                 ),
                 Container(
                   width: 1,
@@ -734,15 +820,23 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                 ),
                 _EstimateField(
                   icon: Icons.flag_rounded,
-                  label: 'Waypoints',
-                  value: '${_waypoints.length}',
+                  label: 'Stops',
+                  value: '$_waypoints.length',
                 ),
               ],
             ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            'Distance is the straight-line sum between selected stops and days '
+            'assume ~${_kmPerDay.toInt()} km of travel per day.',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 11,
+              color: TeritoryColors.textMuted,
+            ),
+          ),
           const SizedBox(height: 16),
 
-          // Community selector
           Text(
             'Community (Optional)',
             style: GoogleFonts.plusJakartaSans(
@@ -752,27 +846,34 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            decoration: BoxDecoration(
-              color: TeritoryColors.surfaceContainer,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.groups_rounded, color: TeritoryColors.communityIndigo, size: 20),
-                const SizedBox(width: 10),
-                Text(
-                  'Munnar Trail Blazers',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: TeritoryColors.textPrimary,
+          GestureDetector(
+            onTap: _pickCommunity,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(
+                color: TeritoryColors.surfaceContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.groups_rounded,
+                      color: TeritoryColors.communityIndigo, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _communityName ?? 'Personal plan',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: TeritoryColors.textPrimary,
+                      ),
+                    ),
                   ),
-                ),
-                const Spacer(),
-                const Icon(Icons.chevron_right_rounded, color: TeritoryColors.textMuted),
-              ],
+                  const Icon(Icons.chevron_right_rounded,
+                      color: TeritoryColors.textMuted),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -784,38 +885,252 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
 
 // ─── Helper widgets ────────────────────────────────────────────────────
 
-class _LocationInput extends StatelessWidget {
-  final TextEditingController controller;
+class _PlaceField extends StatelessWidget {
+  final ApiFlag? place;
   final String label;
   final IconData icon;
   final Color iconColor;
+  final VoidCallback onTap;
 
-  const _LocationInput({
-    required this.controller,
+  const _PlaceField({
+    required this.place,
     required this.label,
     required this.icon,
     required this.iconColor,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w600),
-      decoration: InputDecoration(
-        prefixIcon: Icon(icon, color: iconColor, size: 20),
-        hintText: label,
-        hintStyle: GoogleFonts.plusJakartaSans(
-          fontSize: 14,
-          color: TeritoryColors.textMuted,
-        ),
-        filled: true,
-        fillColor: TeritoryColors.surfaceContainer,
-        border: OutlineInputBorder(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: TeritoryColors.surfaceContainer,
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, color: iconColor, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: TeritoryColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    place?.placeName ?? 'Choose from flagged places',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: place == null
+                          ? TeritoryColors.textMuted
+                          : TeritoryColors.textPrimary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.unfold_more_rounded,
+                color: TeritoryColors.textMuted, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MapPin extends StatelessWidget {
+  final Color color;
+  final IconData icon;
+
+  const _MapPin({required this.color, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 3),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.4),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: Icon(icon, color: Colors.white, size: 18),
+    );
+  }
+}
+
+class _PlacePickerSheet extends StatelessWidget {
+  final String title;
+  final List<ApiFlag> places;
+
+  const _PlacePickerSheet({required this.title, required this.places});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: TeritoryColors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              title,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: TeritoryColors.textPrimary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: places.length,
+              itemBuilder: (context, index) {
+                final place = places[index];
+                return ListTile(
+                  leading: const Icon(Icons.place_rounded,
+                      color: TeritoryColors.tripRoute),
+                  title: Text(
+                    place.placeName,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    [place.city, place.category]
+                        .where((part) => part.isNotEmpty)
+                        .join(' · '),
+                    style: GoogleFonts.plusJakartaSans(fontSize: 11),
+                  ),
+                  onTap: () => Navigator.of(context).pop(place),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommunityChoice {
+  final String? id;
+  final String name;
+
+  const _CommunityChoice({this.id, required this.name});
+}
+
+class _CommunityPickerSheet extends StatelessWidget {
+  final List<Community> communities;
+
+  const _CommunityPickerSheet({required this.communities});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.6,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: TeritoryColors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'Attach to community',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: TeritoryColors.textPrimary,
+              ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.person_rounded,
+                color: TeritoryColors.textSecondary),
+            title: Text(
+              'Personal plan',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            onTap: () => Navigator.of(context).pop(
+              const _CommunityChoice(name: 'Personal plan'),
+            ),
+          ),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: communities.length,
+              itemBuilder: (context, index) {
+                final community = communities[index];
+                return ListTile(
+                  leading: const Icon(Icons.groups_rounded,
+                      color: TeritoryColors.communityIndigo),
+                  title: Text(
+                    community.name,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${community.memberCount} members',
+                    style: GoogleFonts.plusJakartaSans(fontSize: 11),
+                  ),
+                  onTap: () => Navigator.of(context).pop(
+                    _CommunityChoice(id: community.id, name: community.name),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -841,20 +1156,28 @@ class _ToggleChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? TeritoryColors.primary : TeritoryColors.surfaceContainer,
+          color: isSelected
+              ? TeritoryColors.primary
+              : TeritoryColors.surfaceContainer,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: isSelected ? Colors.white : TeritoryColors.textSecondary),
+            Icon(icon,
+                size: 16,
+                color: isSelected
+                    ? Colors.white
+                    : TeritoryColors.textSecondary),
             const SizedBox(width: 6),
             Text(
               label,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: isSelected ? Colors.white : TeritoryColors.textSecondary,
+                color: isSelected
+                    ? Colors.white
+                    : TeritoryColors.textSecondary,
               ),
             ),
           ],
@@ -869,7 +1192,11 @@ class _EstimateField extends StatelessWidget {
   final String label;
   final String value;
 
-  const _EstimateField({required this.icon, required this.label, required this.value});
+  const _EstimateField({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -910,13 +1237,4 @@ class _EditableWaypoint {
     required this.location,
     required this.category,
   });
-}
-
-class _WaypointSuggestion {
-  final String name;
-  final LatLng location;
-  final String category;
-  final int flagCount;
-
-  const _WaypointSuggestion(this.name, this.location, this.category, this.flagCount);
 }

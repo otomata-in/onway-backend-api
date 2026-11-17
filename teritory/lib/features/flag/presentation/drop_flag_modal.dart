@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
+import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_data_service.dart';
+import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 
 class DropFlagModal extends StatefulWidget {
@@ -14,6 +16,8 @@ class DropFlagModal extends StatefulWidget {
     this.suggestedPlaceName = 'Current Location',
   });
 
+  /// Completes when the sheet closes. The caller refreshes afterwards, so a flag
+  /// created just as the sheet was dismissed still shows up on the map.
   static Future<void> show(
     BuildContext context, {
     required LatLng coordinates,
@@ -39,6 +43,7 @@ class _DropFlagModalState extends State<DropFlagModal> {
   late TextEditingController _cityController;
   late TextEditingController _notesController;
   bool _isMajorFlag = false;
+  bool _isSubmitting = false;
   String _selectedCategory = 'Scenic Viewpoint';
 
   final List<String> _categories = [
@@ -67,7 +72,9 @@ class _DropFlagModalState extends State<DropFlagModal> {
     super.dispose();
   }
 
-  void _submitFlag() {
+  Future<void> _submitFlag() async {
+    if (_isSubmitting) return;
+
     final name = _placeController.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -79,7 +86,46 @@ class _DropFlagModalState extends State<DropFlagModal> {
     final city = _cityController.text.trim().isNotEmpty
         ? _cityController.text.trim()
         : 'Kerala';
+    final notes = _notesController.text.trim().isNotEmpty
+        ? _notesController.text.trim()
+        : 'Claimed this spot on my journey! 🚩';
+    final messenger = ScaffoldMessenger.of(context);
 
+    setState(() => _isSubmitting = true);
+
+    try {
+      await TeritoryRepository.instance.dropFlag(
+        placeName: name,
+        latitude: widget.initialCoordinates.latitude,
+        longitude: widget.initialCoordinates.longitude,
+        city: city,
+        country: 'India',
+        countryCode: 'IN',
+        isMajorFlag: _isMajorFlag,
+        category: _selectedCategory,
+        notes: notes,
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      messenger.showSnackBar(SnackBar(
+        content: Text('Could not stake flag: ${e.message}'),
+        backgroundColor: TeritoryColors.expiredRed,
+      ));
+      return;
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Could not reach Teritory. Check your connection.'),
+        backgroundColor: TeritoryColors.expiredRed,
+      ));
+      return;
+    }
+
+    if (!mounted) return;
+
+    // Keep the profile cache in sync locally; the POST already happened above.
     TeritoryDataService.instance.addFlag(
       placeName: name,
       city: city,
@@ -87,14 +133,13 @@ class _DropFlagModalState extends State<DropFlagModal> {
       coordinates: widget.initialCoordinates,
       isMajorFlag: _isMajorFlag,
       category: _selectedCategory,
-      notes: _notesController.text.trim().isNotEmpty
-          ? _notesController.text.trim()
-          : 'Claimed this spot on my journey! 🚩',
+      notes: notes,
+      persistToBackend: false,
     );
 
     Navigator.pop(context);
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(
         backgroundColor: TeritoryColors.primary,
         behavior: SnackBarBehavior.floating,
@@ -106,8 +151,8 @@ class _DropFlagModalState extends State<DropFlagModal> {
             Expanded(
               child: Text(
                 _isMajorFlag
-                    ? '🎉 Major Flag Unlocked! +150 XP'
-                    : '🚩 Territory Flag Staked! +50 XP',
+                    ? '🎉 Major Flag Staked!'
+                    : '🚩 Territory Flag Staked!',
                 style: GoogleFonts.plusJakartaSans(
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
@@ -386,10 +431,19 @@ class _DropFlagModalState extends State<DropFlagModal> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton.icon(
-                onPressed: _submitFlag,
-                icon: const Icon(Icons.flag_rounded, color: Colors.white),
+                onPressed: _isSubmitting ? null : _submitFlag,
+                icon: _isSubmitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.flag_rounded, color: Colors.white),
                 label: Text(
-                  'Claim & Stake Flag',
+                  _isSubmitting ? 'Staking flag…' : 'Claim & Stake Flag',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,

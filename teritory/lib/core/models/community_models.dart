@@ -98,17 +98,27 @@ class CommunityMember {
   });
 
   factory CommunityMember.fromJson(Map<String, dynamic> json) {
+    // The API nests the person under `user` and sends roles as CREATOR/MEMBER.
+    final userMap = json['user'] is Map ? json['user'] as Map : null;
+    final roleStr = (json['role'] as String? ?? 'member').toLowerCase();
+
     return CommunityMember(
-      id: json['id'] as String,
-      communityId: json['communityId'] as String,
-      userId: json['userId'] as String,
-      userName: json['userName'] as String,
-      userAvatar: json['userAvatar'] as String? ?? '',
+      id: json['id'] as String? ?? '',
+      communityId: json['communityId'] as String? ?? '',
+      userId: json['userId'] as String? ?? userMap?['id'] as String? ?? '',
+      userName: json['userName'] as String? ??
+          userMap?['displayName'] as String? ??
+          'Traveler',
+      userAvatar: json['userAvatar'] as String? ??
+          userMap?['avatarUrl'] as String? ??
+          '',
       role: CommunityRole.values.firstWhere(
-        (e) => e.name == json['role'] as String,
+        (e) => e.name == roleStr,
         orElse: () => CommunityRole.member,
       ),
-      joinedAt: DateTime.parse(json['joinedAt'] as String),
+      joinedAt:
+          DateTime.tryParse(json['joinedAt'] as String? ?? '') ??
+              DateTime.now(),
     );
   }
 
@@ -204,19 +214,29 @@ class CommunityActivity {
   });
 
   factory CommunityActivity.fromJson(Map<String, dynamic> json) {
+    // API rows use MEMBER_JOIN-style types and a nested `user`.
+    final userMap = json['user'] is Map ? json['user'] as Map : null;
+    final typeStr =
+        (json['type'] as String? ?? '').replaceAll('_', '').toLowerCase();
+
     return CommunityActivity(
-      id: json['id'] as String,
-      communityId: json['communityId'] as String,
+      id: json['id'] as String? ?? '',
+      communityId: json['communityId'] as String? ?? '',
       type: CommunityActivityType.values.firstWhere(
-        (e) => e.name == json['type'] as String,
+        (e) => e.name.toLowerCase() == typeStr,
         orElse: () => CommunityActivityType.announcement,
       ),
-      title: json['title'] as String,
+      title: json['title'] as String? ?? 'Community update',
       description: json['description'] as String? ?? '',
-      userId: json['userId'] as String,
-      userName: json['userName'] as String,
-      userAvatar: json['userAvatar'] as String? ?? '',
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      userId: json['userId'] as String? ?? userMap?['id'] as String? ?? '',
+      userName: json['userName'] as String? ??
+          userMap?['displayName'] as String? ??
+          'Traveler',
+      userAvatar: json['userAvatar'] as String? ??
+          userMap?['avatarUrl'] as String? ??
+          '',
+      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+          DateTime.now(),
     );
   }
 

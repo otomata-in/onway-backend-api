@@ -3,16 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/models/api_trip.dart';
 import '../../../core/models/trip_models.dart';
-import '../../../core/providers/data_providers.dart';
+import '../../../core/services/api_service.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../trips/application/trips_provider.dart';
 
 class CompletedTripsScreen extends ConsumerWidget {
   const CompletedTripsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final completions = ref.watch(tripHistoryProvider);
+    final historyAsync = ref.watch(tripHistoryLiveProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -24,12 +26,47 @@ class CompletedTripsScreen extends ConsumerWidget {
           ),
         ),
       ),
-      body: completions.isEmpty
-          ? Center(
+      body: historyAsync.when(
+        loading: () => const Center(
+          child: CircularProgressIndicator(color: TeritoryColors.tripRoute),
+        ),
+        error: (error, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off_rounded,
+                    size: 44, color: TeritoryColors.textMuted),
+                const SizedBox(height: 12),
+                Text(
+                  error is ApiException
+                      ? error.message
+                      : 'Could not load completed expeditions.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    color: TeritoryColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: () => ref.invalidate(tripHistoryLiveProvider),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        data: (entries) {
+          final completed = entries.where((entry) => entry.isCompleted).toList();
+
+          if (completed.isEmpty) {
+            return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.explore_off_rounded,
+                  const Icon(Icons.explore_off_rounded,
                       size: 64, color: TeritoryColors.textMuted),
                   const SizedBox(height: 12),
                   Text(
@@ -42,34 +79,30 @@ class CompletedTripsScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: completions.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 14),
-              itemBuilder: (context, index) {
-                final completion = completions[index];
-                return _CompletionCard(completion: completion);
-              },
-            ),
+            );
+          }
+
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: completed.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 14),
+            itemBuilder: (context, index) =>
+                _CompletionCard(entry: completed[index]),
+          );
+        },
+      ),
     );
   }
 }
 
 class _CompletionCard extends StatelessWidget {
-  final TripCompletion completion;
+  final TripHistoryEntry entry;
 
-  const _CompletionCard({required this.completion});
+  const _CompletionCard({required this.entry});
 
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('MMMM d, yyyy');
-    final durationHours = completion.totalDurationHours.toInt();
-    final durationDays = durationHours ~/ 24;
-    final remainingHours = durationHours % 24;
-    final durationText = durationDays > 0
-        ? '$durationDays days $remainingHours hrs'
-        : '$durationHours hrs';
 
     return Container(
       decoration: BoxDecoration(
@@ -88,9 +121,8 @@ class _CompletionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Trip name and date
           Text(
-            'Trip #${completion.tripId}',
+            entry.tripName,
             style: GoogleFonts.plusJakartaSans(
               fontSize: 16,
               fontWeight: FontWeight.w800,
@@ -99,33 +131,33 @@ class _CompletionCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            dateFormat.format(completion.completedAt),
+            entry.completedAt == null
+                ? 'Date not recorded'
+                : dateFormat.format(entry.completedAt!),
             style: GoogleFonts.plusJakartaSans(
               fontSize: 12,
               color: TeritoryColors.textSecondary,
             ),
           ),
           const SizedBox(height: 14),
-
-          // Stats row
           Row(
             children: [
-              _buildStatChip(Icons.straighten_rounded,
-                  '${completion.totalDistanceKm.toInt()} km'),
-              const SizedBox(width: 10),
-              _buildStatChip(Icons.schedule_rounded, durationText),
-              const SizedBox(width: 10),
-              _buildStatChip(Icons.flag_rounded,
-                  '${completion.waypointsValidated}/${completion.totalWaypoints} validated'),
+              if (entry.distanceKm > 0)
+                _StatChip(
+                  icon: Icons.straighten_rounded,
+                  label: '${entry.distanceKm.toInt()} km',
+                ),
+              if (entry.distanceKm > 0) const SizedBox(width: 10),
+              _StatChip(
+                icon: Icons.flag_rounded,
+                label: '${entry.totalWaypoints} waypoints',
+              ),
             ],
           ),
           const SizedBox(height: 14),
-
-          // Badge and participants row
           Row(
             children: [
-              // Badge
-              if (completion.badge == TripBadge.full)
+              if (entry.badge == TripBadge.full)
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -145,7 +177,7 @@ class _CompletionCard extends StatelessWidget {
                     ),
                   ),
                 )
-              else if (completion.badge == TripBadge.partial)
+              else
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -163,66 +195,42 @@ class _CompletionCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              const Spacer(),
-
-              // Mock participant avatars
-              SizedBox(
-                width: 80,
-                height: 28,
-                child: Stack(
-                  children: List.generate(4, (i) {
-                    return Positioned(
-                      left: i * 18.0,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                        child: CircleAvatar(
-                          radius: 14,
-                          backgroundImage: NetworkImage(
-                            'https://picsum.photos/seed/avatar_$i/100',
-                          ),
-                          backgroundColor: TeritoryColors.surfaceContainer,
-                        ),
-                      ),
-                    );
-                  }),
-                ),
-              ),
             ],
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildStatChip(IconData icon, String label) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: TeritoryColors.surfaceContainer,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 13, color: TeritoryColors.textSecondary),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: TeritoryColors.textSecondary,
-                ),
-              ),
+class _StatChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _StatChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: TeritoryColors.surfaceContainer,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: TeritoryColors.textSecondary),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: TeritoryColors.textSecondary,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

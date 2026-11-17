@@ -99,6 +99,10 @@ class SocketService {
     _socket?.emit('join_trip', {'tripId': tripId});
   }
 
+  void leaveTrip(String tripId) {
+    _socket?.emit('leave_trip', {'tripId': tripId});
+  }
+
   void sendTripLocation(String tripId, double lat, double lng) {
     _socket?.emit('trip_location_update', {
       'tripId': tripId,

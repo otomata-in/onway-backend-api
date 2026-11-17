@@ -106,6 +106,88 @@ const getFriends = async (req, res, next) => {
   }
 };
 
+// Pending friend requests, split into what the caller received and what they sent
+const getFriendRequests = async (req, res, next) => {
+  try {
+    const currentUserId = req.user.id;
+
+    const relationships = await prisma.friendRelationship.findMany({
+      where: {
+        status: 'PENDING',
+        OR: [{ senderId: currentUserId }, { receiverId: currentUserId }],
+      },
+      include: { sender: true, receiver: true },
+      orderBy: { since: 'desc' },
+    });
+
+    const shape = (rel) => {
+      const isIncoming = rel.receiverId === currentUserId;
+      const otherUser = isIncoming ? rel.sender : rel.receiver;
+      return {
+        ...otherUser,
+        relationshipId: rel.id,
+        category: rel.category,
+        since: rel.since,
+        direction: isIncoming ? 'INCOMING' : 'OUTGOING',
+      };
+    };
+
+    const incoming = relationships
+      .filter((rel) => rel.receiverId === currentUserId)
+      .map(shape);
+    const outgoing = relationships
+      .filter((rel) => rel.senderId === currentUserId)
+      .map(shape);
+
+    return ApiResponse.success(res, { incoming, outgoing });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Cancel a friend request the caller sent
+const cancelFriendRequest = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const rel = await prisma.friendRelationship.findUnique({ where: { id } });
+
+    if (!rel || rel.senderId !== req.user.id) {
+      throw ApiError.notFound('Friend request not found');
+    }
+    if (rel.status !== 'PENDING') {
+      throw ApiError.badRequest('Only pending requests can be cancelled');
+    }
+
+    await prisma.friendRelationship.delete({ where: { id } });
+    return ApiResponse.success(res, { cancelled: true }, 'Friend request cancelled');
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Remove an accepted friend
+const removeFriend = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const rel = await prisma.friendRelationship.findUnique({ where: { id } });
+
+    if (
+      !rel ||
+      (rel.senderId !== req.user.id && rel.receiverId !== req.user.id)
+    ) {
+      throw ApiError.notFound('Friendship not found');
+    }
+    if (rel.status !== 'ACCEPTED') {
+      throw ApiError.badRequest('Only accepted friendships can be removed');
+    }
+
+    await prisma.friendRelationship.delete({ where: { id } });
+    return ApiResponse.success(res, { removed: true }, 'Friend removed');
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Search users by name or handle
 const searchUsers = async (req, res, next) => {
   try {
@@ -275,6 +357,9 @@ module.exports = {
   toggleTripMode,
   getUserProfile,
   getFriends,
+  getFriendRequests,
+  cancelFriendRequest,
+  removeFriend,
   searchUsers,
   inviteFriends,
   sendFriendRequest,
