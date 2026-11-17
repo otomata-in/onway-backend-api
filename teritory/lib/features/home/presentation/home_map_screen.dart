@@ -13,6 +13,7 @@ import '../../explore/application/explore_flags_provider.dart';
 import '../../flag/presentation/drop_flag_modal.dart';
 import '../../flag/presentation/live_flag_detail_sheet.dart';
 import '../../profile/application/profile_providers.dart';
+import '../../notifications/presentation/notification_bell.dart';
 
 class HomeMapScreen extends ConsumerStatefulWidget {
   const HomeMapScreen({super.key});
@@ -219,6 +220,7 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                               isDark: _isDarkTheme,
                             ),
                             const Spacer(),
+                            const NotificationBell(),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 4),

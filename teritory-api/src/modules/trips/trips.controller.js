@@ -2,6 +2,7 @@ const prisma = require('../../config/prisma');
 const ApiResponse = require('../../utils/ApiResponse');
 const ApiError = require('../../utils/ApiError');
 const { haversineDistanceMeters } = require('../../utils/geo');
+const { notify } = require('../notifications/notifications.service');
 
 const getTripsHub = async (req, res, next) => {
   try {
@@ -209,6 +210,17 @@ const startTripFromPlan = async (req, res, next) => {
       data: { status: 'ACTIVE' },
     });
 
+    if (plan.createdById !== req.user.id) {
+      await notify({
+        userId: plan.createdById,
+        type: 'TRIP_STARTED',
+        title: 'Your plan is on the road',
+        body: `${req.user.displayName} started "${plan.name}".`,
+        icon: 'trip',
+        actionUrl: `/trips/${plan.id}`,
+      });
+    }
+
     return ApiResponse.created(res, trip, 'Trip started! Expedition mode is active.');
   } catch (err) {
     next(err);
@@ -243,6 +255,12 @@ const getTripById = async (req, res, next) => {
 const joinActiveTrip = async (req, res, next) => {
   try {
     const { tripId } = req.params;
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      select: { createdById: true, tripPlan: { select: { name: true } } },
+    });
+    if (!trip) throw ApiError.notFound('Trip not found');
+
     const existing = await prisma.tripParticipant.findUnique({
       where: { tripId_userId: { tripId, userId: req.user.id } },
     });
@@ -261,6 +279,17 @@ const joinActiveTrip = async (req, res, next) => {
       where: { id: req.user.id },
       data: { isTripMode: true },
     });
+
+    if (trip.createdById !== req.user.id) {
+      await notify({
+        userId: trip.createdById,
+        type: 'TRIP_STARTED',
+        title: 'A traveler joined your expedition',
+        body: `${req.user.displayName} joined "${trip.tripPlan?.name ?? 'your trip'}".`,
+        icon: 'trip',
+        actionUrl: `/trips/${tripId}/active`,
+      });
+    }
 
     return ApiResponse.created(res, participant, 'Joined trip expedition');
   } catch (err) {

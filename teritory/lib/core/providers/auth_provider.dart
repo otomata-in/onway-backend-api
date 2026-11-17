@@ -3,6 +3,7 @@ import '../models/user_models.dart';
 import '../services/api_service.dart';
 import '../services/mock_data_service.dart';
 import '../services/socket_service.dart';
+import 'data_providers.dart';
 import '../services/teritory_repository.dart';
 
 /// Session state that the router uses as its gate.
@@ -61,6 +62,7 @@ class AuthNotifier extends Notifier<AuthStatus> {
   Future<void> signOut() async {
     await TeritoryRepository.instance.logout();
     SocketService.instance.disconnect();
+    ref.invalidate(notificationsNotifierProvider);
     state = AuthStatus.signedOut;
   }
 }

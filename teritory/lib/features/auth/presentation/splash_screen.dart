@@ -15,16 +15,25 @@ class SplashScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 72,
-              height: 72,
+              width: 88,
+              height: 88,
               decoration: BoxDecoration(
-                color: TeritoryColors.primaryLight,
-                borderRadius: BorderRadius.circular(22),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF144F87).withValues(alpha: 0.25),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
-              child: const Icon(
-                Icons.flag_rounded,
-                size: 36,
-                color: TeritoryColors.primary,
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/images/teritory_logo.png',
+                  width: 88,
+                  height: 88,
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
             const SizedBox(height: 20),

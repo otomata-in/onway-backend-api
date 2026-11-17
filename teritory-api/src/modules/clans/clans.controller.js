@@ -1,6 +1,7 @@
 const prisma = require('../../config/prisma');
 const ApiResponse = require('../../utils/ApiResponse');
 const ApiError = require('../../utils/ApiError');
+const { notify } = require('../notifications/notifications.service');
 
 const getClans = async (req, res, next) => {
   try {
@@ -123,6 +124,12 @@ const joinClan = async (req, res, next) => {
 
     if (existing) throw ApiError.badRequest('Already a member of this clan');
 
+    const clan = await prisma.clan.findUnique({
+      where: { id: clanId },
+      select: { name: true, chieftainId: true },
+    });
+    if (!clan) throw ApiError.notFound('Clan not found');
+
     const member = await prisma.clanMember.create({
       data: {
         clanId,
@@ -135,6 +142,17 @@ const joinClan = async (req, res, next) => {
       where: { id: clanId },
       data: { memberCount: { increment: 1 } },
     });
+
+    if (clan.chieftainId !== req.user.id) {
+      await notify({
+        userId: clan.chieftainId,
+        type: 'SYSTEM',
+        title: 'New clan member',
+        body: `${req.user.displayName} joined ${clan.name}.`,
+        icon: 'clan',
+        actionUrl: `/clans/${clanId}`,
+      });
+    }
 
     return ApiResponse.created(res, member, 'Joined clan successfully');
   } catch (err) {

@@ -13,6 +13,7 @@ import '../../flag/presentation/live_flag_detail_sheet.dart';
 import '../../rankings/application/rankings_provider.dart';
 import '../application/profile_providers.dart';
 import 'edit_profile_sheet.dart';
+import '../../notifications/presentation/notification_bell.dart';
 
 /// Live "Traveler Footprint" page: profile, stats and stamps come from
 /// `GET /users/me`, the map and flag list from `GET /flags?userId=`.
@@ -77,6 +78,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ],
         ),
         actions: [
+          const NotificationBell(),
           IconButton(
             tooltip: 'Edit profile',
             icon: const Icon(Icons.edit_outlined, size: 20),

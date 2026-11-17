@@ -239,12 +239,31 @@ const inviteFriends = async (req, res, next) => {
     };
     const notifType = typeMap[type.toUpperCase()] || 'COMMUNITY_INVITE';
 
+    // Build paths the mobile router can resolve, not bare ids.
+    let actionUrl = '/notifications';
+    if (targetId) {
+      const key = type.toUpperCase();
+      if (key === 'CLAN') {
+        actionUrl = `/clans/${targetId}`;
+      } else if (key === 'TRIP') {
+        actionUrl = `/trips/${targetId}`;
+      } else if (key === 'COMMUNITY') {
+        const community = await prisma.community.findUnique({
+          where: { id: targetId },
+          select: { parentClanId: true },
+        });
+        actionUrl = community
+          ? `/clans/${community.parentClanId}/communities/${targetId}`
+          : '/notifications';
+      }
+    }
+
     const notifications = targetUserIds.map((userId) => ({
       userId,
       type: notifType,
       title: title || `${req.user.displayName} invited you!`,
       body: message || `${req.user.displayName} invited you to join a ${type}.`,
-      actionUrl: targetId ? `/${type.toLowerCase()}/${targetId}` : '/notifications',
+      actionUrl,
     }));
 
     await prisma.notification.createMany({

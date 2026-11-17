@@ -2,6 +2,7 @@ const prisma = require('../../config/prisma');
 const ApiResponse = require('../../utils/ApiResponse');
 const ApiError = require('../../utils/ApiError');
 const { haversineDistanceMeters } = require('../../utils/geo');
+const { notify } = require('../notifications/notifications.service');
 
 const createRally = async (req, res, next) => {
   try {
@@ -101,12 +102,28 @@ const joinRally = async (req, res, next) => {
 
     if (existing) throw ApiError.badRequest('Already participating in this rally');
 
+    const rally = await prisma.legendaryRally.findUnique({
+      where: { id },
+      select: { name: true, createdById: true },
+    });
+    if (!rally) throw ApiError.notFound('Rally not found');
+
     const participant = await prisma.rallyParticipant.create({
       data: {
         rallyId: id,
         userId: req.user.id,
       },
     });
+
+    if (rally.createdById !== req.user.id) {
+      await notify({
+        userId: rally.createdById,
+        type: 'RALLY_STARTED',
+        title: 'A rider joined your rally',
+        body: `${req.user.displayName} joined ${rally.name}.`,
+        icon: 'rally',
+      });
+    }
 
     return ApiResponse.created(res, participant, 'Joined Legendary Rally');
   } catch (err) {

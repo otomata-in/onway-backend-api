@@ -29,6 +29,7 @@ import '../../features/profile/presentation/friend_requests_screen.dart';
 import '../../features/profile/presentation/completed_trips_screen.dart';
 import '../../features/profile/presentation/settings_screen.dart';
 import '../../features/profile/presentation/info_page_screen.dart';
+import '../../features/notifications/presentation/notifications_screen.dart';
 
 // ─── Navigation keys ───────────────────────────────────────────────────
 
@@ -80,6 +81,10 @@ final routerProvider = Provider<GoRouter>((ref) {
     GoRoute(
       path: '/login',
       builder: (context, state) => const LoginScreen(),
+    ),
+    GoRoute(
+      path: '/notifications',
+      builder: (context, state) => const NotificationsScreen(),
     ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {

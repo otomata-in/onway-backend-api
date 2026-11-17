@@ -352,16 +352,25 @@ class TeritoryRepository {
 
   // ─── NOTIFICATIONS ───────────────────────────────────────────────────
 
+  /// Live-only notification read: throws [ApiException] so the bell and the
+  /// notifications screen show the server's own message instead of mock rows.
   Future<List<NotificationItem>> fetchNotifications() async {
-    try {
-      final res = await _api.get('/notifications');
-      if (res is List) {
-        return res.map((e) => NotificationItem.fromJson(e as Map<String, dynamic>)).toList();
-      }
-    } catch (e) {
-      if (kDebugMode) print('⚠️ [fetchNotifications] Falling back to mock: $e');
+    final res = await _api.get('/notifications');
+    if (res is! List) {
+      throw ApiException('Unexpected response while loading notifications');
     }
-    return MockDataService.instance.notifications;
+    return res
+        .whereType<Map<String, dynamic>>()
+        .map(NotificationItem.fromJson)
+        .toList();
+  }
+
+  Future<void> markNotificationRead(String id) async {
+    await _api.patch('/notifications/$id/read');
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    await _api.patch('/notifications/read-all');
   }
 
   // ─── FRIENDS, SEARCH & INVITES ───────────────────────────────────────

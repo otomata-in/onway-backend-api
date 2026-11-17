@@ -67,32 +67,60 @@ final friendRequestsProvider = Provider<List<FriendRelationship>>((ref) {
 
 // ─── Notifications ─────────────────────────────────────────────────────
 
-class NotificationsNotifier extends Notifier<List<NotificationItem>> {
+/// Live notification inbox: the server list is the only source, so an error
+/// is rendered as an error (with retry) instead of falling back to mock rows.
+class NotificationsNotifier extends AsyncNotifier<List<NotificationItem>> {
   @override
-  List<NotificationItem> build() {
-    _load();
-    return MockDataService.instance.notifications;
+  Future<List<NotificationItem>> build() =>
+      TeritoryRepository.instance.fetchNotifications();
+
+  Future<void> refresh() async {
+    state = await AsyncValue.guard(
+        () => TeritoryRepository.instance.fetchNotifications());
   }
 
-  Future<void> _load() async {
-    final live = await TeritoryRepository.instance.fetchNotifications();
-    state = live;
+  Future<void> markRead(String id) async {
+    final current = state.valueOrNull ?? const <NotificationItem>[];
+    state = AsyncData([
+      for (final item in current)
+        if (item.id == id) item.copyWith(isRead: true) else item,
+    ]);
+    try {
+      await TeritoryRepository.instance.markNotificationRead(id);
+    } catch (_) {
+      state = AsyncData(current);
+      rethrow;
+    }
   }
 
-  Future<void> refresh() async => _load();
+  Future<void> markAllRead() async {
+    final current = state.valueOrNull ?? const <NotificationItem>[];
+    state = AsyncData([
+      for (final item in current) item.copyWith(isRead: true),
+    ]);
+    try {
+      await TeritoryRepository.instance.markAllNotificationsRead();
+    } catch (_) {
+      state = AsyncData(current);
+      rethrow;
+    }
+  }
 }
 
 final notificationsNotifierProvider =
-    NotifierProvider<NotificationsNotifier, List<NotificationItem>>(
+    AsyncNotifierProvider<NotificationsNotifier, List<NotificationItem>>(
         NotificationsNotifier.new);
 
-final notificationsProvider = Provider<List<NotificationItem>>((ref) {
+final notificationsProvider =
+    Provider<AsyncValue<List<NotificationItem>>>((ref) {
   return ref.watch(notificationsNotifierProvider);
 });
 
+/// Zero while loading or signed out — the bell never invents a count.
 final unreadNotificationCountProvider = Provider<int>((ref) {
-  final notifs = ref.watch(notificationsProvider);
-  return notifs.where((n) => !n.isRead).length;
+  final items = ref.watch(notificationsNotifierProvider).valueOrNull ??
+      const <NotificationItem>[];
+  return items.where((n) => !n.isRead).length;
 });
 
 // ─── Services ──────────────────────────────────────────────────────────

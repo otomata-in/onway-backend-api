@@ -147,16 +147,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Column(
       children: [
         Container(
-          width: 64,
-          height: 64,
+          width: 80,
+          height: 80,
           decoration: BoxDecoration(
-            color: TeritoryColors.primaryLight,
-            borderRadius: BorderRadius.circular(20),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF144F87).withValues(alpha: 0.25),
+                blurRadius: 20,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-          child: const Icon(
-            Icons.flag_rounded,
-            size: 32,
-            color: TeritoryColors.primary,
+          child: ClipOval(
+            child: Image.asset(
+              'assets/images/teritory_logo.png',
+              width: 80,
+              height: 80,
+              fit: BoxFit.contain,
+            ),
           ),
         ),
         const SizedBox(height: 18),
