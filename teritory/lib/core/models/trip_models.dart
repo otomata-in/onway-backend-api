@@ -153,7 +153,10 @@ class TripPlan {
       createdBy: cBy,
       createdByName: cByName,
       communityId: json['communityId'] as String?,
-      communityName: json['communityName'] as String?,
+      communityName: json['communityName'] as String? ??
+          (json['community'] is Map
+              ? json['community']['name'] as String?
+              : null),
       originName: json['originName'] as String? ?? (waypointsList.isNotEmpty ? waypointsList.first.placeName : ''),
       originLat: oLat,
       originLng: oLng,

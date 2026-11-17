@@ -64,6 +64,13 @@ function initSocket(io) {
       }
     });
 
+    socket.on('leave_trip', (data) => {
+      const { tripId } = data;
+      if (tripId) {
+        socket.leave(`trip:${tripId}`);
+      }
+    });
+
     socket.on('trip_location_update', (data) => {
       const { tripId, latitude, longitude } = data;
       if (tripId && user) {

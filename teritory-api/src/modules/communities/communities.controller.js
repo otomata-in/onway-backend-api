@@ -233,6 +233,7 @@ const getCommunityTripPlans = async (req, res, next) => {
       include: {
         waypoints: { orderBy: { orderIndex: 'asc' } },
         createdBy: { select: { id: true, displayName: true, avatarUrl: true } },
+        community: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: 'desc' },
     });

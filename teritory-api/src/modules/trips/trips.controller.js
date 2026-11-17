@@ -25,6 +25,7 @@ const getTripsHub = async (req, res, next) => {
       include: {
         waypoints: { orderBy: { orderIndex: 'asc' } },
         createdBy: { select: { id: true, displayName: true, avatarUrl: true } },
+        community: { select: { id: true, name: true } },
       },
       take: 10,
     });
@@ -33,7 +34,10 @@ const getTripsHub = async (req, res, next) => {
       where: { userId: req.user.id },
       include: {
         tripPlan: {
-          include: { waypoints: { orderBy: { orderIndex: 'asc' } } },
+          include: {
+            waypoints: { orderBy: { orderIndex: 'asc' } },
+            community: { select: { id: true, name: true } },
+          },
         },
       },
       take: 5,
@@ -95,8 +99,22 @@ const createTripPlan = async (req, res, next) => {
       },
       include: {
         waypoints: { orderBy: { orderIndex: 'asc' } },
+        community: { select: { id: true, name: true } },
       },
     });
+
+    // Surface community plans in that community's activity feed.
+    if (communityId) {
+      await prisma.communityActivity.create({
+        data: {
+          communityId,
+          userId: req.user.id,
+          type: 'ANNOUNCEMENT',
+          title: 'New trip plan proposed',
+          description: `${req.user.displayName} proposed "${plan.name}"`,
+        },
+      });
+    }
 
     return ApiResponse.created(res, plan, 'Trip plan created');
   } catch (err) {
@@ -112,6 +130,7 @@ const getTripPlanById = async (req, res, next) => {
       include: {
         waypoints: { orderBy: { orderIndex: 'asc' } },
         createdBy: { select: { id: true, displayName: true, avatarUrl: true, handle: true } },
+        community: { select: { id: true, name: true } },
         votes: true,
       },
     });
@@ -464,6 +483,7 @@ const getSavedTripPlans = async (req, res, next) => {
           include: {
             waypoints: { orderBy: { orderIndex: 'asc' } },
             createdBy: { select: { id: true, displayName: true, avatarUrl: true } },
+            community: { select: { id: true, name: true } },
           },
         },
       },
@@ -488,6 +508,7 @@ const listTripPlans = async (req, res, next) => {
       include: {
         waypoints: { orderBy: { orderIndex: 'asc' } },
         createdBy: { select: { id: true, displayName: true, avatarUrl: true } },
+        community: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: 'desc' },
     });

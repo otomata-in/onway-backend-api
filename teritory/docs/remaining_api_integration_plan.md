@@ -324,9 +324,65 @@ Overall: **~72% of surfaces wired**; **48 / 69 endpoints are reachable from a sc
 
 ## 7. Known blockers / decisions needed
 
-1. `teritory-api` was not running during this audit — all runtime claims are from the prior
-   rankings smoke test; every other page still needs a live pass.
+1. ~~`teritory-api` was not running during this audit~~ — it now runs on `:4000` and all
+   migrated flows were exercised; see section 9 for what was observed.
 2. Device location is a product decision (new plugin + permissions).
 3. Avatar upload, account deletion, gear booking, DMs, wishlist and plan fork require **new
    backend work**; until then those buttons must stay honest rather than fake success.
 4. Token refresh needs a refresh token persisted at login — currently only the access token is.
+
+---
+
+## 9. Live verification log — 17 Nov 2026
+
+**Environment**: `teritory-api` on `:4000` against the Neon seed DB.
+The shell environment exports `PORT=0`, which `dotenv` does not override, so `npm start`
+silently binds an ephemeral port; the server was started as
+`PORT=4000 node src/server.js`. Seeded data: 5 travelers, 2 clans, 2 communities,
+2 flags within 100 km of Kochi, 3 trip plans, 1 active trip with 5 waypoints,
+1 incoming friend request, 0 notifications, 1 rally, 2 gear providers.
+
+**Test harness**: `test/live_flows_smoke_test.dart` drives the real client
+(`TeritoryRepository`, `SocketService`) — not raw HTTP — so model parsing is part of
+the assertion. Run: `flutter test test/live_flows_smoke_test.dart test/live_rankings_smoke_test.dart`.
+Result: **8/8 passed**.
+
+| Flow | Observed | Verdict |
+|---|---|---|
+| OTP login | `POST /auth/verify-otp` 12345 → u1 `arjunnair` | works |
+| Explore flags | 2 flags / 100 km, detail comments 1, own footprint 1 | works |
+| Clans | 2 clans, 2 memberships, detail roster 3, 2 communities | works |
+| Community detail | 2 members, 2 plans, 1 feed row after a proposal | works |
+| Community chat REST | send + refetch (`messages 2→3`) | works |
+| Community chat socket | `new_message` delivered to the room from Arjun Nair | works |
+| Trips hub | 3 proposed plans, active trip "Palakkad to Kanyakumari", 5 waypoints | works |
+| Plan detail / saved / vote | save toggle on/off, vote toggle on/off, `hasVoted` | works |
+| Planner → plan | `POST /trips/plans` creates a 2-waypoint community plan | works |
+| Waypoint 15 km rule | 0,0 → `isValid=false`, `distanceM=8,550,265`, message returned | works at API level |
+| Rankings | 5 rows, leader u5:4180; week reorders (u1:725); me rank 3 / 3160 | works |
+| Profile & social | me, 3 friends, 1 incoming request, search, friend profile | works |
+
+### 9.1 Contract mismatches fixed
+
+| Mismatch | Symptom in the app | Fix |
+|---|---|---|
+| Plan payloads carried no community identity | Saved/community plans rendered "Personal" in `saved_plans_screen` | `community { id, name }` included in hub proposed/saved, saved-plans, plan detail, plan list, create-plan and community trip-plans responses; `TripPlan.fromJson` also reads the nested `community.name` |
+| Community feed had no writer for plan proposals | Feed tab always empty for every seeded community | `createTripPlan` writes a `ANNOUNCEMENT` activity when `communityId` is set |
+| `SocketService.leaveTrip` emitted an event no one listened for | Leaving the tracker left the socket in the trip room | Added `leave_trip` handler in `src/sockets/index.js` |
+
+### 9.2 Blockers found while running the flows
+
+1. **Waypoint validation cannot be triggered from the UI.** The endpoint works, but the
+   tracker gates on `ActiveTripDetail.hasPosition`, which reads `participant.currentLat/Lng`;
+   `TripParticipant` has no coordinate columns, and `trip_location_update` is never emitted
+   (no GPS plugin). Validation stays disabled until device location is added (Phase 7.4).
+2. **No way to delete a trip plan.** The smoke test creates
+   "Smoke test plan (safe to delete)" in `Munnar High-Altitude Campers` on every run and it
+   cannot be removed through the API. Plans now accumulate in the dev DB (3 after two runs).
+3. **Denormalised counts disagree with rosters.** `memberCount` is seeded at 142 (clan) and
+   68 (community) while the join tables hold 3 and 2 rows, so cards show large numbers and
+   the members tab lists a handful. Not a wiring bug; the seed or the counter needs fixing.
+4. **Feed coverage is thin.** Only `MEMBER_JOIN` and (now) proposed community plans create
+   activities; messages, completions and flag drops do not, so the feed is quiet by design.
+5. `chat_typing` is relayed as `user_typing` but no client listens; typing indicators are
+   still unimplemented (Phase 7.0 alongside notifications).
