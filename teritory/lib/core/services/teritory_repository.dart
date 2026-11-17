@@ -316,38 +316,47 @@ class TeritoryRepository {
 
   // ─── SERVICES ────────────────────────────────────────────────────────
 
-  Future<List<ServiceListing>> fetchServices() async {
-    try {
-      final res = await _api.get('/services/gear');
-      if (res is List) {
-        final List<ServiceListing> listings = [];
-        for (final provider in res) {
-          if (provider is Map<String, dynamic> && provider['listings'] is List) {
-            final pName = provider['name'] as String? ?? '';
-            final pId = provider['id'] as String? ?? '';
-            final pLat = (provider['latitude'] as num?)?.toDouble() ?? 0.0;
-            final pLng = (provider['longitude'] as num?)?.toDouble() ?? 0.0;
-            final pRating = (provider['rating'] as num?)?.toDouble() ?? 4.8;
-            for (final l in provider['listings']) {
-              if (l is Map<String, dynamic>) {
-                listings.add(ServiceListing.fromJson({
-                  ...l,
-                  'providerId': pId,
-                  'providerName': pName,
-                  'latitude': pLat,
-                  'longitude': pLng,
-                  'rating': pRating,
-                }));
-              }
-            }
-          }
-        }
-        if (listings.isNotEmpty) return listings;
-      }
-    } catch (e) {
-      if (kDebugMode) print('⚠️ [fetchServices] Falling back to mock: $e');
+  /// Live `GET /services/gear`, distance-sorted by the API when a centre is
+  /// supplied. Throws [ApiException] so the sheet can show the server message.
+  Future<List<ServiceProvider>> fetchGearProviders({
+    double? latitude,
+    double? longitude,
+  }) =>
+      _fetchServiceProviders(
+        '/services/gear',
+        latitude: latitude,
+        longitude: longitude,
+      );
+
+  /// Live `GET /services/nearby-food` (the API keeps a 10 km radius).
+  Future<List<ServiceProvider>> fetchNearbyFoodProviders({
+    double? latitude,
+    double? longitude,
+  }) =>
+      _fetchServiceProviders(
+        '/services/nearby-food',
+        latitude: latitude,
+        longitude: longitude,
+      );
+
+  Future<List<ServiceProvider>> _fetchServiceProviders(
+    String path, {
+    double? latitude,
+    double? longitude,
+  }) async {
+    final res = await _api.get(path, queryParams: {
+      if (latitude != null && longitude != null) ...{
+        'lat': latitude.toStringAsFixed(5),
+        'lng': longitude.toStringAsFixed(5),
+      },
+    });
+    if (res is! List) {
+      throw ApiException('Unexpected response while loading nearby services');
     }
-    return MockDataService.instance.serviceListings;
+    return res
+        .whereType<Map<String, dynamic>>()
+        .map(ServiceProvider.fromJson)
+        .toList();
   }
 
   // ─── NOTIFICATIONS ───────────────────────────────────────────────────

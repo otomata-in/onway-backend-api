@@ -1,39 +1,74 @@
 class ServiceProvider {
   final String id;
   final String name;
-  final String contactPhone;
-  final String contactEmail;
-  final String region;
-  final String logoUrl;
+  final String description;
+  final String category;
+  final double rating;
+  final double latitude;
+  final double longitude;
+  final String? contactPhone;
+  final String? contactEmail;
+  final String? websiteUrl;
+  final String? imageUrl;
+  final bool isVerified;
+
+  /// Only present when the request carried a centre point.
+  final double? distanceKm;
+  final List<ServiceListing> listings;
 
   const ServiceProvider({
     required this.id,
     required this.name,
-    required this.contactPhone,
-    required this.contactEmail,
-    required this.region,
-    this.logoUrl = '',
+    this.description = '',
+    this.category = '',
+    this.rating = 0.0,
+    required this.latitude,
+    required this.longitude,
+    this.contactPhone,
+    this.contactEmail,
+    this.websiteUrl,
+    this.imageUrl,
+    this.isVerified = false,
+    this.distanceKm,
+    this.listings = const [],
   });
 
   factory ServiceProvider.fromJson(Map<String, dynamic> json) {
+    final lat = (json['latitude'] as num?)?.toDouble() ?? 0.0;
+    final lng = (json['longitude'] as num?)?.toDouble() ?? 0.0;
+    final id = json['id'] as String;
+    final name = json['name'] as String? ?? '';
+    final providerRating = (json['rating'] as num?)?.toDouble() ?? 0.0;
+    final providerDistance = (json['distanceKm'] as num?)?.toDouble();
+
     return ServiceProvider(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      contactPhone: json['contactPhone'] as String? ?? '',
-      contactEmail: json['contactEmail'] as String? ?? '',
-      region: json['region'] as String? ?? '',
-      logoUrl: json['logoUrl'] as String? ?? '',
+      id: id,
+      name: name,
+      description: json['description'] as String? ?? '',
+      category: json['category'] as String? ?? '',
+      rating: providerRating,
+      latitude: lat,
+      longitude: lng,
+      contactPhone: json['contactPhone'] as String?,
+      contactEmail: json['contactEmail'] as String?,
+      websiteUrl: json['websiteUrl'] as String?,
+      imageUrl: json['imageUrl'] as String?,
+      isVerified: json['isVerified'] as bool? ?? false,
+      distanceKm: providerDistance,
+      listings: (json['listings'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map((listing) => ServiceListing.fromJson({
+                ...listing,
+                'providerId': id,
+                'providerName': name,
+                'latitude': lat,
+                'longitude': lng,
+                'rating': providerRating,
+                'distanceKm': providerDistance,
+              }))
+          .toList(),
     );
   }
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'contactPhone': contactPhone,
-        'contactEmail': contactEmail,
-        'region': region,
-        'logoUrl': logoUrl,
-      };
 }
 
 class ServiceListing {

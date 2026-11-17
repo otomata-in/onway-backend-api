@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../providers/auth_provider.dart';
-import '../theme/teritory_theme.dart';
+import '../widgets/sea_wave_nav_bar.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/splash_screen.dart';
 
@@ -275,87 +274,25 @@ class _MainScaffold extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
   const _MainScaffold({required this.navigationShell});
 
+  static const _navItems = [
+    SeaWaveNavItem(icon: Icons.explore_rounded, label: 'Explore'),
+    SeaWaveNavItem(icon: Icons.shield_rounded, label: 'Clans'),
+    SeaWaveNavItem(icon: Icons.route_rounded, label: 'Trips'),
+    SeaWaveNavItem(icon: Icons.leaderboard_rounded, label: 'Rankings'),
+    SeaWaveNavItem(icon: Icons.person_pin_rounded, label: 'Profile'),
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true,
       body: navigationShell,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 16,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(
-                    context, 0, Icons.explore_rounded, 'Explore'),
-                _buildNavItem(
-                    context, 1, Icons.shield_rounded, 'Clans'),
-                _buildNavItem(
-                    context, 2, Icons.route_rounded, 'Trips'),
-                _buildNavItem(
-                    context, 3, Icons.leaderboard_rounded, 'Rankings'),
-                _buildNavItem(
-                    context, 4, Icons.person_pin_rounded, 'Profile'),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(
-      BuildContext context, int index, IconData icon, String label) {
-    final isSelected = navigationShell.currentIndex == index;
-    return GestureDetector(
-      onTap: () => navigationShell.goBranch(
-        index,
-        initialLocation: index == navigationShell.currentIndex,
-      ),
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? TeritoryColors.primaryLight
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 22,
-              color: isSelected
-                  ? TeritoryColors.primary
-                  : TeritoryColors.textMuted,
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 10,
-                fontWeight:
-                    isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected
-                    ? TeritoryColors.primary
-                    : TeritoryColors.textSecondary,
-              ),
-            ),
-          ],
+      bottomNavigationBar: SeaWaveNavBar(
+        currentIndex: navigationShell.currentIndex,
+        items: _navItems,
+        onTap: (index) => navigationShell.goBranch(
+          index,
+          initialLocation: index == navigationShell.currentIndex,
         ),
       ),
     );

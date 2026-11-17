@@ -14,6 +14,7 @@ import '../../flag/presentation/drop_flag_modal.dart';
 import '../../flag/presentation/live_flag_detail_sheet.dart';
 import '../../profile/application/profile_providers.dart';
 import '../../notifications/presentation/notification_bell.dart';
+import '../../services/presentation/gear_service_sheet.dart';
 
 class HomeMapScreen extends ConsumerStatefulWidget {
   const HomeMapScreen({super.key});
@@ -323,6 +324,29 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                 bottom: 160,
                 child: Column(
                   children: [
+                    // Gear rental + nearby food (live /services endpoints)
+                    FloatingActionButton.small(
+                      heroTag: 'services_btn',
+                      tooltip: 'Gear & food nearby',
+                      backgroundColor:
+                          _isDarkTheme ? const Color(0xFF1E293B) : Colors.white,
+                      foregroundColor: TeritoryColors.gearAmber,
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: _isDarkTheme
+                            ? const BorderSide(
+                                color: Color(0xFF334155), width: 1.0)
+                            : BorderSide.none,
+                      ),
+                      onPressed: () => GearServiceSheet.show(
+                        context,
+                        latitude: _currentLocation.latitude,
+                        longitude: _currentLocation.longitude,
+                      ),
+                      child: const Icon(Icons.backpack_rounded),
+                    ),
+                    const SizedBox(height: 8),
                     // Map Theme Selector (Midnight Oceanic / Daylight White Map)
                     FloatingActionButton.small(
                       heroTag: 'theme_toggle_btn',

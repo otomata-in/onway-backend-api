@@ -125,28 +125,25 @@ final unreadNotificationCountProvider = Provider<int>((ref) {
 
 // ─── Services ──────────────────────────────────────────────────────────
 
-class ServicesNotifier extends Notifier<List<ServiceListing>> {
-  @override
-  List<ServiceListing> build() {
-    _load();
-    return MockDataService.instance.serviceListings;
-  }
+/// The map centre the services endpoints are queried around.
+typedef ServiceLocation = ({double lat, double lng});
 
-  Future<void> _load() async {
-    final live = await TeritoryRepository.instance.fetchServices();
-    state = live;
-  }
+/// Live `GET /services/gear?lat&lng`, already distance-sorted by the API.
+final gearServicesProvider =
+    FutureProvider.autoDispose.family<List<ServiceProvider>, ServiceLocation>(
+        (ref, location) => TeritoryRepository.instance.fetchGearProviders(
+              latitude: location.lat,
+              longitude: location.lng,
+            ));
 
-  Future<void> refresh() async => _load();
-}
-
-final servicesNotifierProvider =
-    NotifierProvider<ServicesNotifier, List<ServiceListing>>(
-        ServicesNotifier.new);
-
-final nearbyServicesProvider = Provider<List<ServiceListing>>((ref) {
-  return ref.watch(servicesNotifierProvider);
-});
+/// Live `GET /services/nearby-food?lat&lng` (10 km radius server-side).
+final nearbyFoodProvidersProvider =
+    FutureProvider.autoDispose.family<List<ServiceProvider>, ServiceLocation>(
+        (ref, location) =>
+            TeritoryRepository.instance.fetchNearbyFoodProviders(
+              latitude: location.lat,
+              longitude: location.lng,
+            ));
 
 // ─── Rallies ───────────────────────────────────────────────────────────
 
