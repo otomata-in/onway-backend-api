@@ -6,11 +6,13 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/models/api_flag.dart';
 import '../../../core/models/teritory_models.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/preferences_provider.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../../../core/widgets/teritory_logo.dart';
 import '../../explore/application/explore_flags_provider.dart';
 import '../../flag/presentation/drop_flag_modal.dart';
 import '../../flag/presentation/live_flag_detail_sheet.dart';
+import '../../profile/application/profile_providers.dart';
 
 class HomeMapScreen extends ConsumerStatefulWidget {
   const HomeMapScreen({super.key});
@@ -28,7 +30,9 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
     ExploreFlagsNotifier.centerLng,
   );
   String _selectedFilter = 'All';
-  bool _isDarkTheme = true; // true: Midnight Oceanic (Teal/Blue/Black mix), false: Daylight White map
+  // Mirrors the persisted theme (true = Midnight Oceanic, false = Daylight
+  // White); assigned from [mapThemeProvider] at the top of build.
+  bool _isDarkTheme = true;
   late AnimationController _pulseController;
 
   @override
@@ -66,8 +70,11 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
 
   @override
   Widget build(BuildContext context) {
+    _isDarkTheme = ref.watch(mapThemeProvider);
     final exploreAsync = ref.watch(exploreFlagsProvider);
     final currentUserId = ref.watch(currentUserProvider).id;
+    final isTripMode =
+        ref.watch(myProfileProvider).valueOrNull?.isTripMode ?? false;
     final live = exploreAsync.valueOrNull ??
         const ExploreFlagsData(flags: [], friendIds: <String>{});
 
@@ -246,6 +253,47 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                           ],
                         ),
                       ),
+                      if (isTripMode) ...[
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _isDarkTheme
+                                  ? const Color(0xFF1E293B)
+                                  : TeritoryColors.tripRoute
+                                      .withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: _isDarkTheme
+                                  ? Border.all(
+                                      color: const Color(0xFF334155),
+                                      width: 0.8)
+                                  : null,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.route_rounded,
+                                    size: 13,
+                                    color: TeritoryColors.tripRoute),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'On a trip',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: _isDarkTheme
+                                        ? Colors.white
+                                        : TeritoryColors.textPrimary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 10),
 
                       // Filter Chips
@@ -292,11 +340,9 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                                 color: Color(0xFF334155), width: 1.0)
                             : BorderSide.none,
                       ),
-                      onPressed: () {
-                        setState(() {
-                          _isDarkTheme = !_isDarkTheme;
-                        });
-                      },
+                      onPressed: () => ref
+                          .read(mapThemeProvider.notifier)
+                          .setDark(!_isDarkTheme),
                       child: Icon(_isDarkTheme
                           ? Icons.water_drop_rounded
                           : Icons.light_mode_rounded),

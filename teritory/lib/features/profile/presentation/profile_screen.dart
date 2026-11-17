@@ -10,7 +10,9 @@ import '../../../core/models/api_user.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../../flag/presentation/live_flag_detail_sheet.dart';
+import '../../rankings/application/rankings_provider.dart';
 import '../application/profile_providers.dart';
+import 'edit_profile_sheet.dart';
 
 /// Live "Traveler Footprint" page: profile, stats and stamps come from
 /// `GET /users/me`, the map and flag list from `GET /flags?userId=`.
@@ -76,6 +78,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: 'Edit profile',
+            icon: const Icon(Icons.edit_outlined, size: 20),
+            onPressed: () => _openEditProfile(profileAsync.valueOrNull),
+          ),
+          IconButton(
             tooltip: 'Friends',
             icon: const Icon(Icons.people_outline_rounded, size: 20),
             onPressed: () => context.go('/profile/friends'),
@@ -100,6 +107,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         data: _buildProfile,
       ),
     );
+  }
+
+  Future<void> _openEditProfile(ApiUser? profile) async {
+    if (profile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Your profile is still loading')),
+      );
+      return;
+    }
+
+    final saved = await EditProfileSheet.show(context, profile);
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile updated')),
+      );
+    }
   }
 
   Widget _buildProfile(ApiUser profile) {
@@ -148,6 +171,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           _ProfileHeader(profile: profile),
           const SizedBox(height: 14),
           _StatsRow(profile: profile),
+          const SizedBox(height: 12),
+          _ProfileBadges(profile: profile),
           const SizedBox(height: 18),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -456,6 +481,84 @@ class _ProfileHeader extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Rank, clan membership and rally count, all from live endpoints. Each chip
+/// appears only once its data has arrived, so the row never shows placeholders.
+class _ProfileBadges extends ConsumerWidget {
+  const _ProfileBadges({required this.profile});
+
+  final ApiUser profile;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rank = ref.watch(myRankProvider).valueOrNull;
+    final clanCount = ref.watch(myClanCountProvider).valueOrNull;
+
+    final chips = <Widget>[
+      if (rank != null && rank.globalRank > 0)
+        _badge(
+          Icons.emoji_events_rounded,
+          'Rank #${rank.globalRank}',
+          'of ${rank.totalUsers} travelers',
+        ),
+      if (clanCount != null && clanCount > 0)
+        _badge(
+          Icons.shield_rounded,
+          '$clanCount',
+          clanCount == 1 ? 'clan' : 'clans',
+        ),
+      if (profile.legendaryRalliesCount > 0)
+        _badge(
+          Icons.local_fire_department_rounded,
+          '${profile.legendaryRalliesCount}',
+          profile.legendaryRalliesCount == 1
+              ? 'legendary rally'
+              : 'legendary rallies',
+        ),
+    ];
+
+    if (chips.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Wrap(spacing: 8, runSpacing: 8, children: chips),
+    );
+  }
+
+  Widget _badge(IconData icon, String value, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: TeritoryColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: TeritoryColors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: TeritoryColors.primary),
+          const SizedBox(width: 6),
+          Text(
+            value,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: TeritoryColors.textPrimary,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 11,
+              color: TeritoryColors.textSecondary,
+            ),
           ),
         ],
       ),

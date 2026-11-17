@@ -17,13 +17,13 @@
 | HTTP client | `TeritoryApiService` — token in `SharedPreferences`, 15 s timeout, unwraps `body['data']`, throws `ApiException` |
 | Repository | 30+ live methods; **legacy methods still swallow errors and fall back to `MockDataService`** |
 | State | Live pages use `FutureProvider`/`AsyncNotifier` with loading / empty / error+retry; legacy providers are still mock-seeded |
-| Auth | **No login UI.** `CurrentUserNotifier` auto-logs in as `+919876543210` / `12345` on first build |
+| Auth | **Live.** `/login` (phone + OTP), access **and refresh** tokens in `SharedPreferences`, silent 401 → refresh + one retry, logout revokes server-side |
 | Realtime | Socket connected with the token; chat `new_message`, typing, trip location, rally rooms available server-side |
 | Data planes still alive | live REST · `MockDataService` (1390 lines) · `assets/data/teritory_data.json` |
 
 **Migrated (pages 1–5 + profile/social)**: Explore, Clans, Communities, Trips, Rankings, Profile, Friends, Friend requests, Friend profile.
 
-**Not integrated**: Login/session, Settings, Notifications (no UI at all), Gear services, Legendary rallies, shared Invite sheet, Wonders catalogue, sub-territories, legacy tribes screen, trip completion card, community plan creation, join-active-trip.
+**Not integrated**: Notifications (no UI at all), Gear services, Legendary rallies, shared Invite sheet, Wonders catalogue, sub-territories, legacy tribes screen, trip completion card, community plan creation, join-active-trip.
 
 ---
 
@@ -236,7 +236,7 @@ Overall: **~72% of surfaces wired**; **48 / 69 endpoints are reachable from a sc
 
 ## 5. Plan to finish (phases, in order)
 
-### Phase 6.0 — Auth & session gate (foundational, do first)
+### Phase 6.0 — Auth & session gate (foundational, do first) — **done (§10)**
 - New `LoginScreen` (phone → `POST /auth/send-otp` → OTP `12345` in dev → `POST /auth/verify-otp`).
 - Persist access **and refresh** tokens; `POST /auth/refresh` on 401 with one retry.
 - Router redirect: unauthenticated → `/login`; remove the hard-coded auto-login.
@@ -244,13 +244,13 @@ Overall: **~72% of surfaces wired**; **48 / 69 endpoints are reachable from a sc
 - **Done when**: cold start with no token lands on login; OTP round-trip signs in; expired token
   refreshes silently; logout returns to login and clears the stack.
 
-### Phase 6.1 — Profile completeness
+### Phase 6.1 — Profile completeness — **done (§10)**
 - Edit-profile sheet (displayName, bio, avatar URL, country/state/district, privacy) → `PATCH /users/me`.
 - Trip-mode switch → `PATCH /users/me/trip-mode`; show the "On Trip" badge on Explore carousel.
 - Profile badges: rank summary (`/rankings/me`), clans (`/clans/my`), rally count (`/rallies`).
 - **Done when**: edits survive a relaunch (server round-trip) and invalidate `myProfileProvider`.
 
-### Phase 6.2 — Settings
+### Phase 6.2 — Settings — **done (§10)**
 - Wire Log Out → Phase 6.0 flow; About/Terms/Privacy static pages; Version from `pubspec`.
 - Map theme default → persisted preference consumed by Explore.
 - Notification settings → local toggles until the backend exposes preferences (document the gap).
@@ -329,7 +329,9 @@ Overall: **~72% of surfaces wired**; **48 / 69 endpoints are reachable from a sc
 2. Device location is a product decision (new plugin + permissions).
 3. Avatar upload, account deletion, gear booking, DMs, wishlist and plan fork require **new
    backend work**; until then those buttons must stay honest rather than fake success.
-4. Token refresh needs a refresh token persisted at login — currently only the access token is.
+4. ~~Token refresh needs a refresh token persisted at login~~ — both tokens are now stored and
+   refreshed on 401 (§10).  Remaining auth-shaped gaps: no handle change, no account deletion,
+   and no server-side notification preferences.
 
 ---
 
@@ -386,3 +388,44 @@ Result: **8/8 passed**.
    activities; messages, completions and flag drops do not, so the feed is quiet by design.
 5. `chat_typing` is relayed as `user_typing` but no client listens; typing indicators are
    still unimplemented (Phase 7.0 alongside notifications).
+
+---
+
+## 10. Phase 6 log — 17 Nov 2026
+
+### 10.1 What changed
+
+| Area | Change |
+|---|---|
+| API client | `saveTokens` stores access **and** refresh tokens; a 401 outside `/auth/*` refreshes once (single-flight, because the server rotates and revokes the old refresh token) and replays the request |
+| Session gate | `AuthStatus { restoring, signedOut, signedIn }` notifier restores the stored session on cold start; hard-coded `+919876543210` auto-login removed |
+| Router | `routerProvider` + `refreshListenable`: `restoring → /splash`, `signedOut → /login`, `signedIn → shell`; `/login` and `/splash` leave the stack on sign-in |
+| Login UI | `LoginScreen` — phone → `POST /auth/send-otp` → 5-digit code → `POST /auth/verify-otp`; server errors rendered inline; dev bypass hint only in debug builds |
+| Logout | Settings → Log Out confirms, calls `POST /auth/logout`, clears both tokens, disconnects the socket, router lands on `/login` |
+| Profile edits | `EditProfileSheet` → `PATCH /users/me` (displayName, bio, avatar URL, country/state/district, isPrivate) and `PATCH /users/me/trip-mode`; invalidates `myProfileProvider` |
+| Profile badges | Rank (`/rankings/me`), clan count (`/clans/my`) and legendary rally count (already in `/users/me`) as chips under the stats row |
+| Explore | "On a trip" pill under the header when the profile has trip mode on |
+| Settings | Edit Profile / Privacy (live), map theme (persisted), notification switches (device-local, labelled), About / Terms / Privacy pages, version, Delete Account dialog stating the missing endpoint |
+| Explore theme | `mapThemeProvider` (persisted) replaces the local `_isDarkTheme`, so Settings and the map FAB stay in sync |
+
+### 10.2 Live tests run against `:4000`
+
+| File | Covers | Result |
+|---|---|---|
+| `test/live_auth_smoke_test.dart` | `send-otp`; wrong code rejected; `verify-otp` stores both tokens; expired access token refreshes silently and rotates the refresh token; `logout` revokes and clears | 4/4 passed |
+| `test/live_profile_smoke_test.dart` | `PATCH /users/me` round-trip (edit then re-read, then restore); `PATCH /users/me/trip-mode` flip and restore | 2/2 passed |
+| `test/live_flows_smoke_test.dart` + `live_rankings_smoke_test.dart` | earlier migrations, re-run after the client change | passed |
+| `test/preferences_test.dart` | map theme + notification switches survive a fresh provider container | 2/2 passed |
+
+### 10.3 Gaps left open (deliberately)
+
+1. **Handle** is not in the backend allow-list for `PATCH /users/me`; Settings states that instead
+   of pretending.
+2. **Account deletion** has no endpoint; the action shows a dialog naming the gap.
+3. **Notification preferences** are device-local; the backend has no preferences endpoint, and the
+   sheet says so.
+4. **Avatar upload** does not exist — the sheet edits an avatar URL only.
+5. Version is a constant in `AppConfig.appVersion` kept in sync with `pubspec.yaml`; adding
+   `package_info_plus` was avoided.
+6. The screens were verified through `flutter analyze` and the repository-level live tests; no
+   on-device tap-through of the new login/settings UI was performed.

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../providers/auth_provider.dart';
 import '../theme/teritory_theme.dart';
+import '../../features/auth/presentation/login_screen.dart';
+import '../../features/auth/presentation/splash_screen.dart';
 
 // ─── Screen imports ─────────────────────────────────────────────────────
 import '../../features/home/presentation/home_map_screen.dart';
@@ -24,6 +28,7 @@ import '../../features/profile/presentation/friend_profile_screen.dart';
 import '../../features/profile/presentation/friend_requests_screen.dart';
 import '../../features/profile/presentation/completed_trips_screen.dart';
 import '../../features/profile/presentation/settings_screen.dart';
+import '../../features/profile/presentation/info_page_screen.dart';
 
 // ─── Navigation keys ───────────────────────────────────────────────────
 
@@ -41,10 +46,41 @@ final _shellNavigatorProfileKey =
 
 // ─── Router ────────────────────────────────────────────────────────────
 
-final GoRouter appRouter = GoRouter(
+/// The router lives behind a provider so its redirect follows the session
+/// state: restoring → `/splash`, signed out → `/login`, signed in → the shell.
+final routerProvider = Provider<GoRouter>((ref) {
+  final authRefresh = ValueNotifier<AuthStatus>(ref.read(authStatusProvider));
+  ref.listen<AuthStatus>(authStatusProvider, (_, next) {
+    authRefresh.value = next;
+  });
+  ref.onDispose(authRefresh.dispose);
+
+  return GoRouter(
   navigatorKey: _rootNavigatorKey,
   initialLocation: '/explore',
+  refreshListenable: authRefresh,
+  redirect: (context, state) {
+    final status = ref.read(authStatusProvider);
+    final location = state.matchedLocation;
+
+    if (status == AuthStatus.restoring) {
+      return location == '/splash' ? null : '/splash';
+    }
+    if (status == AuthStatus.signedOut) {
+      return location == '/login' ? null : '/login';
+    }
+    if (location == '/login' || location == '/splash') return '/explore';
+    return null;
+  },
   routes: [
+    GoRoute(
+      path: '/splash',
+      builder: (context, state) => const SplashScreen(),
+    ),
+    GoRoute(
+      path: '/login',
+      builder: (context, state) => const LoginScreen(),
+    ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {
         return _MainScaffold(navigationShell: navigationShell);
@@ -203,6 +239,20 @@ final GoRouter appRouter = GoRouter(
                   path: 'settings',
                   builder: (context, state) =>
                       const SettingsScreen(),
+                  routes: [
+                    GoRoute(
+                      path: 'about',
+                      builder: (context, state) => InfoPageScreen.about(),
+                    ),
+                    GoRoute(
+                      path: 'terms',
+                      builder: (context, state) => InfoPageScreen.terms(),
+                    ),
+                    GoRoute(
+                      path: 'privacy',
+                      builder: (context, state) => InfoPageScreen.privacy(),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -211,7 +261,8 @@ final GoRouter appRouter = GoRouter(
       ],
     ),
   ],
-);
+  );
+});
 
 // ─── Main scaffold with bottom nav ─────────────────────────────────────
 

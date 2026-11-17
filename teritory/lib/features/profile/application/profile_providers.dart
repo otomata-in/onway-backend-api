@@ -21,6 +21,13 @@ final userFlagsProvider =
   return TeritoryRepository.instance.fetchUserFlags(userId);
 });
 
+/// Membership count for the profile badges. The clan list itself belongs to
+/// the Clans tab, so this only reads `/clans/my`.
+final myClanCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  final ids = await TeritoryRepository.instance.fetchMyClanIds();
+  return ids.length;
+});
+
 final friendsLiveProvider = FutureProvider.autoDispose<List<ApiFriend>>((ref) {
   return TeritoryRepository.instance.fetchFriends();
 });

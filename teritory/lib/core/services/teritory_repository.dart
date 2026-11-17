@@ -24,33 +24,69 @@ class TeritoryRepository {
 
   // ─── AUTH & PROFILE ──────────────────────────────────────────────────
 
-  Future<User?> loginWithOtp(String phone, String otp) async {
-    try {
-      final res = await _api.post('/auth/verify-otp', body: {
-        'phone': phone,
-        'otp': otp,
-      });
+  Future<void> sendOtp(String phone) async {
+    await _api.post('/auth/send-otp', body: {'phone': phone});
+  }
 
-      if (res is Map<String, dynamic> && res['accessToken'] != null) {
-        await _api.saveToken(res['accessToken'] as String);
-        return await fetchMyProfile();
-      }
-    } catch (e) {
-      if (kDebugMode) print('❌ [TeritoryRepository.loginWithOtp] Error: $e');
+  /// Signs in and returns the live profile. Errors propagate so the login
+  /// screen can show the server message instead of failing silently.
+  Future<User> loginWithOtp(String phone, String otp) async {
+    final res = await _api.post('/auth/verify-otp', body: {
+      'phone': phone,
+      'otp': otp,
+    });
+
+    if (res is! Map<String, dynamic> || res['accessToken'] == null) {
+      throw ApiException('Sign-in failed: the server did not return a session');
     }
-    return null;
+
+    await _api.saveTokens(
+      accessToken: res['accessToken'] as String,
+      refreshToken: res['refreshToken'] as String?,
+    );
+    return fetchMyProfileOrThrow();
+  }
+
+  /// Live-only profile read: throws [ApiException] so callers can show the
+  /// server message and a retry.
+  Future<User> fetchMyProfileOrThrow() async {
+    final res = await _api.get('/users/me');
+    if (res is! Map<String, dynamic>) {
+      throw ApiException('Unexpected response while loading your profile');
+    }
+    return User.fromJson(res);
   }
 
   Future<User> fetchMyProfile() async {
     try {
-      final res = await _api.get('/users/me');
-      if (res is Map<String, dynamic>) {
-        return User.fromJson(res);
-      }
+      return await fetchMyProfileOrThrow();
     } catch (e) {
       if (kDebugMode) print('⚠️ [TeritoryRepository.fetchMyProfile] Falling back to mock: $e');
     }
     return MockDataService.instance.currentUser;
+  }
+
+  /// Revokes the refresh token server-side, then clears the local session.
+  Future<void> logout() async {
+    try {
+      await _api.post('/auth/logout', body: {'refreshToken': _api.refreshToken});
+    } catch (e) {
+      if (kDebugMode) print('⚠️ [TeritoryRepository.logout] Server revoke failed: $e');
+    } finally {
+      await _api.clearTokens();
+    }
+  }
+
+  /// Toggles the "On a trip" state shown to friends; returns the stored value.
+  Future<bool> setTripMode(bool enabled) async {
+    final res = await _api.patch(
+      '/users/me/trip-mode',
+      body: {'isTripMode': enabled},
+    );
+    if (res is Map<String, dynamic> && res['isTripMode'] is bool) {
+      return res['isTripMode'] as bool;
+    }
+    throw ApiException('Unexpected response while updating trip mode');
   }
 
   // ─── CLANS ───────────────────────────────────────────────────────────
@@ -737,8 +773,29 @@ class TeritoryRepository {
     await _api.delete('/users/friends/$relationshipId');
   }
 
-  /// `PATCH /users/me` with only the fields the caller changed.
-  Future<ApiUser> updateMyProfile(Map<String, dynamic> changes) async {
+  /// `PATCH /users/me` with only the fields the caller changed; the backend
+  /// ignores any key outside its allow-list.
+  Future<ApiUser> updateMyProfile({
+    String? displayName,
+    String? bio,
+    String? avatarUrl,
+    String? coverImageUrl,
+    String? country,
+    String? state,
+    String? district,
+    bool? isPrivate,
+  }) async {
+    final changes = <String, dynamic>{
+      'displayName': ?displayName,
+      'bio': ?bio,
+      'avatarUrl': ?avatarUrl,
+      'coverImageUrl': ?coverImageUrl,
+      'country': ?country,
+      'state': ?state,
+      'district': ?district,
+      'isPrivate': ?isPrivate,
+    };
+
     final res = await _api.patch('/users/me', body: changes);
     if (res is! Map<String, dynamic>) {
       throw ApiException('Unexpected response while saving your profile');

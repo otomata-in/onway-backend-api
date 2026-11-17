@@ -15,4 +15,7 @@ class AppConfig {
   );
 
   static const Duration requestTimeout = Duration(seconds: 15);
+
+  /// Keep in sync with `version:` in pubspec.yaml.
+  static const String appVersion = '1.0.0+1';
 }

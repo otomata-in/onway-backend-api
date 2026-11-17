@@ -30,9 +30,9 @@
 
 | Layer | Implementation | Consequence |
 |---|---|---|
-| Auth | `auth_provider.dart` auto-logged in with hard-coded `+919876543210` / `12345` | no OTP/login/logout UI |
-| Token | access token in `SharedPreferences` | refresh token unused; 7-day cliff |
-| HTTP | `api_service.dart` unwraps `body['data']`, 15 s timeout | no retry/refresh |
+| Auth | **LIVE** — `LoginScreen` (phone → `send-otp` → `verify-otp`), `AuthStatus` gate in the router, logout revokes server-side | no hard-coded credentials; `/splash` while the session restores |
+| Token | access **and** refresh token in `SharedPreferences`; refresh token rotated on every use | expired access token refreshes silently, one retry |
+| HTTP | `api_service.dart` unwraps `body['data']`, 15 s timeout, 401 → single-flight refresh + replay | auth endpoints excluded to avoid loops |
 | Repository | 20 methods; `try/catch` → mock fallback | failures invisible |
 | State | Riverpod providers seeded with mock, replaced asynchronously | mock flash, no error UI |
 | Realtime | Socket.IO: room join + `new_message` consumed | typing/telemetry unused |
@@ -79,7 +79,8 @@ asset data · `MISSING` no API / no UI · `UNREACHABLE` no inbound navigation.
 | 17 | Friends list | `friends_list_screen.dart` | **LIVE (migrated)** | done |
 | 18 | Friend requests | `friend_requests_screen.dart` | **LIVE (migrated)** | done |
 | 19 | Friend profile | `friend_profile_screen.dart` | **LIVE (migrated)** | done |
-| 20 | Settings | `settings_screen.dart` | STUB (every tile "Coming soon") | phase 6 |
+| 20 | Settings | `settings_screen.dart` | **LIVE (migrated)** — edit profile, persisted map theme, local notification switches, About/Terms/Privacy, version, logout; handle / delete-account gaps stated | done |
+| — | Login + session | `features/auth/presentation/login_screen.dart` | **LIVE (migrated)** — OTP sign-in, splash restore, silent refresh, logout | done |
 | 21 | Gear service sheet | `gear_service_sheet.dart` | MOCK (never opened) | phase 7 |
 | 22 | Invite friends sheet | `invite_friends_sheet.dart` | PARTIAL (never opened) | phase 7 |
 | 23 | Legendary rally sheet | `legendary_rally_sheet.dart` | MOCK (never opened) | phase 7 |
@@ -173,7 +174,7 @@ asset data · `MISSING` no API / no UI · `UNREACHABLE` no inbound navigation.
 | Add friend | `POST /users/friends/request` | snackbar |
 | Friend profile | `GET /users/:userId` | mock |
 | Remove friend / DM | missing | snackbar / none |
-| Settings actions | logout, delete, prefs | "Coming soon" |
+| Settings actions | logout, delete, prefs | logout live; notifications local; delete-account dialog names the missing endpoint |
 
 ### Phase 7 — Secondary surfaces
 
