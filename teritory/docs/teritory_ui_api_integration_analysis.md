@@ -2,7 +2,7 @@
 
 > **Status**: living document
 > **Created**: 16 Nov 2026
-> **Last update**: Page 5 (Rankings) integrated and smoke-tested against the live API
+> **Last update**: 17 Nov 2026 — profile/social pages committed (`93c697c`); see `remaining_api_integration_plan.md` for what is left
 > **Scope**: `teritory/` (Flutter app) · `teritory-api/` (Node 22 + Express + Prisma)
 > **Method**: source inspection of all 50 Dart files and the full backend; `flutter analyze`
 > after each increment. Runtime smoke tests are listed per page.
@@ -75,11 +75,11 @@ asset data · `MISSING` no API / no UI · `UNREACHABLE` no inbound navigation.
 | 13 | Trip history / completed trips | `trip_history_screen.dart`, `completed_trips_screen.dart` | **LIVE (migrated)** | done |
 | 14 | Trip completion card | `trip_completion_card.dart` | MOCK (never shown) | phase 4 |
 | 15 | Leaderboard | `leaderboard_screen.dart` | **LIVE (migrated)** | done |
-| 16 | Profile | `profile_screen.dart` | MOCK (asset) | phase 6 |
-| 17 | Friends list | `friends_list_screen.dart` | MOCK (unreachable) | phase 6 |
-| 18 | Friend requests | `friend_requests_screen.dart` | MOCK (unreachable) | phase 6 |
-| 19 | Friend profile | `friend_profile_screen.dart` | MOCK (unreachable) | phase 6 |
-| 20 | Settings | `settings_screen.dart` | MOCK (unreachable) | phase 6 |
+| 16 | Profile | `profile_screen.dart` | **LIVE (migrated)** | done |
+| 17 | Friends list | `friends_list_screen.dart` | **LIVE (migrated)** | done |
+| 18 | Friend requests | `friend_requests_screen.dart` | **LIVE (migrated)** | done |
+| 19 | Friend profile | `friend_profile_screen.dart` | **LIVE (migrated)** | done |
+| 20 | Settings | `settings_screen.dart` | STUB (every tile "Coming soon") | phase 6 |
 | 21 | Gear service sheet | `gear_service_sheet.dart` | MOCK (never opened) | phase 7 |
 | 22 | Invite friends sheet | `invite_friends_sheet.dart` | PARTIAL (never opened) | phase 7 |
 | 23 | Legendary rally sheet | `legendary_rally_sheet.dart` | MOCK (never opened) | phase 7 |
