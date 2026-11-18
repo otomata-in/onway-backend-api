@@ -2,6 +2,7 @@ const prisma = require('../../config/prisma');
 const ApiResponse = require('../../utils/ApiResponse');
 const ApiError = require('../../utils/ApiError');
 const { haversineDistanceMeters, haversineDistanceKm } = require('../../utils/geo');
+const { notify } = require('../notifications/notifications.service');
 
 // Major wonders registry — derived from the major flags travelers have staked.
 // There is no official wonders table: one row per distinct place, with the
@@ -334,6 +335,22 @@ const toggleReaction = async (req, res, next) => {
           type,
         },
       });
+
+      const flag = await prisma.flag.findUnique({
+        where: { id },
+        select: { userId: true, placeName: true },
+      });
+      if (flag && flag.userId !== req.user.id) {
+        await notify({
+          userId: flag.userId,
+          type: 'SYSTEM',
+          title: 'Reaction on your spot',
+          body: `${req.user.displayName} reacted ${type} to "${flag.placeName}".`,
+          icon: 'star',
+          actionUrl: '/explore',
+        });
+      }
+
       return ApiResponse.created(res, { reacted: true, reaction }, 'Reaction added');
     }
   } catch (err) {
@@ -362,6 +379,22 @@ const addComment = async (req, res, next) => {
       },
     });
 
+    const flag = await prisma.flag.findUnique({
+      where: { id },
+      select: { userId: true, placeName: true },
+    });
+    if (flag && flag.userId !== req.user.id) {
+      const preview = text.trim().length > 40 ? `${text.trim().substring(0, 40)}…` : text.trim();
+      await notify({
+        userId: flag.userId,
+        type: 'SYSTEM',
+        title: 'New comment on your spot',
+        body: `${req.user.displayName} commented on "${flag.placeName}": "${preview}"`,
+        icon: 'chat',
+        actionUrl: '/explore',
+      });
+    }
+
     return ApiResponse.created(res, comment, 'Comment posted');
   } catch (err) {
     next(err);
@@ -375,7 +408,20 @@ const addKudos = async (req, res, next) => {
     const updated = await prisma.flag.update({
       where: { id },
       data: { kudos: { increment: 1 } },
+      select: { kudos: true, userId: true, placeName: true },
     });
+
+    if (updated.userId !== req.user.id) {
+      await notify({
+        userId: updated.userId,
+        type: 'SYSTEM',
+        title: 'Kudos received!',
+        body: `${req.user.displayName} gave kudos to your spot "${updated.placeName}".`,
+        icon: 'heart',
+        actionUrl: '/explore',
+      });
+    }
+
     return ApiResponse.success(res, { kudos: updated.kudos }, 'Kudos recorded');
   } catch (err) {
     next(err);

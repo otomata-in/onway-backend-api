@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -128,6 +129,18 @@ class _LiveFlagDetailSheetState extends ConsumerState<LiveFlagDetailSheet> {
     } finally {
       if (mounted) setState(() => _savingWishlist = false);
     }
+  }
+
+  void _shareSpot(ApiFlag flag) {
+    final location = flag.locationLabel.isNotEmpty
+        ? flag.locationLabel
+        : [flag.city, flag.country].where((p) => p.isNotEmpty).join(', ');
+    final shareText = '🚩 Spot on Teritory: ${flag.placeName} (${flag.category})\n'
+        '📍 $location\n'
+        'Coordinates: ${flag.latitude.toStringAsFixed(4)}, ${flag.longitude.toStringAsFixed(4)}\n'
+        'Explore more: https://teritory.app/flags/${flag.id}';
+    Clipboard.setData(ClipboardData(text: shareText));
+    _toast('Spot details copied to clipboard!');
   }
 
   Future<void> _sendComment() async {
