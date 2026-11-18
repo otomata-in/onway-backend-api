@@ -36,3 +36,4 @@ echo "✅ Teritory API Deployed Successfully!"
 echo "   Endpoint: http://localhost:4000/v1"
 echo "   Health:   http://localhost:4000/health"
 echo "=========================================="
+
