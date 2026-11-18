@@ -1,62 +1,40 @@
-# OnWay API — Cloud Deployment & Maintenance Guide
+# Cloud Deployment & Maintenance Guide
 
-This folder contains the complete operational documentation for the deployed **OnWay Hyperlocal Marketplace Backend** and **Lakebase PostgreSQL Database**.
+This folder contains operational documentation for the backend services hosted within this repository:
+
+1. **Teritory Travel & Expedition Platform Backend** (`teritory-api`, standalone Node.js Express service running on Render & Neon `teritory_db`).
+2. **OnWay Hyperlocal Marketplace Backend** (`onway-api`, running on Render & Neon `neondb`).
 
 ---
 
-## 🌐 Quick Links & Service Information
+## 🛡️ Multi-Project Architecture & Separation
 
-| Resource | Value / Link | Notes |
+The repository houses two isolated projects. Actions taken on one project do not alter or disrupt the other:
+
+| Component | Teritory Travel Platform | OnWay Marketplace |
 | :--- | :--- | :--- |
-| **Live API Base URL** | `https://onway-backend-api.onrender.com` | Root endpoint returns service health status |
-| **API Version 1 Prefix** | `https://onway-backend-api.onrender.com/api/v1` | Used by Flutter Buyer and Vendor apps |
-| **API Documentation (Swagger UI)** | `https://onway-backend-api.onrender.com/api-docs/` | Interactive OpenAPI documentation |
-| **Render Dashboard** | [dashboard.render.com](https://dashboard.render.com/web/srv-dbnm5rrl550s73fjluq0) | Manage web service, logs, environment variables |
-| **Neon Database Console** | [console.neon.tech](https://console.neon.tech/) | Project: `cool-pond-82585350`, Branch: `production` |
-| **GitHub Repository** | [github.com/otomata-in/onway-backend-api](https://github.com/otomata-in/onway-backend-api) | Primary production codebase repository |
-
----
-
-## 🏛 Architecture Overview
-
-```
-                      ┌────────────────────────────────┐
-                      │   Flutter Apps (Vendor/Buyer)  │
-                      └──────────────┬─────────────────┘
-                                     │ HTTPS / WSS
-                                     ▼
-                      ┌────────────────────────────────┐
-                      │    Render Web Service          │
-                      │  (Node.js 22 + Express 5)      │
-                      │  Port: 10000 (bind 0.0.0.0)    │
-                      └──────┬──────────────────┬──────┘
-                             │                  │
-           Prisma Runtime    │                  │  ioredis (Optional)
-       Pooled Query (5432)   │                  │  Graceful Fallback
-                             ▼                  ▼
-              ┌────────────────────────┐  ┌───────────┐
-              │    Neon PostgreSQL     │  │  Upstash  │
-              │  (Lakebase Serverless) │  │   Redis   │
-              │  Project: cool-pond... │  └───────────┘
-              └────────────────────────┘
-```
+| **API Path** | `./teritory-api` | `./src` (Root) |
+| **Mobile App** | `./teritory` (Flutter) | OnWay Buyer & Vendor |
+| **Cloud Database** | Neon Postgres (`teritory_db`) | Neon Postgres (`neondb`) |
+| **Production Service** | `teritory-api` | `onway-backend-api` |
+| **Default Port** | `4000` (Dev) / `10000` (Cloud) | `3001` (Dev) / `10000` (Cloud) |
+| **Dedicated Guide** | [teritory_backend_deployment.md](teritory_backend_deployment.md) | [backend_deployment.md](backend_deployment.md) |
 
 ---
 
 ## 📁 Guide Table of Contents
 
-1. **[Backend Deployment & Maintenance](backend_deployment.md)**
-   * How automatic deployments work on git push.
-   * How to manually trigger deploys or rebuild with clear cache.
-   * Managing environment variables on Render.
-   * Viewing logs and diagnosing container issues.
-2. **[Database Management & Migrations](database_management.md)**
-   * How Prisma connects to Neon (Pooled vs. Direct connection strings).
-   * Modifying Prisma schema and deploying changes to the live database (`prisma db push`).
-   * Neon branching workflows for safe testing without risking production data.
-   * Using the Neon CLI and MCP tools.
-3. **[Flutter Integration & Testing](flutter_integration.md)**
-   * Configuration of `baseUrl` in Flutter Vendor and Buyer applications.
-   * Testing endpoints from physical devices anywhere in the world.
-   * Handling authentication tokens and Socket.IO connections.
-
+1. **[Teritory API Deployment & Maintenance](teritory_backend_deployment.md)**
+   * Deploying `teritory-api` on Render without affecting `onway-api`.
+   * Standalone Docker and PM2 configurations.
+   * Remote Neon database migrations & seeding rich Kazhakkoottam test data.
+   * Testing authentication for user **Akhil V A** (`+91 8848793417`, OTP `12345`).
+   * Configuring the Teritory Flutter application to connect to the live cloud URL.
+2. **[OnWay Backend Deployment & Maintenance](backend_deployment.md)**
+   * How automatic deployments work on git push for OnWay.
+   * Render service configuration (`onway-backend-api`).
+   * Environment variables and cache clearing.
+3. **[OnWay Database Management & Migrations](database_management.md)**
+   * Managing `neondb` on Lakebase serverless Postgres.
+4. **[OnWay Flutter Integration & Testing](flutter_integration.md)**
+   * Flutter Buyer & Vendor apps configuration.

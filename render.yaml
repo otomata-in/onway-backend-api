@@ -19,3 +19,36 @@ services:
       - key: PORT
         value: 10000
 
+  - type: web
+    name: teritory-api
+    runtime: node
+    plan: free
+    region: ohio
+    branch: develop
+    rootDir: teritory-api
+    buildCommand: npm install && npx prisma generate
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        value: postgresql://neondb_owner:npg_MNPi8KZyD1OU@ep-noisy-bar-be1d5ayd-pooler.c-9.us-east-2.aws.neon.tech/teritory_db?sslmode=require&connect_timeout=30&pool_timeout=30
+      - key: JWT_SECRET
+        value: teritory_super_secret_jwt_access_key_2026_x99
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: JWT_REFRESH_SECRET
+        value: teritory_super_secret_refresh_token_key_2026_z88
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 30d
+      - key: WAYPOINT_VALIDATION_RADIUS_METERS
+        value: "15000"
+      - key: RALLY_ARRIVAL_RADIUS_METERS
+        value: "500"
+      - key: SUB_TERITORY_RADIUS_METERS
+        value: "5000"
+
+
