@@ -3,6 +3,71 @@ const ApiResponse = require('../../utils/ApiResponse');
 const ApiError = require('../../utils/ApiError');
 const { haversineDistanceMeters, haversineDistanceKm } = require('../../utils/geo');
 
+// Major wonders registry — derived from the major flags travelers have staked.
+// There is no official wonders table: one row per distinct place, with the
+// claim count, the travelers who claimed it and whether the caller has.
+const getWonders = async (req, res, next) => {
+  try {
+    const flags = await prisma.flag.findMany({
+      where: { isMajorFlag: true },
+      include: {
+        user: {
+          select: { id: true, displayName: true, handle: true, avatarUrl: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const currentUserId = req.user?.id;
+    const byPlace = new Map();
+
+    for (const flag of flags) {
+      const key = `${flag.placeName.trim().toLowerCase()}|${(flag.country || '').trim().toLowerCase()}`;
+      let wonder = byPlace.get(key);
+
+      if (!wonder) {
+        wonder = {
+          key,
+          placeName: flag.placeName,
+          city: flag.city,
+          country: flag.country,
+          countryCode: flag.countryCode,
+          continent: flag.continent,
+          latitude: flag.latitude,
+          longitude: flag.longitude,
+          photoUrl: null,
+          latestFlagId: flag.id,
+          claimCount: 0,
+          claimers: [],
+          claimedByMe: false,
+          lastClaimedAt: flag.createdAt,
+        };
+        byPlace.set(key, wonder);
+      }
+
+      wonder.claimCount += 1;
+      if (!wonder.photoUrl && flag.photoUrl) wonder.photoUrl = flag.photoUrl;
+      if (currentUserId && flag.userId === currentUserId) wonder.claimedByMe = true;
+      if (!wonder.claimers.some((c) => c.id === flag.userId)) {
+        wonder.claimers.push({
+          id: flag.userId,
+          displayName: flag.user?.displayName || 'Traveler',
+          handle: flag.user?.handle || '',
+          avatarUrl: flag.user?.avatarUrl || '',
+        });
+      }
+    }
+
+    const wonders = [...byPlace.values()].sort(
+      (a, b) => b.claimCount - a.claimCount || a.placeName.localeCompare(b.placeName)
+    );
+
+    return ApiResponse.success(res, wonders);
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Explore nearby flags
 const exploreFlags = async (req, res, next) => {
   try {
@@ -185,7 +250,56 @@ const getFlagById = async (req, res, next) => {
       throw ApiError.notFound('Flag not found');
     }
 
-    return ApiResponse.success(res, flag);
+    let isSaved = false;
+    if (req.user) {
+      const saved = await prisma.$queryRaw`SELECT 1 FROM saved_flags WHERE user_id = ${req.user.id} AND flag_id = ${id} LIMIT 1`;
+      isSaved = saved.length > 0;
+    }
+
+    return ApiResponse.success(res, { ...flag, isSaved });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Toggle Save / Wishlist for a flag
+const toggleSaveFlag = async (req, res, next) => {
+  try {
+    const { id: flagId } = req.params;
+    const userId = req.user.id;
+
+    const flag = await prisma.flag.findUnique({
+      where: { id: flagId },
+      select: { id: true, placeName: true },
+    });
+    if (!flag) throw ApiError.notFound('Flag not found');
+
+    const existing = await prisma.$queryRaw`SELECT id FROM saved_flags WHERE user_id = ${userId} AND flag_id = ${flagId} LIMIT 1`;
+
+    if (existing.length > 0) {
+      await prisma.$executeRaw`DELETE FROM saved_flags WHERE user_id = ${userId} AND flag_id = ${flagId}`;
+      return ApiResponse.success(res, { isSaved: false }, `Removed ${flag.placeName} from your wishlist`);
+    } else {
+      await prisma.$executeRaw`INSERT INTO saved_flags (user_id, flag_id) VALUES (${userId}, ${flagId}) ON CONFLICT DO NOTHING`;
+      return ApiResponse.success(res, { isSaved: true }, `Saved ${flag.placeName} to your wishlist`);
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Get Saved / Wishlist flags
+const getSavedFlags = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const flags = await prisma.$queryRaw`
+      SELECT f.id, f."placeName", f.latitude, f.longitude, f."isMajorFlag", f.category, f.notes, f."photoUrl", f.kudos, f."createdAt", sf.saved_at as "savedAt"
+      FROM flags f
+      JOIN saved_flags sf ON f.id = sf.flag_id
+      WHERE sf.user_id = ${userId}
+      ORDER BY sf.saved_at DESC
+    `;
+    return ApiResponse.success(res, flags);
   } catch (err) {
     next(err);
   }
@@ -269,6 +383,7 @@ const addKudos = async (req, res, next) => {
 };
 
 module.exports = {
+  getWonders,
   exploreFlags,
   getSubTerritories,
   dropFlag,
@@ -276,5 +391,7 @@ module.exports = {
   toggleReaction,
   addComment,
   addKudos,
+  toggleSaveFlag,
+  getSavedFlags,
 };
 

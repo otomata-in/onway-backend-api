@@ -5,40 +5,46 @@ import '../../../core/models/trip_models.dart';
 
 /// A full-screen celebration dialog shown when a trip is completed.
 ///
-/// Usage:
-/// ```dart
-/// showDialog(
-///   context: context,
-///   builder: (_) => TripCompletionCard(tripPlan: myTripPlan),
-/// );
-/// ```
+/// Stats come from the live trip and the badge from the `POST
+/// /trips/:tripId/complete` response, so nothing here is sample data.
 class TripCompletionCard extends StatelessWidget {
-  final TripPlan tripPlan;
+  final Trip trip;
+  final List<TripWaypoint> waypoints;
+  final String badge;
 
-  const TripCompletionCard({super.key, required this.tripPlan});
+  const TripCompletionCard({
+    super.key,
+    required this.trip,
+    this.waypoints = const [],
+    this.badge = 'NONE',
+  });
 
   /// Convenience method to show the completion dialog.
-  static Future<void> show(BuildContext context, {required TripPlan tripPlan}) {
+  static Future<void> show(
+    BuildContext context, {
+    required Trip trip,
+    List<TripWaypoint> waypoints = const [],
+    String badge = 'NONE',
+  }) {
     return showDialog(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.7),
-      builder: (_) => TripCompletionCard(tripPlan: tripPlan),
+      builder: (_) =>
+          TripCompletionCard(trip: trip, waypoints: waypoints, badge: badge),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Mock stats derived from the trip plan
-    final int durationDays =
-        (tripPlan.estimatedDurationHours / 24).ceil().clamp(1, 999);
-    final int waypointsVisited = tripPlan.waypoints.length;
-    final double distanceKm = tripPlan.estimatedDistanceKm;
+    final int durationDays = (trip.estimatedDurationHours / 24).ceil().clamp(
+      1,
+      999,
+    );
+    final int stopCount = waypoints.length;
 
     return Dialog(
       backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       child: SingleChildScrollView(
         child: Padding(
@@ -68,7 +74,7 @@ class TripCompletionCard extends StatelessWidget {
 
               // ── Trip Name Subtitle ─────────────────────────────────────
               Text(
-                tripPlan.name,
+                trip.tripName,
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
@@ -88,13 +94,13 @@ class TripCompletionCard extends StatelessWidget {
                   ),
                   _StatItem(
                     icon: Icons.flag_rounded,
-                    value: '$waypointsVisited',
-                    label: 'Waypoints',
+                    value: '$stopCount',
+                    label: 'Stops',
                   ),
                   _StatItem(
-                    icon: Icons.straighten_rounded,
-                    value: distanceKm.toStringAsFixed(1),
-                    label: 'km',
+                    icon: Icons.military_tech_rounded,
+                    value: badge.toLowerCase(),
+                    label: 'Badge',
                   ),
                 ],
               ),
@@ -123,22 +129,25 @@ class TripCompletionCard extends StatelessWidget {
                     const SizedBox(height: 10),
                     // Origin
                     _RouteStop(
-                      label: tripPlan.originName,
+                      label: trip.originName.isEmpty
+                          ? 'Origin'
+                          : trip.originName,
                       isFirst: true,
-                      isLast: tripPlan.waypoints.isEmpty,
+                      isLast: waypoints.isEmpty,
                     ),
-                    // Waypoints
-                    for (int i = 0; i < tripPlan.waypoints.length; i++)
+                    // Waypoints, flagged when this traveler validated them.
+                    for (int i = 0; i < waypoints.length; i++)
                       _RouteStop(
-                        label: tripPlan.waypoints[i].placeName,
+                        label: waypoints[i].placeName,
                         isFirst: false,
-                        isLast: i == tripPlan.waypoints.length - 1 &&
-                            tripPlan.destinationName == tripPlan.originName,
+                        isLast:
+                            i == waypoints.length - 1 &&
+                            trip.destinationName == trip.originName,
                       ),
                     // Destination (if different from origin)
-                    if (tripPlan.destinationName != tripPlan.originName)
+                    if (trip.destinationName != trip.originName)
                       _RouteStop(
-                        label: tripPlan.destinationName,
+                        label: trip.destinationName,
                         isFirst: false,
                         isLast: true,
                       ),
@@ -293,14 +302,14 @@ class _RouteStop extends StatelessWidget {
             isFirst
                 ? Icons.trip_origin_rounded
                 : isLast
-                    ? Icons.location_on_rounded
-                    : Icons.circle,
+                ? Icons.location_on_rounded
+                : Icons.circle,
             size: isFirst || isLast ? 16 : 8,
             color: isFirst
                 ? TeritoryColors.validatedGreen
                 : isLast
-                    ? TeritoryColors.primary
-                    : TeritoryColors.textMuted,
+                ? TeritoryColors.primary
+                : TeritoryColors.textMuted,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -308,8 +317,9 @@ class _RouteStop extends StatelessWidget {
               label,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 13,
-                fontWeight:
-                    isFirst || isLast ? FontWeight.w700 : FontWeight.w500,
+                fontWeight: isFirst || isLast
+                    ? FontWeight.w700
+                    : FontWeight.w500,
                 color: TeritoryColors.textPrimary,
               ),
               maxLines: 1,

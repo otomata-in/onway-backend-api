@@ -7,6 +7,8 @@ import '../../../core/config/app_config.dart';
 import '../../../core/models/api_user.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/preferences_provider.dart';
+import '../../../core/services/api_service.dart';
+import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../application/profile_providers.dart';
 import 'edit_profile_sheet.dart';
@@ -71,6 +73,13 @@ class SettingsScreen extends ConsumerWidget {
 
           // ── Preferences ──
           _buildSectionHeader('Preferences'),
+          _buildSettingsTile(
+            context,
+            icon: Icons.bookmark_border_rounded,
+            title: 'Wishlist & Saved Expeditions',
+            subtitle: 'Saved spots and trip itineraries',
+            onTap: () => context.push('/trips/saved'),
+          ),
           _buildSettingsTile(
             context,
             icon: Icons.map_outlined,
@@ -149,26 +158,10 @@ class SettingsScreen extends ConsumerWidget {
             context,
             icon: Icons.delete_forever_rounded,
             title: 'Delete Account',
-            subtitle: 'Needs a backend endpoint',
+            subtitle: 'Permanently remove your traveler profile',
             isDanger: true,
-            showChevron: false,
-            onTap: () => showDialog<void>(
-              context: context,
-              builder: (dialogContext) => AlertDialog(
-                title: const Text('Delete account'),
-                content: const Text(
-                  'Account deletion needs a backend endpoint that does not '
-                  'exist yet, so this stays disabled. Contact '
-                  'support@teritory.app to remove your account and data.',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                    child: const Text('Close'),
-                  ),
-                ],
-              ),
-            ),
+            showChevron: true,
+            onTap: () => _confirmDeleteAccount(context, ref),
           ),
           const SizedBox(height: 32),
         ],
@@ -234,6 +227,14 @@ class SettingsScreen extends ConsumerWidget {
 
     if (selected == null) return;
     await ref.read(mapThemeProvider.notifier).setDark(selected);
+    try {
+      await TeritoryRepository.instance.updateMyProfile(
+        mapStyle: selected ? 'midnight_oceanic' : 'daylight_white',
+      );
+      ref.invalidate(myProfileProvider);
+    } catch (_) {
+      // Local preference is already active
+    }
   }
 
   Future<void> _openNotificationSettings(
@@ -331,6 +332,50 @@ class SettingsScreen extends ConsumerWidget {
 
     if (confirmed != true || !context.mounted) return;
     await ref.read(authStatusProvider.notifier).signOut();
+  }
+
+  Future<void> _confirmDeleteAccount(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete your account?'),
+        content: const Text(
+          'This will permanently delete your profile, friendships, memberships, and sign you out. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: TeritoryColors.expiredRed,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await TeritoryRepository.instance.deleteMyAccount();
+      await ref.read(authStatusProvider.notifier).signOut();
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not delete account. Check connection.'),
+        ),
+      );
+    }
   }
 
   Widget _buildSectionHeader(String title) {

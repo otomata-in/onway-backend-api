@@ -60,6 +60,12 @@ final savedPlansLiveProvider =
   return TeritoryRepository.instance.fetchSavedPlans();
 });
 
+/// Flags saved to the traveler's wishlist (`GET /flags/saved`).
+final savedFlagsLiveProvider =
+    FutureProvider.autoDispose<List<ApiFlag>>((ref) {
+  return TeritoryRepository.instance.fetchSavedFlags();
+});
+
 /// Places the planner can use, taken from live flags. There is no geocoding
 /// service, so a plan's stops are real flagged places rather than typed text
 /// with invented coordinates.

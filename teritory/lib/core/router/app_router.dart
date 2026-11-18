@@ -29,20 +29,22 @@ import '../../features/profile/presentation/completed_trips_screen.dart';
 import '../../features/profile/presentation/settings_screen.dart';
 import '../../features/profile/presentation/info_page_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
+import '../../features/wonders/presentation/wonders_catalog_screen.dart';
 
 // ─── Navigation keys ───────────────────────────────────────────────────
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
-final _shellNavigatorExploreKey =
-    GlobalKey<NavigatorState>(debugLabel: 'explore');
-final _shellNavigatorClansKey =
-    GlobalKey<NavigatorState>(debugLabel: 'clans');
-final _shellNavigatorTripsKey =
-    GlobalKey<NavigatorState>(debugLabel: 'trips');
-final _shellNavigatorRankingsKey =
-    GlobalKey<NavigatorState>(debugLabel: 'rankings');
-final _shellNavigatorProfileKey =
-    GlobalKey<NavigatorState>(debugLabel: 'profile');
+final _shellNavigatorExploreKey = GlobalKey<NavigatorState>(
+  debugLabel: 'explore',
+);
+final _shellNavigatorClansKey = GlobalKey<NavigatorState>(debugLabel: 'clans');
+final _shellNavigatorTripsKey = GlobalKey<NavigatorState>(debugLabel: 'trips');
+final _shellNavigatorRankingsKey = GlobalKey<NavigatorState>(
+  debugLabel: 'rankings',
+);
+final _shellNavigatorProfileKey = GlobalKey<NavigatorState>(
+  debugLabel: 'profile',
+);
 
 // ─── Router ────────────────────────────────────────────────────────────
 
@@ -56,215 +58,205 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(authRefresh.dispose);
 
   return GoRouter(
-  navigatorKey: _rootNavigatorKey,
-  initialLocation: '/explore',
-  refreshListenable: authRefresh,
-  redirect: (context, state) {
-    final status = ref.read(authStatusProvider);
-    final location = state.matchedLocation;
+    navigatorKey: _rootNavigatorKey,
+    initialLocation: '/explore',
+    refreshListenable: authRefresh,
+    redirect: (context, state) {
+      final status = ref.read(authStatusProvider);
+      final location = state.matchedLocation;
 
-    if (status == AuthStatus.restoring) {
-      return location == '/splash' ? null : '/splash';
-    }
-    if (status == AuthStatus.signedOut) {
-      return location == '/login' ? null : '/login';
-    }
-    if (location == '/login' || location == '/splash') return '/explore';
-    return null;
-  },
-  routes: [
-    GoRoute(
-      path: '/splash',
-      builder: (context, state) => const SplashScreen(),
-    ),
-    GoRoute(
-      path: '/login',
-      builder: (context, state) => const LoginScreen(),
-    ),
-    GoRoute(
-      path: '/notifications',
-      builder: (context, state) => const NotificationsScreen(),
-    ),
-    StatefulShellRoute.indexedStack(
-      builder: (context, state, navigationShell) {
-        return _MainScaffold(navigationShell: navigationShell);
-      },
-      branches: [
-        // Tab 0: Explore
-        StatefulShellBranch(
-          navigatorKey: _shellNavigatorExploreKey,
-          routes: [
-            GoRoute(
-              path: '/explore',
-              builder: (context, state) => const HomeMapScreen(),
-            ),
-          ],
-        ),
+      if (status == AuthStatus.restoring) {
+        return location == '/splash' ? null : '/splash';
+      }
+      if (status == AuthStatus.signedOut) {
+        return location == '/login' ? null : '/login';
+      }
+      if (location == '/login' || location == '/splash') return '/explore';
+      return null;
+    },
+    routes: [
+      GoRoute(
+        path: '/splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/wonders',
+        builder: (context, state) => const WondersCatalogScreen(),
+      ),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return _MainScaffold(navigationShell: navigationShell);
+        },
+        branches: [
+          // Tab 0: Explore
+          StatefulShellBranch(
+            navigatorKey: _shellNavigatorExploreKey,
+            routes: [
+              GoRoute(
+                path: '/explore',
+                builder: (context, state) => const HomeMapScreen(),
+              ),
+            ],
+          ),
 
-        // Tab 1: Clans
-        StatefulShellBranch(
-          navigatorKey: _shellNavigatorClansKey,
-          routes: [
-            GoRoute(
-              path: '/clans',
-              builder: (context, state) => const ClanBrowserScreen(),
-              routes: [
-                GoRoute(
-                  path: ':clanId',
-                  builder: (context, state) => ClanDetailScreen(
-                    clanId: state.pathParameters['clanId']!,
-                  ),
-                  routes: [
-                    GoRoute(
-                      path: 'create',
-                      builder: (context, state) => CommunityCreateScreen(
-                        clanId: state.pathParameters['clanId'],
-                      ),
+          // Tab 1: Clans
+          StatefulShellBranch(
+            navigatorKey: _shellNavigatorClansKey,
+            routes: [
+              GoRoute(
+                path: '/clans',
+                builder: (context, state) => const ClanBrowserScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':clanId',
+                    builder: (context, state) => ClanDetailScreen(
+                      clanId: state.pathParameters['clanId']!,
                     ),
-                    GoRoute(
-                      path: 'communities/:communityId',
-                      builder: (context, state) => CommunityDetailScreen(
-                        communityId:
-                            state.pathParameters['communityId']!,
-                      ),
-                      routes: [
-                        GoRoute(
-                          path: 'chat',
-                          builder: (context, state) =>
-                              CommunityChatScreen(
-                            communityId:
-                                state.pathParameters['communityId']!,
-                          ),
+                    routes: [
+                      GoRoute(
+                        path: 'create',
+                        builder: (context, state) => CommunityCreateScreen(
+                          clanId: state.pathParameters['clanId']!,
                         ),
-                        GoRoute(
-                          path: 'members',
-                          builder: (context, state) =>
-                              CommunityMembersScreen(
-                            communityId:
-                                state.pathParameters['communityId']!,
-                          ),
+                      ),
+                      GoRoute(
+                        path: 'communities/:communityId',
+                        builder: (context, state) => CommunityDetailScreen(
+                          communityId: state.pathParameters['communityId']!,
                         ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-
-        // Tab 2: Trips
-        StatefulShellBranch(
-          navigatorKey: _shellNavigatorTripsKey,
-          routes: [
-            GoRoute(
-              path: '/trips',
-              builder: (context, state) => const TripsHubScreen(),
-              routes: [
-                GoRoute(
-                  path: 'planner',
-                  builder: (context, state) =>
-                      const TripPlannerScreen(),
-                ),
-                GoRoute(
-                  path: 'saved',
-                  builder: (context, state) =>
-                      const SavedPlansScreen(),
-                ),
-                GoRoute(
-                  path: 'history',
-                  builder: (context, state) =>
-                      const TripHistoryScreen(),
-                ),
-                GoRoute(
-                  path: ':tripId',
-                  builder: (context, state) => TripPlanDetailScreen(
-                    tripPlanId: state.pathParameters['tripId']!,
+                        routes: [
+                          GoRoute(
+                            path: 'chat',
+                            builder: (context, state) => CommunityChatScreen(
+                              communityId: state.pathParameters['communityId']!,
+                            ),
+                          ),
+                          GoRoute(
+                            path: 'members',
+                            builder: (context, state) => CommunityMembersScreen(
+                              communityId: state.pathParameters['communityId']!,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  routes: [
-                    GoRoute(
-                      path: 'active',
-                      builder: (context, state) => ActiveTripScreen(
-                        tripId: state.pathParameters['tripId']!,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
+                ],
+              ),
+            ],
+          ),
 
-        // Tab 3: Rankings
-        StatefulShellBranch(
-          navigatorKey: _shellNavigatorRankingsKey,
-          routes: [
-            GoRoute(
-              path: '/rankings',
-              builder: (context, state) => const LeaderboardScreen(),
-            ),
-          ],
-        ),
-
-        // Tab 4: Profile
-        StatefulShellBranch(
-          navigatorKey: _shellNavigatorProfileKey,
-          routes: [
-            GoRoute(
-              path: '/profile',
-              builder: (context, state) => const ProfileScreen(),
-              routes: [
-                GoRoute(
-                  path: 'friends',
-                  builder: (context, state) =>
-                      const FriendsListScreen(),
-                  routes: [
-                    GoRoute(
-                      path: ':friendId',
-                      builder: (context, state) =>
-                          FriendProfileScreen(
-                        userId:
-                            state.pathParameters['friendId']!,
+          // Tab 2: Trips
+          StatefulShellBranch(
+            navigatorKey: _shellNavigatorTripsKey,
+            routes: [
+              GoRoute(
+                path: '/trips',
+                builder: (context, state) => const TripsHubScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'planner',
+                    builder: (context, state) => TripPlannerScreen(
+                      communityId: state.uri.queryParameters['communityId'],
+                      communityName: state.uri.queryParameters['communityName'],
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'saved',
+                    builder: (context, state) => const SavedPlansScreen(),
+                  ),
+                  GoRoute(
+                    path: 'history',
+                    builder: (context, state) => const TripHistoryScreen(),
+                  ),
+                  GoRoute(
+                    path: ':tripId',
+                    builder: (context, state) => TripPlanDetailScreen(
+                      tripPlanId: state.pathParameters['tripId']!,
+                    ),
+                    routes: [
+                      GoRoute(
+                        path: 'active',
+                        builder: (context, state) => ActiveTripScreen(
+                          tripId: state.pathParameters['tripId']!,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                GoRoute(
-                  path: 'friend-requests',
-                  builder: (context, state) =>
-                      const FriendRequestsScreen(),
-                ),
-                GoRoute(
-                  path: 'completed-trips',
-                  builder: (context, state) =>
-                      const CompletedTripsScreen(),
-                ),
-                GoRoute(
-                  path: 'settings',
-                  builder: (context, state) =>
-                      const SettingsScreen(),
-                  routes: [
-                    GoRoute(
-                      path: 'about',
-                      builder: (context, state) => InfoPageScreen.about(),
-                    ),
-                    GoRoute(
-                      path: 'terms',
-                      builder: (context, state) => InfoPageScreen.terms(),
-                    ),
-                    GoRoute(
-                      path: 'privacy',
-                      builder: (context, state) => InfoPageScreen.privacy(),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-      ],
-    ),
-  ],
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // Tab 3: Rankings
+          StatefulShellBranch(
+            navigatorKey: _shellNavigatorRankingsKey,
+            routes: [
+              GoRoute(
+                path: '/rankings',
+                builder: (context, state) => const LeaderboardScreen(),
+              ),
+            ],
+          ),
+
+          // Tab 4: Profile
+          StatefulShellBranch(
+            navigatorKey: _shellNavigatorProfileKey,
+            routes: [
+              GoRoute(
+                path: '/profile',
+                builder: (context, state) => const ProfileScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'friends',
+                    builder: (context, state) => const FriendsListScreen(),
+                    routes: [
+                      GoRoute(
+                        path: ':friendId',
+                        builder: (context, state) => FriendProfileScreen(
+                          userId: state.pathParameters['friendId']!,
+                        ),
+                      ),
+                    ],
+                  ),
+                  GoRoute(
+                    path: 'friend-requests',
+                    builder: (context, state) => const FriendRequestsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'completed-trips',
+                    builder: (context, state) => const CompletedTripsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'settings',
+                    builder: (context, state) => const SettingsScreen(),
+                    routes: [
+                      GoRoute(
+                        path: 'about',
+                        builder: (context, state) => InfoPageScreen.about(),
+                      ),
+                      GoRoute(
+                        path: 'terms',
+                        builder: (context, state) => InfoPageScreen.terms(),
+                      ),
+                      GoRoute(
+                        path: 'privacy',
+                        builder: (context, state) => InfoPageScreen.privacy(),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    ],
   );
 });
 

@@ -44,8 +44,9 @@ const verifyOtp = async (phone, otp) => {
   const cleanPhone = phone.trim();
   const cachedOtp = await redis.get(`otp:${cleanPhone}`);
 
-  // Allow '12345' (or legacy 123456) as static dev bypass, or match cached OTP
-  const isDevBypass = otp === '12345' || otp === '123456';
+  // Allow '12345' (or legacy 123456) as static dev bypass in non-production, or match cached OTP
+  const isDevBypass =
+    process.env.NODE_ENV !== 'production' && (otp === '12345' || otp === '123456');
   if (!isDevBypass && cachedOtp !== otp) {
     throw ApiError.badRequest('Invalid or expired OTP code');
   }

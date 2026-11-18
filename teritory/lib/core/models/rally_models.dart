@@ -1,5 +1,3 @@
-enum RallyInviteType { community, friends, open }
-
 enum RallyStatus { pending, active, completed, expired }
 
 class LegendaryRally {
@@ -11,13 +9,16 @@ class LegendaryRally {
   final double latitude;
   final double longitude;
   final double radiusMeters;
-  final RallyInviteType inviteType;
   final String? communityId;
   final DateTime windowStartTime;
   final DateTime windowEndTime;
   final RallyStatus status;
   final int participantCount;
   final DateTime createdAt;
+  final double? distanceKm;
+  final List<String> participantIds;
+  final int arrivedCount;
+  final int minParticipants;
 
   const LegendaryRally({
     required this.id,
@@ -28,25 +29,39 @@ class LegendaryRally {
     required this.latitude,
     required this.longitude,
     this.radiusMeters = 500,
-    required this.inviteType,
     this.communityId,
     required this.windowStartTime,
     required this.windowEndTime,
     this.status = RallyStatus.pending,
     this.participantCount = 0,
     required this.createdAt,
+    this.distanceKm,
+    this.participantIds = const [],
+    this.arrivedCount = 0,
+    this.minParticipants = 3,
   });
 
+  bool isParticipant(String? userId) =>
+      userId != null && userId.isNotEmpty && participantIds.contains(userId);
+
   factory LegendaryRally.fromJson(Map<String, dynamic> json) {
-    String orgId = json['organizerId'] as String? ?? json['createdById'] as String? ?? '';
+    String orgId =
+        json['organizerId'] as String? ?? json['createdById'] as String? ?? '';
     String orgName = json['organizerName'] as String? ?? '';
     if (json['host'] is Map) {
-      if (orgId.isEmpty) orgId = json['host']['id'] as String? ?? '';
-      if (orgName.isEmpty) orgName = json['host']['displayName'] as String? ?? '';
+      if (orgId.isEmpty) {
+        orgId = json['host']['id'] as String? ?? '';
+      }
+      if (orgName.isEmpty) {
+        orgName = json['host']['displayName'] as String? ?? '';
+      }
     }
 
-    final pCount = json['participantCount'] as int? ??
-        (json['participants'] is List ? (json['participants'] as List).length : 0);
+    final pCount =
+        json['participantCount'] as int? ??
+        (json['participants'] is List
+            ? (json['participants'] as List).length
+            : 0);
 
     final statusStr = (json['status'] as String? ?? 'pending').toLowerCase();
     RallyStatus rStatus = RallyStatus.pending;
@@ -63,30 +78,42 @@ class LegendaryRally {
     final start = json['windowStartTime'] != null
         ? DateTime.parse(json['windowStartTime'] as String)
         : (json['scheduledAt'] != null
-            ? DateTime.parse(json['scheduledAt'] as String)
-            : (json['createdAt'] != null
-                ? DateTime.parse(json['createdAt'] as String)
-                : DateTime.now()));
+              ? DateTime.parse(json['scheduledAt'] as String)
+              : (json['createdAt'] != null
+                    ? DateTime.parse(json['createdAt'] as String)
+                    : DateTime.now()));
 
     final end = json['windowEndTime'] != null
         ? DateTime.parse(json['windowEndTime'] as String)
         : (json['expiresAt'] != null
-            ? DateTime.parse(json['expiresAt'] as String)
-            : DateTime.now().add(const Duration(days: 2)));
+              ? DateTime.parse(json['expiresAt'] as String)
+              : DateTime.now().add(const Duration(days: 2)));
+
+    final rawParticipants = json['participants'];
+    final participantIds = rawParticipants is List
+        ? rawParticipants
+              .whereType<Map<String, dynamic>>()
+              .map((p) => p['userId'] as String? ?? '')
+              .where((id) => id.isNotEmpty)
+              .toList()
+        : <String>[];
+    final arrivedCount = rawParticipants is List
+        ? rawParticipants
+              .whereType<Map<String, dynamic>>()
+              .where((p) => p['hasArrived'] == true)
+              .length
+        : 0;
 
     return LegendaryRally(
       id: json['id'] as String,
       name: json['name'] as String,
       organizerId: orgId,
       organizerName: orgName.isNotEmpty ? orgName : 'Host',
-      locationName: json['locationName'] as String? ?? json['placeName'] as String? ?? '',
+      locationName:
+          json['locationName'] as String? ?? json['placeName'] as String? ?? '',
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),
       radiusMeters: (json['radiusMeters'] as num?)?.toDouble() ?? 500,
-      inviteType: RallyInviteType.values.firstWhere(
-        (e) => e.name.toLowerCase() == (json['inviteType'] as String? ?? 'open').toLowerCase(),
-        orElse: () => RallyInviteType.open,
-      ),
       communityId: json['communityId'] as String?,
       windowStartTime: start,
       windowEndTime: end,
@@ -95,74 +122,110 @@ class LegendaryRally {
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
           : DateTime.now(),
+      distanceKm: (json['distanceKm'] as num?)?.toDouble(),
+      participantIds: participantIds,
+      arrivedCount: arrivedCount,
+      minParticipants: (json['minParticipants'] as num?)?.toInt() ?? 3,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'organizerId': organizerId,
-        'organizerName': organizerName,
-        'locationName': locationName,
-        'latitude': latitude,
-        'longitude': longitude,
-        'radiusMeters': radiusMeters,
-        'inviteType': inviteType.name,
-        'communityId': communityId,
-        'windowStartTime': windowStartTime.toIso8601String(),
-        'windowEndTime': windowEndTime.toIso8601String(),
-        'status': status.name,
-        'participantCount': participantCount,
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    'organizerId': organizerId,
+    'organizerName': organizerName,
+    'locationName': locationName,
+    'latitude': latitude,
+    'longitude': longitude,
+    'radiusMeters': radiusMeters,
+    'communityId': communityId,
+    'windowStartTime': windowStartTime.toIso8601String(),
+    'windowEndTime': windowEndTime.toIso8601String(),
+    'status': status.name,
+    'participantCount': participantCount,
+    'createdAt': createdAt.toIso8601String(),
+  };
 }
 
-class RallyParticipant {
-  final String id;
-  final String rallyId;
+/// One row of `GET /rallies/:id`'s participant roster (the API nests the user).
+class RallyRosterEntry {
+  final String participantId;
   final String userId;
-  final String userName;
-  final String userAvatar;
-  final DateTime joinedAt;
-  final bool isWithinRadius;
-  final double latitude;
-  final double longitude;
+  final String displayName;
+  final String avatarUrl;
+  final bool hasArrived;
+  final DateTime? arrivedAt;
 
-  const RallyParticipant({
-    required this.id,
-    required this.rallyId,
+  const RallyRosterEntry({
+    required this.participantId,
     required this.userId,
-    required this.userName,
-    required this.userAvatar,
-    required this.joinedAt,
-    this.isWithinRadius = false,
-    required this.latitude,
-    required this.longitude,
+    required this.displayName,
+    this.avatarUrl = '',
+    this.hasArrived = false,
+    this.arrivedAt,
   });
 
-  factory RallyParticipant.fromJson(Map<String, dynamic> json) {
-    return RallyParticipant(
-      id: json['id'] as String,
-      rallyId: json['rallyId'] as String,
-      userId: json['userId'] as String,
-      userName: json['userName'] as String,
-      userAvatar: json['userAvatar'] as String? ?? '',
-      joinedAt: DateTime.parse(json['joinedAt'] as String),
-      isWithinRadius: json['isWithinRadius'] as bool? ?? false,
-      latitude: (json['latitude'] as num).toDouble(),
-      longitude: (json['longitude'] as num).toDouble(),
+  factory RallyRosterEntry.fromJson(Map<String, dynamic> json) {
+    final user = json['user'] is Map ? json['user'] as Map : null;
+    return RallyRosterEntry(
+      participantId: json['id'] as String? ?? '',
+      userId: json['userId'] as String? ?? user?['id'] as String? ?? '',
+      displayName: user?['displayName'] as String? ?? 'Traveler',
+      avatarUrl: user?['avatarUrl'] as String? ?? '',
+      hasArrived: json['hasArrived'] as bool? ?? false,
+      arrivedAt: json['arrivedAt'] != null
+          ? DateTime.tryParse(json['arrivedAt'] as String)
+          : null,
     );
   }
+}
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'rallyId': rallyId,
-        'userId': userId,
-        'userName': userName,
-        'userAvatar': userAvatar,
-        'joinedAt': joinedAt.toIso8601String(),
-        'isWithinRadius': isWithinRadius,
-        'latitude': latitude,
-        'longitude': longitude,
-      };
+/// `GET /rallies/:id`: the rally plus its real roster and arrival state.
+class RallyDetail {
+  final LegendaryRally rally;
+  final List<RallyRosterEntry> roster;
+  final double? distanceKm;
+
+  const RallyDetail({
+    required this.rally,
+    required this.roster,
+    this.distanceKm,
+  });
+
+  int get arrivedCount => roster.where((entry) => entry.hasArrived).length;
+
+  factory RallyDetail.fromJson(Map<String, dynamic> json) {
+    final rawParticipants = json['participants'];
+    return RallyDetail(
+      rally: LegendaryRally.fromJson(json),
+      roster: rawParticipants is List
+          ? rawParticipants
+                .whereType<Map<String, dynamic>>()
+                .map(RallyRosterEntry.fromJson)
+                .toList()
+          : const [],
+      distanceKm: (json['distanceKm'] as num?)?.toDouble(),
+    );
+  }
+}
+
+/// `POST /rallies/:id/arrive` answer: the server's 500 m check, not a local one.
+class RallyArrivalResult {
+  final bool arrived;
+  final int distanceM;
+  final String message;
+
+  const RallyArrivalResult({
+    required this.arrived,
+    required this.distanceM,
+    required this.message,
+  });
+
+  factory RallyArrivalResult.fromJson(Map<String, dynamic> json) {
+    return RallyArrivalResult(
+      arrived: json['arrived'] as bool? ?? false,
+      distanceM: (json['distanceM'] as num?)?.toInt() ?? 0,
+      message: json['message'] as String? ?? '',
+    );
+  }
 }

@@ -10,7 +10,9 @@ import '../../../core/services/api_service.dart';
 import '../../../core/services/socket_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../profile/application/profile_providers.dart';
 import '../application/trips_provider.dart';
+import 'trip_completion_card.dart';
 
 class ActiveTripScreen extends ConsumerStatefulWidget {
   final String? tripId;
@@ -27,6 +29,7 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
   late Animation<double> _pulseAnimation;
   bool _validating = false;
   bool _completing = false;
+  bool _joining = false;
 
   @override
   void initState() {
@@ -66,28 +69,42 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
       ? error.message
       : 'Could not load this trip. Check the API and retry.';
 
+  Future<void> _joinTrip(String tripId) async {
+    if (_joining) return;
+    setState(() => _joining = true);
+    try {
+      await TeritoryRepository.instance.joinActiveTrip(tripId);
+      if (!mounted) return;
+      ref.invalidate(activeTripDetailProvider(tripId));
+      ref.invalidate(tripsHubProvider);
+      _toast('Joined this expedition!');
+    } on ApiException catch (e) {
+      _toast(e.message, error: true);
+    } catch (_) {
+      _toast('Could not join trip. Check your connection.', error: true);
+    } finally {
+      if (mounted) setState(() => _joining = false);
+    }
+  }
+
   Future<void> _validateWaypoint(
     ActiveTripDetail detail,
     String tripId,
     String waypointId,
+    LatLng fallbackPos,
   ) async {
     if (_validating) return;
-    if (!detail.hasPosition) {
-      _toast(
-        'No GPS position recorded for this trip yet, so this stop cannot be '
-        'validated.',
-        error: true,
-      );
-      return;
-    }
+    final lat = detail.currentLat ?? fallbackPos.latitude;
+    final lng = detail.currentLng ?? fallbackPos.longitude;
 
     setState(() => _validating = true);
     try {
+      SocketService.instance.sendTripLocation(tripId, lat, lng);
       final result = await TeritoryRepository.instance.validateWaypointAt(
         tripId: tripId,
         waypointId: waypointId,
-        latitude: detail.currentLat!,
-        longitude: detail.currentLng!,
+        latitude: lat,
+        longitude: lng,
       );
       if (!mounted) return;
       ref.invalidate(activeTripDetailProvider(tripId));
@@ -96,8 +113,10 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
     } on ApiException catch (e) {
       _toast(e.message, error: true);
     } catch (_) {
-      _toast('Could not validate this stop. Check your connection.',
-          error: true);
+      _toast(
+        'Could not validate this stop. Check your connection.',
+        error: true,
+      );
     } finally {
       if (mounted) setState(() => _validating = false);
     }
@@ -111,7 +130,8 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
       builder: (context) => AlertDialog(
         title: const Text('Complete this trip?'),
         content: const Text(
-            'Stops you have not validated will count as missed.'),
+          'Stops you have not validated will count as missed.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -126,19 +146,32 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
     );
     if (confirmed != true || !mounted) return;
 
+    final detail = ref.read(activeTripDetailProvider(tripId)).valueOrNull;
     setState(() => _completing = true);
     try {
-      await TeritoryRepository.instance.completeTrip(tripId);
+      final badge = await TeritoryRepository.instance.completeTrip(tripId);
       if (!mounted) return;
       ref.invalidate(tripsHubProvider);
       ref.invalidate(tripHistoryLiveProvider);
+      ref.invalidate(activeTripDetailProvider(tripId));
+      if (detail != null) {
+        await TripCompletionCard.show(
+          context,
+          trip: detail.trip,
+          waypoints: detail.waypoints,
+          badge: badge,
+        );
+      }
+      if (!mounted) return;
       _toast('Trip completed');
       if (context.canPop()) context.pop();
     } on ApiException catch (e) {
       _toast(e.message, error: true);
     } catch (_) {
-      _toast('Could not complete this trip. Check your connection.',
-          error: true);
+      _toast(
+        'Could not complete this trip. Check your connection.',
+        error: true,
+      );
     } finally {
       if (mounted) setState(() => _completing = false);
     }
@@ -175,8 +208,11 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.cloud_off_rounded,
-                          size: 44, color: TeritoryColors.textMuted),
+                      const Icon(
+                        Icons.cloud_off_rounded,
+                        size: 44,
+                        color: TeritoryColors.textMuted,
+                      ),
                       const SizedBox(height: 12),
                       Text(
                         _errorMessage(detailAsync.error),
@@ -196,23 +232,29 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                   ),
                 )
               : const CircularProgressIndicator(
-                  color: TeritoryColors.validatedGreen),
+                  color: TeritoryColors.validatedGreen,
+                ),
         ),
       );
     }
 
     final trip = detail.trip;
     final waypoints = detail.waypoints;
-    final waypointPoints =
-        waypoints.map((w) => LatLng(w.latitude, w.longitude)).toList();
+    final waypointPoints = waypoints
+        .map((w) => LatLng(w.latitude, w.longitude))
+        .toList();
     final validatedCount = detail.validatedWaypointIds.length;
     final totalCount = waypoints.length;
     final nextWaypoint = detail.nextWaypoint;
+    final myId = ref.watch(myProfileProvider).valueOrNull?.id;
+    final isParticipant = myId != null &&
+        (trip.organizerId == myId ||
+            trip.participants.any((p) => p.userId == myId));
     final currentPos = detail.hasPosition
         ? LatLng(detail.currentLat!, detail.currentLng!)
         : (waypointPoints.isNotEmpty
-            ? waypointPoints[0]
-            : const LatLng(10.0889, 77.0595));
+              ? waypointPoints[0]
+              : const LatLng(10.0889, 77.0595));
 
     final nextDistanceKm = nextWaypoint != null && detail.hasPosition
         ? const Distance().as(
@@ -226,21 +268,33 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
       body: Stack(
         children: [
           FlutterMap(
-            options: MapOptions(
-              initialCenter: currentPos,
-              initialZoom: 10.0,
-            ),
+            options: MapOptions(initialCenter: currentPos, initialZoom: 10.0),
             children: [
               TileLayer(
-                urlTemplate:
-                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.onway.teritory',
                 tileBuilder: (context, tileWidget, tile) => ColorFiltered(
                   colorFilter: const ColorFilter.matrix(<double>[
-                    -0.20, -0.15, -0.30, 0.0, 140,
-                    -0.45, 0.20, -0.35, 0.0, 165,
-                    -0.55, 0.05, -0.05, 0.0, 185,
-                    0.0, 0.0, 0.0, 1.0, 0,
+                    -0.20,
+                    -0.15,
+                    -0.30,
+                    0.0,
+                    140,
+                    -0.45,
+                    0.20,
+                    -0.35,
+                    0.0,
+                    165,
+                    -0.55,
+                    0.05,
+                    -0.05,
+                    0.0,
+                    185,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                    0,
                   ]),
                   child: tileWidget,
                 ),
@@ -262,14 +316,17 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                     radius: 40,
                     color: TeritoryColors.tripRoute.withValues(alpha: 0.1),
                     borderStrokeWidth: 1.5,
-                    borderColor:
-                        TeritoryColors.tripRoute.withValues(alpha: 0.4),
+                    borderColor: TeritoryColors.tripRoute.withValues(
+                      alpha: 0.4,
+                    ),
                   );
                 }).toList(),
               ),
               MarkerLayer(
                 markers: waypoints.map((w) {
-                  final isValidated = detail.validatedWaypointIds.contains(w.id);
+                  final isValidated = detail.validatedWaypointIds.contains(
+                    w.id,
+                  );
                   return Marker(
                     point: LatLng(w.latitude, w.longitude),
                     width: 30,
@@ -290,8 +347,11 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                       ),
                       alignment: Alignment.center,
                       child: isValidated
-                          ? const Icon(Icons.check_rounded,
-                              color: Colors.white, size: 16)
+                          ? const Icon(
+                              Icons.check_rounded,
+                              color: Colors.white,
+                              size: 16,
+                            )
                           : Text(
                               '${w.orderIndex + 1}',
                               style: GoogleFonts.plusJakartaSans(
@@ -318,7 +378,8 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: TeritoryColors.primary.withValues(
-                                  alpha: _pulseAnimation.value * 0.3),
+                                alpha: _pulseAnimation.value * 0.3,
+                              ),
                               border: Border.all(
                                 color: TeritoryColors.primary,
                                 width: 2,
@@ -377,8 +438,7 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                               context.go('/trips');
                             }
                           },
-                          icon:
-                              const Icon(Icons.arrow_back_rounded, size: 20),
+                          icon: const Icon(Icons.arrow_back_rounded, size: 20),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                           color: TeritoryColors.textPrimary,
@@ -413,7 +473,8 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                         minHeight: 6,
                         backgroundColor: TeritoryColors.surfaceContainer,
                         valueColor: const AlwaysStoppedAnimation(
-                            TeritoryColors.validatedGreen),
+                          TeritoryColors.validatedGreen,
+                        ),
                       ),
                     ),
                   ],
@@ -433,33 +494,38 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
-                    ...trip.participants.take(5).map((p) => Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: Column(
-                            children: [
-                              _ParticipantAvatar(
-                                name: p.userName,
-                                avatarUrl: p.userAvatar,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                p.userName.split(' ').first,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                  shadows: [
-                                    Shadow(
-                                      color:
-                                          Colors.black.withValues(alpha: 0.6),
-                                      blurRadius: 4,
-                                    ),
-                                  ],
+                    ...trip.participants
+                        .take(5)
+                        .map(
+                          (p) => Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Column(
+                              children: [
+                                _ParticipantAvatar(
+                                  name: p.userName,
+                                  avatarUrl: p.userAvatar,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 2),
+                                Text(
+                                  p.userName.split(' ').first,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                    shadows: [
+                                      Shadow(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.6,
+                                        ),
+                                        blurRadius: 4,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        )),
+                        ),
                   ],
                 ),
               ),
@@ -475,8 +541,9 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(24)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.1),
@@ -538,9 +605,11 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(Icons.straighten_rounded,
-                              size: 14,
-                              color: TeritoryColors.textSecondary),
+                          const Icon(
+                            Icons.straighten_rounded,
+                            size: 14,
+                            color: TeritoryColors.textSecondary,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             nextDistanceKm == null
@@ -556,77 +625,110 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                       const SizedBox(height: 16),
                     ],
 
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: nextWaypoint == null ||
-                                _validating ||
-                                !detail.hasPosition
-                            ? null
-                            : () => _validateWaypoint(
+                    if (!isParticipant)
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _joining ? null : () => _joinTrip(tripId),
+                          icon: _joining
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.group_add_rounded, size: 20),
+                          label: Text(
+                            'Join This Expedition',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: TeritoryColors.tripRoute,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                      )
+                    else ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: nextWaypoint == null || _validating
+                              ? null
+                              : () => _validateWaypoint(
                                   detail,
                                   tripId,
                                   nextWaypoint.id,
+                                  currentPos,
                                 ),
-                        icon: _validating
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.flag_rounded, size: 20),
-                        label: Text(
-                          detail.hasPosition
-                              ? 'Flag This Stop'
-                              : 'Live position unavailable',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
+                          icon: _validating
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.flag_rounded, size: 20),
+                          label: Text(
+                            'Flag This Stop',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
                           ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: TeritoryColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: TeritoryColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: _completing ? null : () => _completeTrip(tripId),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          side: const BorderSide(
-                              color: TeritoryColors.border),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: _completing
+                              ? null
+                              : () => _completeTrip(tripId),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            side: const BorderSide(color: TeritoryColors.border),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                           ),
-                        ),
-                        child: _completing
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Text(
-                                'Complete Trip',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                  color: TeritoryColors.textPrimary,
+                          child: _completing
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(
+                                  'Complete Trip',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: TeritoryColors.textPrimary,
+                                  ),
                                 ),
-                              ),
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -651,10 +753,7 @@ class _ParticipantAvatar extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 4,
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 4),
         ],
       ),
       child: CircleAvatar(

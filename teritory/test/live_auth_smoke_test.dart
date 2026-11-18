@@ -38,9 +38,13 @@ void main() {
     expect(api.isAuthenticated, isTrue);
     expect(api.refreshToken, isNotNull);
 
+    // Tokens live in the platform keystore keyed by flutter_secure_storage, so
+    // the assertion here is that they are held in the session and never written
+    // to plaintext preferences (§20).
+    expect(api.accessToken, isNotEmpty);
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('teritory_access_token'), api.accessToken);
-    expect(prefs.getString('teritory_refresh_token'), api.refreshToken);
+    expect(prefs.getString('teritory_access_token'), isNull);
+    expect(prefs.getString('teritory_refresh_token'), isNull);
 
     // ignore: avoid_print
     print('auth: signed in as ${user.handle} (${user.id})');

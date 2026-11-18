@@ -9,6 +9,7 @@ import '../../../core/models/community_models.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../shared/presentation/invite_friends_sheet.dart';
 import '../application/clans_provider.dart';
 
 class ClanDetailScreen extends ConsumerStatefulWidget {
@@ -36,7 +37,8 @@ class _ClanDetailScreenState extends ConsumerState<ClanDetailScreen> {
         builder: (context) => AlertDialog(
           title: const Text('Leave this clan?'),
           content: const Text(
-              'Your communities and messages stay; your membership does not.'),
+            'Your communities and messages stay; your membership does not.',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -71,6 +73,18 @@ class _ClanDetailScreenState extends ConsumerState<ClanDetailScreen> {
     }
   }
 
+  Future<void> _openInviteSheet(ApiClanDetail detail) async {
+    final invited = await InviteFriendsSheet.show(
+      context,
+      targetType: InviteTargetType.clan,
+      targetId: detail.clan.id,
+      targetName: detail.clan.name,
+      excludeUserIds: detail.members.map((member) => member.userId).toSet(),
+    );
+    if (!mounted || invited == null) return;
+    _toast(invited == 1 ? 'Invitation sent' : '$invited invitations sent');
+  }
+
   void _toast(String message, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -98,8 +112,11 @@ class _ClanDetailScreenState extends ConsumerState<ClanDetailScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.cloud_off_rounded,
-                          size: 44, color: TeritoryColors.textMuted),
+                      const Icon(
+                        Icons.cloud_off_rounded,
+                        size: 44,
+                        color: TeritoryColors.textMuted,
+                      ),
                       const SizedBox(height: 12),
                       Text(
                         detailAsync.error is ApiException
@@ -122,7 +139,8 @@ class _ClanDetailScreenState extends ConsumerState<ClanDetailScreen> {
                   ),
                 )
               : const CircularProgressIndicator(
-                  color: TeritoryColors.clanPurple),
+                  color: TeritoryColors.clanPurple,
+                ),
         ),
       );
     }
@@ -138,8 +156,8 @@ class _ClanDetailScreenState extends ConsumerState<ClanDetailScreen> {
     final membershipLabel = clansData != null
         ? (isMember ? 'Leave Clan' : 'Join Clan')
         : (clansAsync.isLoading
-            ? 'Checking membership…'
-            : 'Membership unavailable');
+              ? 'Checking membership…'
+              : 'Membership unavailable');
 
     return Scaffold(
       backgroundColor: TeritoryColors.background,
@@ -165,9 +183,21 @@ class _ClanDetailScreenState extends ConsumerState<ClanDetailScreen> {
                   }
                 },
               ),
+              actions: [
+                IconButton(
+                  icon: const Icon(
+                    Icons.person_add_alt_1_rounded,
+                    color: Colors.white,
+                  ),
+                  tooltip: 'Invite friends',
+                  onPressed: () => _openInviteSheet(detail),
+                ),
+              ],
               flexibleSpace: FlexibleSpaceBar(
-                titlePadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                titlePadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 title: Text(
                   clan.name,
                   style: GoogleFonts.plusJakartaSans(
@@ -230,8 +260,10 @@ class _ClanDetailScreenState extends ConsumerState<ClanDetailScreen> {
             SliverToBoxAdapter(
               child: Container(
                 margin: const EdgeInsets.all(16),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
@@ -247,24 +279,25 @@ class _ClanDetailScreenState extends ConsumerState<ClanDetailScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _StatColumn(
-                        value: '${clan.memberCount}', label: 'Members'),
+                    _StatColumn(value: '${clan.memberCount}', label: 'Members'),
                     Container(
                       width: 1,
                       height: 30,
                       color: TeritoryColors.border,
                     ),
                     _StatColumn(
-                        value: '${detail.communities.length}',
-                        label: 'Communities'),
+                      value: '${detail.communities.length}',
+                      label: 'Communities',
+                    ),
                     Container(
                       width: 1,
                       height: 30,
                       color: TeritoryColors.border,
                     ),
                     _StatColumn(
-                        value: clan.region.isEmpty ? '—' : clan.region,
-                        label: 'Region'),
+                      value: clan.region.isEmpty ? '—' : clan.region,
+                      label: 'Region',
+                    ),
                   ],
                 ),
               ),
@@ -322,7 +355,8 @@ class _ClanDetailScreenState extends ConsumerState<ClanDetailScreen> {
                                   width: 16,
                                   height: 16,
                                   child: CircularProgressIndicator(
-                                      strokeWidth: 2),
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : Icon(
                                   isMember
@@ -355,8 +389,11 @@ class _ClanDetailScreenState extends ConsumerState<ClanDetailScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
-                    const Icon(Icons.people_rounded,
-                        size: 18, color: TeritoryColors.primary),
+                    const Icon(
+                      Icons.people_rounded,
+                      size: 18,
+                      color: TeritoryColors.primary,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'Members',
@@ -413,8 +450,11 @@ class _ClanDetailScreenState extends ConsumerState<ClanDetailScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
-                    const Icon(Icons.groups_rounded,
-                        size: 18, color: TeritoryColors.communityIndigo),
+                    const Icon(
+                      Icons.groups_rounded,
+                      size: 18,
+                      color: TeritoryColors.communityIndigo,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'Communities',
@@ -455,21 +495,21 @@ class _ClanDetailScreenState extends ConsumerState<ClanDetailScreen> {
               )
             else
               SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final community = detail.communities[index];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 6),
-                      child: _CommunityCard(
-                        community: community,
-                        onTap: () => context.push(
-                            '/clans/${widget.clanId}/communities/${community.id}'),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final community = detail.communities[index];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    child: _CommunityCard(
+                      community: community,
+                      onTap: () => context.push(
+                        '/clans/${widget.clanId}/communities/${community.id}',
                       ),
-                    );
-                  },
-                  childCount: detail.communities.length,
-                ),
+                    ),
+                  );
+                }, childCount: detail.communities.length),
               ),
 
             // Create Community button
@@ -482,7 +522,8 @@ class _ClanDetailScreenState extends ConsumerState<ClanDetailScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: TeritoryColors.communityIndigo,
                     side: const BorderSide(
-                        color: TeritoryColors.communityIndigo),
+                      color: TeritoryColors.communityIndigo,
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -517,13 +558,18 @@ class _ChieftainNotice extends StatelessWidget {
       decoration: BoxDecoration(
         color: TeritoryColors.clanPurple.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: TeritoryColors.clanPurple.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: TeritoryColors.clanPurple.withValues(alpha: 0.3),
+        ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.shield_rounded,
-              size: 18, color: TeritoryColors.clanPurple),
+          const Icon(
+            Icons.shield_rounded,
+            size: 18,
+            color: TeritoryColors.clanPurple,
+          ),
           const SizedBox(width: 8),
           Text(
             'You are the Chieftain of this clan',
@@ -652,8 +698,11 @@ class _ChieftainBar extends StatelessWidget {
           CircleAvatar(
             radius: 22,
             backgroundColor: TeritoryColors.clanPurple.withValues(alpha: 0.15),
-            child: const Icon(Icons.shield_rounded,
-                color: TeritoryColors.clanPurple, size: 22),
+            child: const Icon(
+              Icons.shield_rounded,
+              color: TeritoryColors.clanPurple,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -688,8 +737,11 @@ class _ChieftainBar extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.star_rounded,
-                    size: 14, color: TeritoryColors.clanPurple),
+                const Icon(
+                  Icons.star_rounded,
+                  size: 14,
+                  color: TeritoryColors.clanPurple,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   'Leader',
@@ -748,8 +800,11 @@ class _CommunityCard extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(14),
                 child: community.coverImageUrl.isEmpty
-                    ? const Icon(Icons.groups_rounded,
-                        color: Colors.white, size: 28)
+                    ? const Icon(
+                        Icons.groups_rounded,
+                        color: Colors.white,
+                        size: 28,
+                      )
                     : Image.network(
                         community.coverImageUrl,
                         fit: BoxFit.cover,
@@ -791,10 +846,13 @@ class _CommunityCard extends StatelessWidget {
                       children: community.interestTags.take(3).map((tag) {
                         return Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
-                            color: TeritoryColors.communityIndigo
-                                .withValues(alpha: 0.1),
+                            color: TeritoryColors.communityIndigo.withValues(
+                              alpha: 0.1,
+                            ),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -812,8 +870,10 @@ class _CommunityCard extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded,
-                color: TeritoryColors.textMuted),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: TeritoryColors.textMuted,
+            ),
           ],
         ),
       ),

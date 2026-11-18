@@ -7,10 +7,7 @@ class SeaWaveNavItem {
   final IconData icon;
   final String label;
 
-  const SeaWaveNavItem({
-    required this.icon,
-    required this.label,
-  });
+  const SeaWaveNavItem({required this.icon, required this.label});
 }
 
 class SeaWaveNavBar extends StatefulWidget {
@@ -32,28 +29,37 @@ class SeaWaveNavBar extends StatefulWidget {
 }
 
 class _SeaWaveNavBarState extends State<SeaWaveNavBar>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _animController;
   late Animation<double> _animPosition;
   late double _previousIndex;
+
+  // Continuous infinite wave animation loop
+  late AnimationController _waveLoopController;
 
   @override
   void initState() {
     super.initState();
     _previousIndex = widget.currentIndex.toDouble();
+
+    // Tab transition controller
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 380),
     );
-    _animPosition = Tween<double>(
-      begin: _previousIndex,
-      end: widget.currentIndex.toDouble(),
-    ).animate(
-      CurvedAnimation(
-        parent: _animController,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+    _animPosition =
+        Tween<double>(
+          begin: _previousIndex,
+          end: widget.currentIndex.toDouble(),
+        ).animate(
+          CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
+        );
+
+    // Continuous sea wave ripple & swell loop
+    _waveLoopController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2800),
+    )..repeat();
   }
 
   @override
@@ -61,15 +67,13 @@ class _SeaWaveNavBarState extends State<SeaWaveNavBar>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentIndex != widget.currentIndex) {
       _previousIndex = _animPosition.value;
-      _animPosition = Tween<double>(
-        begin: _previousIndex,
-        end: widget.currentIndex.toDouble(),
-      ).animate(
-        CurvedAnimation(
-          parent: _animController,
-          curve: Curves.easeOutBack,
-        ),
-      );
+      _animPosition =
+          Tween<double>(
+            begin: _previousIndex,
+            end: widget.currentIndex.toDouble(),
+          ).animate(
+            CurvedAnimation(parent: _animController, curve: Curves.easeOutBack),
+          );
       _animController.forward(from: 0.0);
     }
   }
@@ -77,6 +81,7 @@ class _SeaWaveNavBarState extends State<SeaWaveNavBar>
   @override
   void dispose() {
     _animController.dispose();
+    _waveLoopController.dispose();
     super.dispose();
   }
 
@@ -84,25 +89,31 @@ class _SeaWaveNavBarState extends State<SeaWaveNavBar>
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     const double barHeight = 68.0;
-    const double waveOverflow = 16.0;
+    const double waveOverflow = 18.0;
     final totalHeight = barHeight + waveOverflow + bottomPadding;
 
     return AnimatedBuilder(
-      animation: _animController,
+      animation: Listenable.merge([_animController, _waveLoopController]),
       builder: (context, _) {
         final animVal = _animPosition.value;
+        final waveLoopProgress = _waveLoopController.value;
+        final wavePhase = waveLoopProgress * 2 * math.pi;
+
+        // Gentle nautical bobbing for active component (like a sailboat on ocean swell)
+        final waterBobbing = math.sin(wavePhase) * 2.5;
 
         return SizedBox(
           height: totalHeight,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              // 1. Layered Sea Wave Canvas
+              // 1. Layered Living Sea Wave Canvas
               Positioned.fill(
                 child: CustomPaint(
                   painter: _SeaWavePainter(
                     itemCount: widget.items.length,
                     activePosition: animVal,
+                    wavePhase: wavePhase,
                     isDark: widget.isDark,
                     waveOverflow: waveOverflow,
                     bottomPadding: bottomPadding,
@@ -121,20 +132,28 @@ class _SeaWaveNavBarState extends State<SeaWaveNavBar>
                     final isSelected = widget.currentIndex == index;
                     final item = widget.items[index];
 
-                    // Distance from animated position for subtle dynamic scaling
+                    // Distance from animated position for smooth dynamic elevation
                     final dist = (animVal - index).abs();
                     final scaleFactor = (1.0 - (dist * 0.25)).clamp(0.85, 1.0);
-                    final liftOffset = (1.0 - (dist * 0.8)).clamp(0.0, 1.0) * -12.0;
+                    final baseLift =
+                        (1.0 - (dist * 0.8)).clamp(0.0, 1.0) * -14.0;
+                    final totalLift = isSelected
+                        ? (baseLift + waterBobbing)
+                        : baseLift;
 
                     return Expanded(
                       child: GestureDetector(
                         onTap: () => widget.onTap(index),
                         behavior: HitTestBehavior.opaque,
                         child: Transform.translate(
-                          offset: Offset(0, liftOffset),
+                          offset: Offset(0, totalLift),
                           child: Transform.scale(
                             scale: scaleFactor,
-                            child: _buildItemContent(item, isSelected),
+                            child: _buildItemContent(
+                              item,
+                              isSelected,
+                              waveLoopProgress,
+                            ),
                           ),
                         ),
                       ),
@@ -149,10 +168,14 @@ class _SeaWaveNavBarState extends State<SeaWaveNavBar>
     );
   }
 
-  Widget _buildItemContent(SeaWaveNavItem item, bool isSelected) {
+  Widget _buildItemContent(
+    SeaWaveNavItem item,
+    bool isSelected,
+    double waveProgress,
+  ) {
     final activeColor = widget.isDark
-        ? const Color(0xFF38BDF8) // Bright Cyan on dark oceanic
-        : TeritoryColors.primary; // Vibrant Nautical Coral/Orange
+        ? const Color(0xFF38BDF8) // Bright Ocean Cyan
+        : TeritoryColors.primary; // Vibrant Nautical Coral
     final inactiveColor = widget.isDark
         ? const Color(0xFF94A3B8)
         : TeritoryColors.textMuted;
@@ -161,51 +184,53 @@ class _SeaWaveNavBarState extends State<SeaWaveNavBar>
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (isSelected)
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: widget.isDark
-                    ? [
-                        const Color(0xFF1E3A8A),
-                        const Color(0xFF0C4A6E),
-                      ]
-                    : [
-                        const Color(0xFFFF5330),
-                        const Color(0xFFFF7A50),
-                      ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: (widget.isDark
-                          ? const Color(0xFF0284C7)
-                          : const Color(0xFFFF5330))
-                      .withValues(alpha: 0.40),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+          SizedBox(
+            width: 58,
+            height: 52,
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                // Continuous Expanding Sea Ripple Waves
+                _buildExpandingSeaRipple(waveProgress, 0.0),
+                _buildExpandingSeaRipple(waveProgress, 0.5),
+
+                // Active Elevated Disc on Wave Crest
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: widget.isDark
+                          ? [const Color(0xFF1E3A8A), const Color(0xFF0C4A6E)]
+                          : [const Color(0xFFFF5330), const Color(0xFFFF7A50)],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color:
+                            (widget.isDark
+                                    ? const Color(0xFF0284C7)
+                                    : const Color(0xFFFF5330))
+                                .withValues(alpha: 0.45),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.90),
+                      width: 2.0,
+                    ),
+                  ),
+                  child: Icon(item.icon, size: 22, color: Colors.white),
                 ),
               ],
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.85),
-                width: 2.0,
-              ),
-            ),
-            child: Icon(
-              item.icon,
-              size: 22,
-              color: Colors.white,
             ),
           )
         else
-          Icon(
-            item.icon,
-            size: 22,
-            color: inactiveColor,
-          ),
+          Icon(item.icon, size: 22, color: inactiveColor),
         const SizedBox(height: 3),
         Text(
           item.label,
@@ -221,12 +246,36 @@ class _SeaWaveNavBarState extends State<SeaWaveNavBar>
       ],
     );
   }
+
+  /// Builds a gentle circular sea-water ripple radiating outwards from the active component
+  Widget _buildExpandingSeaRipple(double progress, double offset) {
+    final effectiveProgress = (progress + offset) % 1.0;
+    final size = 44.0 + (effectiveProgress * 16.0);
+    final opacity = (1.0 - effectiveProgress).clamp(0.0, 0.65) * 0.45;
+
+    final rippleColor = widget.isDark
+        ? const Color(0xFF38BDF8)
+        : const Color(0xFF38BDF8);
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: rippleColor.withValues(alpha: opacity),
+          width: 1.5,
+        ),
+      ),
+    );
+  }
 }
 
-/// Custom painter that draws sculpted sea waves with dynamic crest under active tab
+/// Custom painter that draws sculpted sea waves with continuous living water ripples
 class _SeaWavePainter extends CustomPainter {
   final int itemCount;
   final double activePosition;
+  final double wavePhase;
   final bool isDark;
   final double waveOverflow;
   final double bottomPadding;
@@ -234,6 +283,7 @@ class _SeaWavePainter extends CustomPainter {
   _SeaWavePainter({
     required this.itemCount,
     required this.activePosition,
+    required this.wavePhase,
     required this.isDark,
     required this.waveOverflow,
     required this.bottomPadding,
@@ -249,27 +299,30 @@ class _SeaWavePainter extends CustomPainter {
     // Baseline where flat nav bar begins
     final baseLineY = waveOverflow + 4.0;
 
-    // ── 1. Soft Background Tide Swell ──
+    // ── 1. Soft Flowing Background Tide Swell (Continuous Live Motion) ──
     final bgTidePaint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: isDark
             ? [
-                const Color(0xFF0369A1).withValues(alpha: 0.25),
+                const Color(0xFF0369A1).withValues(alpha: 0.28),
                 const Color(0xFF0284C7).withValues(alpha: 0.05),
               ]
             : [
-                const Color(0xFF38BDF8).withValues(alpha: 0.35),
-                const Color(0xFFBAE6FD).withValues(alpha: 0.10),
+                const Color(0xFF38BDF8).withValues(alpha: 0.38),
+                const Color(0xFFBAE6FD).withValues(alpha: 0.12),
               ],
       ).createShader(Rect.fromLTWH(0, 0, w, h))
       ..style = PaintingStyle.fill;
 
     final bgPath = Path();
     bgPath.moveTo(0, baseLineY + 6);
-    for (double x = 0; x <= w; x += 12) {
-      final waveSine = math.sin((x / w) * 4 * math.pi + (activePosition * 0.8)) * 5;
+    for (double x = 0; x <= w; x += 10) {
+      // Continuous sinusoidal ocean swell flowing horizontally
+      final waveSine =
+          math.sin((x / w) * 4 * math.pi + (activePosition * 0.8) + wavePhase) *
+          5.0;
       bgPath.lineTo(x, baseLineY + 2 + waveSine);
     }
     bgPath.lineTo(w, h);
@@ -296,15 +349,19 @@ class _SeaWavePainter extends CustomPainter {
 
     // Ambient drop shadow
     final shadowPaint = Paint()
-      ..color = (isDark ? const Color(0xFF0284C7) : Colors.black)
-          .withValues(alpha: isDark ? 0.20 : 0.08)
+      ..color = (isDark ? const Color(0xFF0284C7) : Colors.black).withValues(
+        alpha: isDark ? 0.22 : 0.08,
+      )
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
+
+    // Dynamic crest swell height influenced by continuous wave breathing
+    final liveCrestOffset = math.sin(wavePhase) * 1.5;
 
     final wavePath = Path();
     wavePath.moveTo(0, baseLineY);
 
     // Wave parameters around active crest
-    const crestRadius = 52.0;
+    const crestRadius = 54.0;
     final leftTroughX = crestX - crestRadius;
     final rightTroughX = crestX + crestRadius;
 
@@ -323,20 +380,20 @@ class _SeaWavePainter extends CustomPainter {
       wavePath.lineTo(0, baseLineY + 3.0);
     }
 
-    // Rise up smoothly into the crest
+    // Rise up smoothly into the active wave crest
     wavePath.cubicTo(
       crestX - (crestRadius * 0.55),
       baseLineY + 3.0,
       crestX - (crestRadius * 0.40),
-      0.0, // Peak crest
+      0.0 + liveCrestOffset,
       crestX,
-      0.0,
+      0.0 + liveCrestOffset,
     );
 
     // Descend gracefully through the right slope
     wavePath.cubicTo(
       crestX + (crestRadius * 0.40),
-      0.0,
+      0.0 + liveCrestOffset,
       crestX + (crestRadius * 0.55),
       baseLineY + 3.0,
       rightTroughX,
@@ -366,46 +423,48 @@ class _SeaWavePainter extends CustomPainter {
     // Draw solid wave body
     canvas.drawPath(wavePath, mainWavePaint);
 
-    // ── 3. Sea Foam Crest Stroke (Top Rim Highlight) ──
+    // ── 3. Continuous Sea Foam Crest Stroke (Shimmering Water Foam) ──
+    final shimmerOffset = math.sin(wavePhase * 1.2) * 20.0;
+
     final foamPaint = Paint()
       ..shader = LinearGradient(
         colors: isDark
             ? [
                 const Color(0xFF38BDF8).withValues(alpha: 0.10),
                 const Color(0xFF38BDF8).withValues(alpha: 0.85),
-                const Color(0xFF67E8F9).withValues(alpha: 0.95),
+                const Color(0xFF67E8F9).withValues(alpha: 1.0),
                 const Color(0xFF38BDF8).withValues(alpha: 0.85),
                 const Color(0xFF38BDF8).withValues(alpha: 0.10),
               ]
             : [
                 const Color(0xFF0284C7).withValues(alpha: 0.15),
-                const Color(0xFF38BDF8).withValues(alpha: 0.80),
-                const Color(0xFF60A5FA).withValues(alpha: 0.90),
-                const Color(0xFF38BDF8).withValues(alpha: 0.80),
+                const Color(0xFF38BDF8).withValues(alpha: 0.85),
+                const Color(0xFF60A5FA).withValues(alpha: 0.95),
+                const Color(0xFF38BDF8).withValues(alpha: 0.85),
                 const Color(0xFF0284C7).withValues(alpha: 0.15),
               ],
         stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
-      ).createShader(Rect.fromLTWH(crestX - 80, 0, 160, 24))
+      ).createShader(Rect.fromLTWH(crestX - 80 + shimmerOffset, 0, 160, 24))
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
+      ..strokeWidth = 2.2
       ..strokeCap = StrokeCap.round;
 
     final foamPath = Path();
-    final foamLeft = math.max(0.0, crestX - 70);
-    final foamRight = math.min(w, crestX + 70);
+    final foamLeft = math.max(0.0, crestX - 72);
+    final foamRight = math.min(w, crestX + 72);
 
     foamPath.moveTo(foamLeft, baseLineY);
     foamPath.cubicTo(
       crestX - (crestRadius * 0.55),
       baseLineY + 3.0,
       crestX - (crestRadius * 0.40),
-      0.0,
+      0.0 + liveCrestOffset,
       crestX,
-      0.0,
+      0.0 + liveCrestOffset,
     );
     foamPath.cubicTo(
       crestX + (crestRadius * 0.40),
-      0.0,
+      0.0 + liveCrestOffset,
       crestX + (crestRadius * 0.55),
       baseLineY + 3.0,
       foamRight,
@@ -418,6 +477,7 @@ class _SeaWavePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _SeaWavePainter oldDelegate) {
     return oldDelegate.activePosition != activePosition ||
+        oldDelegate.wavePhase != wavePhase ||
         oldDelegate.isDark != isDark ||
         oldDelegate.itemCount != itemCount;
   }

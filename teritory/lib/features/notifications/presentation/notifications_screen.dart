@@ -107,17 +107,38 @@ class NotificationsScreen extends ConsumerWidget {
     if (!context.mounted) return;
 
     final route = item.actionUrl ?? item.targetId;
-    if (route == null || route.isEmpty || route == '/notifications') return;
+    if (route == null || route.isEmpty || route == '/notifications') {
+      if (item.type.name.contains('friend')) {
+        context.go('/profile/friends');
+        return;
+      }
+      if (item.type.name.contains('rally') || item.type.name.contains('kudos')) {
+        context.go('/explore');
+        return;
+      }
+      return;
+    }
 
-    const knownPrefixes = ['/clans/', '/trips/', '/profile/'];
+    const knownPrefixes = [
+      '/clans/',
+      '/trips/',
+      '/profile/',
+      '/explore',
+      '/wonders',
+    ];
     if (knownPrefixes.any(route.startsWith)) {
       context.go(route);
       return;
     }
+
+    if (route.startsWith('/flags/')) {
+      context.go('/explore');
+      return;
+    }
+
     messenger.showSnackBar(
       const SnackBar(
-        content: Text('This notification points to a screen the app has not '
-            'built yet.'),
+        content: Text('This notification points to an external feature.'),
       ),
     );
   }

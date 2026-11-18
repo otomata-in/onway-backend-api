@@ -58,19 +58,19 @@ class TripWaypoint {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'tripPlanId': tripPlanId,
-        'orderIndex': orderIndex,
-        'placeName': placeName,
-        'latitude': latitude,
-        'longitude': longitude,
-        'category': category,
-        'flagCount': flagCount,
-        'estimatedArrivalTime': estimatedArrivalTime?.toIso8601String(),
-        'estimatedDepartureTime': estimatedDepartureTime?.toIso8601String(),
-        'isValidated': isValidated,
-        'distanceFromPrevKm': distanceFromPrevKm,
-      };
+    'id': id,
+    'tripPlanId': tripPlanId,
+    'orderIndex': orderIndex,
+    'placeName': placeName,
+    'latitude': latitude,
+    'longitude': longitude,
+    'category': category,
+    'flagCount': flagCount,
+    'estimatedArrivalTime': estimatedArrivalTime?.toIso8601String(),
+    'estimatedDepartureTime': estimatedDepartureTime?.toIso8601String(),
+    'isValidated': isValidated,
+    'distanceFromPrevKm': distanceFromPrevKm,
+  };
 }
 
 class TripPlan {
@@ -119,32 +119,49 @@ class TripPlan {
   });
 
   factory TripPlan.fromJson(Map<String, dynamic> json) {
-    final waypointsList = (json['waypoints'] as List<dynamic>?)
+    final waypointsList =
+        (json['waypoints'] as List<dynamic>?)
             ?.map((e) => TripWaypoint.fromJson(e as Map<String, dynamic>))
             .toList() ??
         [];
 
-    final oLat = (json['originLat'] as num?)?.toDouble() ??
+    final oLat =
+        (json['originLat'] as num?)?.toDouble() ??
         (waypointsList.isNotEmpty ? waypointsList.first.latitude : 0.0);
-    final oLng = (json['originLng'] as num?)?.toDouble() ??
+    final oLng =
+        (json['originLng'] as num?)?.toDouble() ??
         (waypointsList.isNotEmpty ? waypointsList.first.longitude : 0.0);
-    final dLat = (json['destLat'] as num?)?.toDouble() ??
+    final dLat =
+        (json['destLat'] as num?)?.toDouble() ??
         (waypointsList.isNotEmpty ? waypointsList.last.latitude : 0.0);
-    final dLng = (json['destLng'] as num?)?.toDouble() ??
+    final dLng =
+        (json['destLng'] as num?)?.toDouble() ??
         (waypointsList.isNotEmpty ? waypointsList.last.longitude : 0.0);
 
     final cBy = json['createdBy'] is String
         ? json['createdBy'] as String
-        : (json['createdById'] as String? ?? (json['createdBy'] is Map ? json['createdBy']['id'] as String? ?? '' : ''));
-    final cByName = json['createdByName'] as String? ??
-        (json['createdBy'] is Map ? json['createdBy']['displayName'] as String? ?? '' : '');
+        : (json['createdById'] as String? ??
+              (json['createdBy'] is Map
+                  ? json['createdBy']['id'] as String? ?? ''
+                  : ''));
+    final cByName =
+        json['createdByName'] as String? ??
+        (json['createdBy'] is Map
+            ? json['createdBy']['displayName'] as String? ?? ''
+            : '');
 
     final statusStr = (json['status'] as String? ?? 'draft').toLowerCase();
-    final durationHours = (json['estimatedDurationHours'] as num?)?.toDouble() ??
-        ((json['estimatedDays'] as num?)?.toDouble() != null ? (json['estimatedDays'] as num).toDouble() * 8.0 : 8.0);
-    final distanceKm = (json['estimatedDistanceKm'] as num?)?.toDouble() ??
-        (json['totalDistanceKm'] as num?)?.toDouble() ?? 0.0;
-    final voteScore = json['voteScore'] as int? ?? json['voteCount'] as int? ?? 0;
+    final durationHours =
+        (json['estimatedDurationHours'] as num?)?.toDouble() ??
+        ((json['estimatedDays'] as num?)?.toDouble() != null
+            ? (json['estimatedDays'] as num).toDouble() * 8.0
+            : 8.0);
+    final distanceKm =
+        (json['estimatedDistanceKm'] as num?)?.toDouble() ??
+        (json['totalDistanceKm'] as num?)?.toDouble() ??
+        0.0;
+    final voteScore =
+        json['voteScore'] as int? ?? json['voteCount'] as int? ?? 0;
 
     return TripPlan(
       id: json['id'] as String,
@@ -153,14 +170,19 @@ class TripPlan {
       createdBy: cBy,
       createdByName: cByName,
       communityId: json['communityId'] as String?,
-      communityName: json['communityName'] as String? ??
+      communityName:
+          json['communityName'] as String? ??
           (json['community'] is Map
               ? json['community']['name'] as String?
               : null),
-      originName: json['originName'] as String? ?? (waypointsList.isNotEmpty ? waypointsList.first.placeName : ''),
+      originName:
+          json['originName'] as String? ??
+          (waypointsList.isNotEmpty ? waypointsList.first.placeName : ''),
       originLat: oLat,
       originLng: oLng,
-      destinationName: json['destinationName'] as String? ?? (waypointsList.isNotEmpty ? waypointsList.last.placeName : ''),
+      destinationName:
+          json['destinationName'] as String? ??
+          (waypointsList.isNotEmpty ? waypointsList.last.placeName : ''),
       destLat: dLat,
       destLng: dLng,
       estimatedDurationHours: durationHours,
@@ -171,7 +193,8 @@ class TripPlan {
       ),
       voteScore: voteScore,
       waypoints: waypointsList,
-      gearSuggestions: (json['gearSuggestions'] as List<dynamic>?)
+      gearSuggestions:
+          (json['gearSuggestions'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
           [],
@@ -182,57 +205,27 @@ class TripPlan {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'description': description,
-        'createdBy': createdBy,
-        'createdByName': createdByName,
-        'communityId': communityId,
-        'communityName': communityName,
-        'originName': originName,
-        'originLat': originLat,
-        'originLng': originLng,
-        'destinationName': destinationName,
-        'destLat': destLat,
-        'destLng': destLng,
-        'estimatedDurationHours': estimatedDurationHours,
-        'estimatedDistanceKm': estimatedDistanceKm,
-        'status': status.name,
-        'voteScore': voteScore,
-        'waypoints': waypoints.map((e) => e.toJson()).toList(),
-        'gearSuggestions': gearSuggestions,
-        'createdAt': createdAt.toIso8601String(),
-      };
-}
-
-class TripVote {
-  final String id;
-  final String tripPlanId;
-  final String userId;
-  final String direction;
-
-  const TripVote({
-    required this.id,
-    required this.tripPlanId,
-    required this.userId,
-    required this.direction,
-  });
-
-  factory TripVote.fromJson(Map<String, dynamic> json) {
-    return TripVote(
-      id: json['id'] as String,
-      tripPlanId: json['tripPlanId'] as String,
-      userId: json['userId'] as String,
-      direction: json['direction'] as String,
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'tripPlanId': tripPlanId,
-        'userId': userId,
-        'direction': direction,
-      };
+    'id': id,
+    'name': name,
+    'description': description,
+    'createdBy': createdBy,
+    'createdByName': createdByName,
+    'communityId': communityId,
+    'communityName': communityName,
+    'originName': originName,
+    'originLat': originLat,
+    'originLng': originLng,
+    'destinationName': destinationName,
+    'destLat': destLat,
+    'destLng': destLng,
+    'estimatedDurationHours': estimatedDurationHours,
+    'estimatedDistanceKm': estimatedDistanceKm,
+    'status': status.name,
+    'voteScore': voteScore,
+    'waypoints': waypoints.map((e) => e.toJson()).toList(),
+    'gearSuggestions': gearSuggestions,
+    'createdAt': createdAt.toIso8601String(),
+  };
 }
 
 class TripParticipant {
@@ -275,7 +268,9 @@ class TripParticipant {
       userName: uName,
       userAvatar: uAvatar,
       status: ParticipantStatus.values.firstWhere(
-        (e) => e.name.toLowerCase() == statusStr || e.name.toLowerCase() == statusStr.replaceAll('_', ''),
+        (e) =>
+            e.name.toLowerCase() == statusStr ||
+            e.name.toLowerCase() == statusStr.replaceAll('_', ''),
         orElse: () => ParticipantStatus.joined,
       ),
       currentLat: (json['currentLat'] as num?)?.toDouble(),
@@ -287,16 +282,16 @@ class TripParticipant {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'tripId': tripId,
-        'userId': userId,
-        'userName': userName,
-        'userAvatar': userAvatar,
-        'status': status.name,
-        'currentLat': currentLat,
-        'currentLng': currentLng,
-        'lastUpdated': lastUpdated?.toIso8601String(),
-      };
+    'id': id,
+    'tripId': tripId,
+    'userId': userId,
+    'userName': userName,
+    'userAvatar': userAvatar,
+    'status': status.name,
+    'currentLat': currentLat,
+    'currentLng': currentLng,
+    'lastUpdated': lastUpdated?.toIso8601String(),
+  };
 }
 
 class Trip {
@@ -336,20 +331,27 @@ class Trip {
       tName = json['tripPlan']['name'] as String? ?? '';
     }
 
-    final orgId = json['organizerId'] as String? ?? json['createdById'] as String? ?? '';
+    final orgId =
+        json['organizerId'] as String? ?? json['createdById'] as String? ?? '';
     final statusStr = (json['status'] as String? ?? 'active').toLowerCase();
 
-    final plan =
-        json['tripPlan'] is Map ? json['tripPlan'] as Map<String, dynamic> : null;
+    final plan = json['tripPlan'] is Map
+        ? json['tripPlan'] as Map<String, dynamic>
+        : null;
     final waypoints = plan?['waypoints'] as List<dynamic>? ?? const [];
-    final duration = (plan?['estimatedDurationHours'] as num?)?.toDouble() ??
+    final duration =
+        (plan?['estimatedDurationHours'] as num?)?.toDouble() ??
         ((plan?['estimatedDays'] as num?)?.toDouble() != null
             ? (plan!['estimatedDays'] as num).toDouble() * 8
             : 48.0);
 
     return Trip(
       id: json['id'] as String,
-      tripPlanId: json['tripPlanId'] as String? ?? (json['tripPlan'] is Map ? json['tripPlan']['id'] as String? ?? '' : ''),
+      tripPlanId:
+          json['tripPlanId'] as String? ??
+          (json['tripPlan'] is Map
+              ? json['tripPlan']['id'] as String? ?? ''
+              : ''),
       tripName: tName.isNotEmpty ? tName : 'Expedition',
       organizerId: orgId,
       status: TripStatus.values.firstWhere(
@@ -362,22 +364,24 @@ class Trip {
       completedAt: json['completedAt'] != null
           ? DateTime.parse(json['completedAt'] as String)
           : null,
-      participants: (json['participants'] as List<dynamic>?)
-              ?.map((e) =>
-                  TripParticipant.fromJson(e as Map<String, dynamic>))
+      participants:
+          (json['participants'] as List<dynamic>?)
+              ?.map((e) => TripParticipant.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
-      originName: plan?['originName'] as String? ??
+      originName:
+          plan?['originName'] as String? ??
           (waypoints.isNotEmpty
               ? (waypoints.first as Map<String, dynamic>)['placeName']
-                      as String? ??
-                  ''
+                        as String? ??
+                    ''
               : ''),
-      destinationName: plan?['destinationName'] as String? ??
+      destinationName:
+          plan?['destinationName'] as String? ??
           (waypoints.isNotEmpty
               ? (waypoints.last as Map<String, dynamic>)['placeName']
-                      as String? ??
-                  ''
+                        as String? ??
+                    ''
               : ''),
       plannedWaypoints: waypoints.length,
       estimatedDurationHours: duration,
@@ -385,62 +389,19 @@ class Trip {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'tripPlanId': tripPlanId,
-        'tripName': tripName,
-        'organizerId': organizerId,
-        'status': status.name,
-        'startedAt': startedAt.toIso8601String(),
-        'completedAt': completedAt?.toIso8601String(),
-        'participants': participants.map((e) => e.toJson()).toList(),
-        'originName': originName,
-        'destinationName': destinationName,
-        'plannedWaypoints': plannedWaypoints,
-        'estimatedDurationHours': estimatedDurationHours,
-      };
-}
-
-class TripWaypointValidation {
-  final String id;
-  final String tripId;
-  final String waypointId;
-  final String userId;
-  final DateTime flaggedAt;
-  final double distanceFromWaypointM;
-  final bool isWithinRadius;
-
-  const TripWaypointValidation({
-    required this.id,
-    required this.tripId,
-    required this.waypointId,
-    required this.userId,
-    required this.flaggedAt,
-    required this.distanceFromWaypointM,
-    required this.isWithinRadius,
-  });
-
-  factory TripWaypointValidation.fromJson(Map<String, dynamic> json) {
-    return TripWaypointValidation(
-      id: json['id'] as String,
-      tripId: json['tripId'] as String,
-      waypointId: json['waypointId'] as String,
-      userId: json['userId'] as String,
-      flaggedAt: DateTime.parse(json['flaggedAt'] as String),
-      distanceFromWaypointM:
-          (json['distanceFromWaypointM'] as num).toDouble(),
-      isWithinRadius: json['isWithinRadius'] as bool,
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'tripId': tripId,
-        'waypointId': waypointId,
-        'userId': userId,
-        'flaggedAt': flaggedAt.toIso8601String(),
-        'distanceFromWaypointM': distanceFromWaypointM,
-        'isWithinRadius': isWithinRadius,
-      };
+    'id': id,
+    'tripPlanId': tripPlanId,
+    'tripName': tripName,
+    'organizerId': organizerId,
+    'status': status.name,
+    'startedAt': startedAt.toIso8601String(),
+    'completedAt': completedAt?.toIso8601String(),
+    'participants': participants.map((e) => e.toJson()).toList(),
+    'originName': originName,
+    'destinationName': destinationName,
+    'plannedWaypoints': plannedWaypoints,
+    'estimatedDurationHours': estimatedDurationHours,
+  };
 }
 
 class TripCompletion {
@@ -490,16 +451,16 @@ class TripCompletion {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'tripId': tripId,
-        'userId': userId,
-        'userName': userName,
-        'completedAt': completedAt.toIso8601String(),
-        'totalDistanceKm': totalDistanceKm,
-        'totalDurationHours': totalDurationHours,
-        'waypointsValidated': waypointsValidated,
-        'totalWaypoints': totalWaypoints,
-        'badge': badge.name,
-        'routeThumbnailUrl': routeThumbnailUrl,
-      };
+    'id': id,
+    'tripId': tripId,
+    'userId': userId,
+    'userName': userName,
+    'completedAt': completedAt.toIso8601String(),
+    'totalDistanceKm': totalDistanceKm,
+    'totalDurationHours': totalDurationHours,
+    'waypointsValidated': waypointsValidated,
+    'totalWaypoints': totalWaypoints,
+    'badge': badge.name,
+    'routeThumbnailUrl': routeThumbnailUrl,
+  };
 }

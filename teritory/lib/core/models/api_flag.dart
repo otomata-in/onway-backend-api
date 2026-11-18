@@ -21,6 +21,9 @@ class ApiFlag {
   final String photoUrl;
   final int kudos;
   final double distanceKm;
+
+  /// Only `GET /flags/sub-territories` returns this (HIDDEN_GEM reactions).
+  final int hiddenGemCount;
   final DateTime createdAt;
 
   // Author (flattened from the nested `user` object).
@@ -44,6 +47,7 @@ class ApiFlag {
     required this.photoUrl,
     required this.kudos,
     required this.distanceKm,
+    this.hiddenGemCount = 0,
     required this.createdAt,
     required this.authorName,
     required this.authorHandle,
@@ -52,8 +56,13 @@ class ApiFlag {
 
   LatLng get coordinates => LatLng(latitude, longitude);
 
+  String get locationLabel =>
+      [city, country, continent].where((s) => s.trim().isNotEmpty).join(', ');
+
   bool isOwnedBy(String? currentUserId) =>
-      currentUserId != null && currentUserId.isNotEmpty && userId == currentUserId;
+      currentUserId != null &&
+      currentUserId.isNotEmpty &&
+      userId == currentUserId;
 
   factory ApiFlag.fromJson(Map<String, dynamic> json) {
     final user = json['user'];
@@ -65,7 +74,9 @@ class ApiFlag {
       if (authorName.isEmpty) {
         authorName = userMap['displayName'] as String? ?? '';
       }
-      if (authorHandle.isEmpty) authorHandle = userMap['handle'] as String? ?? '';
+      if (authorHandle.isEmpty) {
+        authorHandle = userMap['handle'] as String? ?? '';
+      }
       if (authorAvatar.isEmpty) {
         authorAvatar = userMap['avatarUrl'] as String? ?? '';
       }
@@ -87,6 +98,7 @@ class ApiFlag {
       photoUrl: json['photoUrl'] as String? ?? '',
       kudos: (json['kudos'] as num?)?.toInt() ?? 0,
       distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 0.0,
+      hiddenGemCount: (json['hiddenGemCount'] as num?)?.toInt() ?? 0,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
           : DateTime.now(),
@@ -162,16 +174,33 @@ class ApiFlagDetail {
   final ApiFlag flag;
   final List<ApiFlagReaction> reactions;
   final List<ApiFlagComment> comments;
+  final bool isSaved;
 
   const ApiFlagDetail({
     required this.flag,
     required this.reactions,
     required this.comments,
+    this.isSaved = false,
   });
+
+  ApiFlagDetail copyWith({
+    ApiFlag? flag,
+    List<ApiFlagReaction>? reactions,
+    List<ApiFlagComment>? comments,
+    bool? isSaved,
+  }) {
+    return ApiFlagDetail(
+      flag: flag ?? this.flag,
+      reactions: reactions ?? this.reactions,
+      comments: comments ?? this.comments,
+      isSaved: isSaved ?? this.isSaved,
+    );
+  }
 
   factory ApiFlagDetail.fromJson(Map<String, dynamic> json) {
     return ApiFlagDetail(
       flag: ApiFlag.fromJson(json),
+      isSaved: json['isSaved'] as bool? ?? false,
       reactions: (json['reactions'] as List<dynamic>? ?? [])
           .whereType<Map<String, dynamic>>()
           .map(ApiFlagReaction.fromJson)
@@ -214,36 +243,149 @@ extension ApiFlagPresentation on ApiFlag {
   }
 
   FlagItem toFlagItem() => FlagItem(
-        id: id,
-        placeName: placeName,
-        city: city,
-        country: country,
-        countryCode: countryCode.isEmpty ? 'IN' : countryCode,
-        continent: continent.isEmpty ? 'Asia' : continent,
-        latitude: latitude,
-        longitude: longitude,
-        isMajorFlag: isMajorFlag,
-        category: category,
-        flaggedDate: _flaggedDateLabel,
-        notes: notes,
-        photoUrl: photoUrl,
-        kudos: kudos,
-      );
+    id: id,
+    placeName: placeName,
+    city: city,
+    country: country,
+    countryCode: countryCode.isEmpty ? 'IN' : countryCode,
+    continent: continent.isEmpty ? 'Asia' : continent,
+    latitude: latitude,
+    longitude: longitude,
+    isMajorFlag: isMajorFlag,
+    category: category,
+    flaggedDate: _flaggedDateLabel,
+    notes: notes,
+    photoUrl: photoUrl,
+    kudos: kudos,
+  );
 
   FriendFlag toFriendFlag() => FriendFlag(
-        id: id,
-        friendName: authorName,
-        friendAvatar: authorAvatar,
-        placeName: placeName,
-        city: city,
-        country: country,
-        latitude: latitude,
-        longitude: longitude,
-        isMajorFlag: isMajorFlag,
-        flagColor: '#14B8A6',
-        flaggedTimeAgo: _timeAgoLabel,
-        caption: notes,
-        photoUrl: photoUrl,
-        kudosCount: kudos,
-      );
+    id: id,
+    friendName: authorName,
+    friendAvatar: authorAvatar,
+    placeName: placeName,
+    city: city,
+    country: country,
+    latitude: latitude,
+    longitude: longitude,
+    isMajorFlag: isMajorFlag,
+    flagColor: '#14B8A6',
+    flaggedTimeAgo: _timeAgoLabel,
+    caption: notes,
+    photoUrl: photoUrl,
+    kudosCount: kudos,
+  );
+}
+
+/// One traveler who staked a flag at a wonder (`GET /flags/wonders` ->
+/// `claimers[]`).
+class WonderClaimer {
+  final String id;
+  final String displayName;
+  final String handle;
+  final String avatarUrl;
+
+  const WonderClaimer({
+    required this.id,
+    required this.displayName,
+    required this.handle,
+    required this.avatarUrl,
+  });
+
+  factory WonderClaimer.fromJson(Map<String, dynamic> json) {
+    return WonderClaimer(
+      id: json['id'] as String? ?? '',
+      displayName: (json['displayName'] as String?) ?? 'Traveler',
+      handle: json['handle'] as String? ?? '',
+      avatarUrl: json['avatarUrl'] as String? ?? '',
+    );
+  }
+}
+
+/// A row of the major wonders registry (`GET /v1/flags/wonders`).
+///
+/// The server derives it from the flags travelers marked as major wonders, so a
+/// wonder exists here exactly when someone has staked a claimed flag on it.
+class ApiWonder {
+  final String key;
+  final String placeName;
+  final String city;
+  final String country;
+  final String countryCode;
+  final String continent;
+  final double latitude;
+  final double longitude;
+  final String photoUrl;
+  final String latestFlagId;
+  final int claimCount;
+  final bool claimedByMe;
+  final DateTime? lastClaimedAt;
+  final List<WonderClaimer> claimers;
+
+  const ApiWonder({
+    required this.key,
+    required this.placeName,
+    required this.city,
+    required this.country,
+    required this.countryCode,
+    required this.continent,
+    required this.latitude,
+    required this.longitude,
+    required this.photoUrl,
+    required this.latestFlagId,
+    required this.claimCount,
+    required this.claimedByMe,
+    required this.lastClaimedAt,
+    required this.claimers,
+  });
+
+  factory ApiWonder.fromJson(Map<String, dynamic> json) {
+    return ApiWonder(
+      key: json['key'] as String? ?? '',
+      placeName: json['placeName'] as String? ?? 'Unknown place',
+      city: json['city'] as String? ?? '',
+      country: json['country'] as String? ?? '',
+      countryCode: json['countryCode'] as String? ?? '',
+      continent: json['continent'] as String? ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
+      photoUrl: json['photoUrl'] as String? ?? '',
+      latestFlagId: json['latestFlagId'] as String? ?? '',
+      claimCount: (json['claimCount'] as num?)?.toInt() ?? 0,
+      claimedByMe: json['claimedByMe'] as bool? ?? false,
+      lastClaimedAt: json['lastClaimedAt'] != null
+          ? DateTime.tryParse(json['lastClaimedAt'] as String)
+          : null,
+      claimers: (json['claimers'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(WonderClaimer.fromJson)
+          .toList(),
+    );
+  }
+
+  String get locationLabel =>
+      [city, country].where((part) => part.trim().isNotEmpty).join(', ');
+
+  /// The most recent claim, adapted for the shared live flag detail sheet.
+  ApiFlag toFlag() => ApiFlag(
+    id: latestFlagId,
+    userId: claimers.isNotEmpty ? claimers.first.id : '',
+    placeName: placeName,
+    city: city,
+    country: country,
+    countryCode: countryCode.isEmpty ? 'IN' : countryCode,
+    continent: continent.isEmpty ? 'Asia' : continent,
+    latitude: latitude,
+    longitude: longitude,
+    isMajorFlag: true,
+    category: 'Major Wonder',
+    notes: '',
+    photoUrl: photoUrl,
+    kudos: 0,
+    distanceKm: 0,
+    createdAt: lastClaimedAt ?? DateTime.now(),
+    authorName: claimers.isNotEmpty ? claimers.first.displayName : 'Traveler',
+    authorHandle: claimers.isNotEmpty ? claimers.first.handle : '',
+    authorAvatar: claimers.isNotEmpty ? claimers.first.avatarUrl : '',
+  );
 }

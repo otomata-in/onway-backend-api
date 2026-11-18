@@ -9,6 +9,7 @@ import '../../../core/models/trip_models.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../shared/presentation/invite_friends_sheet.dart';
 import '../application/trips_provider.dart';
 
 class TripPlanDetailScreen extends ConsumerStatefulWidget {
@@ -58,11 +59,74 @@ class _TripPlanDetailScreenState extends ConsumerState<TripPlanDetailScreen> {
     }
   }
 
+  Future<void> _forkPlan(TripPlan plan) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Fork Expedition Plan',
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800),
+        ),
+        content: Text(
+          'Create a customizable personal copy of "${plan.name}" with its ${plan.waypoints.length} waypoints in your expeditions?',
+          style: GoogleFonts.plusJakartaSans(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: TeritoryColors.tripRoute,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Fork Plan'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final forked = await TeritoryRepository.instance.createPlan(
+        name: '${plan.name} (Copy)',
+        originName: plan.originName,
+        destinationName: plan.destinationName,
+        description: plan.description,
+        totalDistanceKm: plan.estimatedDistanceKm,
+        estimatedDays: (plan.estimatedDurationHours / 24).ceil().clamp(1, 30),
+        waypoints: plan.waypoints
+            .map((w) => {
+                  'placeName': w.placeName,
+                  'latitude': w.latitude,
+                  'longitude': w.longitude,
+                  'category': w.category,
+                  'distanceFromPrevKm': w.distanceFromPrevKm,
+                })
+            .toList(),
+      );
+      if (!mounted) return;
+      ref.invalidate(tripsHubProvider);
+      ref.invalidate(savedPlansLiveProvider);
+      _toast('Plan copied to your expeditions!');
+      context.push('/trips/${forked.id}');
+    } on ApiException catch (e) {
+      _toast(e.message, error: true);
+    } catch (_) {
+      _toast('Could not fork plan. Check your connection.', error: true);
+    }
+  }
+
   Future<void> _toggleVote(TripPlan plan) async {
     if (_voting) return;
     setState(() => _voting = true);
     try {
-      final voted = await TeritoryRepository.instance.toggleTripPlanVote(plan.id);
+      final voted = await TeritoryRepository.instance.toggleTripPlanVote(
+        plan.id,
+      );
       if (!mounted) return;
       ref.invalidate(planDetailLiveProvider(widget.tripPlanId));
       _toast(voted ? 'Vote added' : 'Vote removed');
@@ -73,6 +137,17 @@ class _TripPlanDetailScreenState extends ConsumerState<TripPlanDetailScreen> {
     } finally {
       if (mounted) setState(() => _voting = false);
     }
+  }
+
+  Future<void> _inviteFriends(TripPlan plan) async {
+    final invited = await InviteFriendsSheet.show(
+      context,
+      targetType: InviteTargetType.trip,
+      targetId: plan.id,
+      targetName: plan.name,
+    );
+    if (!mounted || invited == null) return;
+    _toast(invited == 1 ? 'Invitation sent' : '$invited invitations sent');
   }
 
   Future<void> _startTrip(TripPlan plan) async {
@@ -113,8 +188,11 @@ class _TripPlanDetailScreenState extends ConsumerState<TripPlanDetailScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.cloud_off_rounded,
-                          size: 44, color: TeritoryColors.textMuted),
+                      const Icon(
+                        Icons.cloud_off_rounded,
+                        size: 44,
+                        color: TeritoryColors.textMuted,
+                      ),
                       const SizedBox(height: 12),
                       Text(
                         _errorMessage(detailAsync.error),
@@ -126,31 +204,34 @@ class _TripPlanDetailScreenState extends ConsumerState<TripPlanDetailScreen> {
                       ),
                       const SizedBox(height: 12),
                       OutlinedButton(
-                        onPressed: () => ref
-                            .invalidate(planDetailLiveProvider(widget.tripPlanId)),
+                        onPressed: () => ref.invalidate(
+                          planDetailLiveProvider(widget.tripPlanId),
+                        ),
                         child: const Text('Retry'),
                       ),
                     ],
                   ),
                 )
               : const CircularProgressIndicator(
-                  color: TeritoryColors.tripRoute),
+                  color: TeritoryColors.tripRoute,
+                ),
         ),
       );
     }
 
     final plan = detail.plan;
-    final isSaved = ref.watch(savedPlanIdsProvider).valueOrNull
-            ?.contains(plan.id) ??
-        false;
+    final isSaved =
+        ref.watch(savedPlanIdsProvider).valueOrNull?.contains(plan.id) ?? false;
     final durationHours = plan.estimatedDurationHours.toInt();
     final days = durationHours ~/ 24;
     final hrs = durationHours % 24;
-    final durationText =
-        days > 0 ? '$days days $hrs hrs' : '$durationHours hrs';
+    final durationText = days > 0
+        ? '$days days $hrs hrs'
+        : '$durationHours hrs';
 
-    final waypointPoints =
-        plan.waypoints.map((w) => LatLng(w.latitude, w.longitude)).toList();
+    final waypointPoints = plan.waypoints
+        .map((w) => LatLng(w.latitude, w.longitude))
+        .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -162,6 +243,16 @@ class _TripPlanDetailScreenState extends ConsumerState<TripPlanDetailScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.fork_right_rounded, size: 22),
+            tooltip: 'Fork / Duplicate plan',
+            onPressed: () => _forkPlan(plan),
+          ),
+          IconButton(
+            icon: const Icon(Icons.person_add_alt_1_rounded, size: 22),
+            tooltip: 'Invite friends',
+            onPressed: () => _inviteFriends(plan),
+          ),
           IconButton(
             icon: _saving
                 ? const SizedBox(
@@ -205,14 +296,30 @@ class _TripPlanDetailScreenState extends ConsumerState<TripPlanDetailScreen> {
                           userAgentPackageName: 'com.onway.teritory',
                           tileBuilder: (context, tileWidget, tile) =>
                               ColorFiltered(
-                            colorFilter: const ColorFilter.matrix(<double>[
-                              -0.20, -0.15, -0.30, 0.0, 140,
-                              -0.45, 0.20, -0.35, 0.0, 165,
-                              -0.55, 0.05, -0.05, 0.0, 185,
-                              0.0, 0.0, 0.0, 1.0, 0,
-                            ]),
-                            child: tileWidget,
-                          ),
+                                colorFilter: const ColorFilter.matrix(<double>[
+                                  -0.20,
+                                  -0.15,
+                                  -0.30,
+                                  0.0,
+                                  140,
+                                  -0.45,
+                                  0.20,
+                                  -0.35,
+                                  0.0,
+                                  165,
+                                  -0.55,
+                                  0.05,
+                                  -0.05,
+                                  0.0,
+                                  185,
+                                  0.0,
+                                  0.0,
+                                  0.0,
+                                  1.0,
+                                  0,
+                                ]),
+                                child: tileWidget,
+                              ),
                         ),
                         if (waypointPoints.length >= 2)
                           PolylineLayer(
@@ -234,12 +341,15 @@ class _TripPlanDetailScreenState extends ConsumerState<TripPlanDetailScreen> {
                                 decoration: BoxDecoration(
                                   color: TeritoryColors.tripRoute,
                                   shape: BoxShape.circle,
-                                  border:
-                                      Border.all(color: Colors.white, width: 2),
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2,
+                                  ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color:
-                                          Colors.black.withValues(alpha: 0.2),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.2,
+                                      ),
                                       blurRadius: 4,
                                     ),
                                   ],
@@ -375,13 +485,16 @@ class _TripPlanDetailScreenState extends ConsumerState<TripPlanDetailScreen> {
                             backgroundColor: TeritoryColors.gearAmber
                                 .withValues(alpha: 0.15),
                             side: BorderSide(
-                              color: TeritoryColors.gearAmber
-                                  .withValues(alpha: 0.4),
+                              color: TeritoryColors.gearAmber.withValues(
+                                alpha: 0.4,
+                              ),
                             ),
-                            avatar: const Icon(Icons.backpack_rounded,
-                                size: 16, color: TeritoryColors.gearAmber),
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 4),
+                            avatar: const Icon(
+                              Icons.backpack_rounded,
+                              size: 16,
+                              color: TeritoryColors.gearAmber,
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
                           );
                         }).toList(),
                       ),
@@ -398,9 +511,7 @@ class _TripPlanDetailScreenState extends ConsumerState<TripPlanDetailScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             decoration: BoxDecoration(
               color: Colors.white,
-              border: Border(
-                top: BorderSide(color: TeritoryColors.border),
-              ),
+              border: Border(top: BorderSide(color: TeritoryColors.border)),
             ),
             child: SafeArea(
               top: false,
@@ -452,7 +563,9 @@ class _TripPlanDetailScreenState extends ConsumerState<TripPlanDetailScreen> {
                                 : Icons.thumb_up_outlined,
                           ),
                     color: TeritoryColors.validatedGreen,
-                    tooltip: detail.hasVoted ? 'Remove vote' : 'Vote for this plan',
+                    tooltip: detail.hasVoted
+                        ? 'Remove vote'
+                        : 'Vote for this plan',
                   ),
                   Text(
                     '${plan.voteScore}',
@@ -602,8 +715,11 @@ class _WaypointTimelineItem extends StatelessWidget {
                     ),
                   ),
                   if (waypoint.isValidated)
-                    const Icon(Icons.check_circle_rounded,
-                        color: TeritoryColors.validatedGreen, size: 22),
+                    const Icon(
+                      Icons.check_circle_rounded,
+                      color: TeritoryColors.validatedGreen,
+                      size: 22,
+                    ),
                 ],
               ),
             ),

@@ -2,7 +2,7 @@
 
 > **Status**: living document
 > **Created**: 16 Nov 2026
-> **Last update**: 17 Nov 2026 — profile/social pages committed (`93c697c`); see `remaining_api_integration_plan.md` for what is left
+> **Last update**: 18 Nov 2026 — Phase 7.0 notifications, 7.2 rallies, 7.3 invites, 7.4 Sub-Spots, 7.5 community plans + completion badge; see `remaining_api_integration_plan.md` §11–§14
 > **Scope**: `teritory/` (Flutter app) · `teritory-api/` (Node 22 + Express + Prisma)
 > **Method**: source inspection of all 50 Dart files and the full backend; `flutter analyze`
 > after each increment. Runtime smoke tests are listed per page.
@@ -81,9 +81,9 @@ asset data · `MISSING` no API / no UI · `UNREACHABLE` no inbound navigation.
 | 19 | Friend profile | `friend_profile_screen.dart` | **LIVE (migrated)** | done |
 | 20 | Settings | `settings_screen.dart` | **LIVE (migrated)** — edit profile, persisted map theme, local notification switches, About/Terms/Privacy, version, logout; handle / delete-account gaps stated | done |
 | — | Login + session | `features/auth/presentation/login_screen.dart` | **LIVE (migrated)** — OTP sign-in, splash restore, silent refresh, logout | done |
-| 21 | Gear service sheet | `gear_service_sheet.dart` | MOCK (never opened) | phase 7 |
-| 22 | Invite friends sheet | `invite_friends_sheet.dart` | PARTIAL (never opened) | phase 7 |
-| 23 | Legendary rally sheet | `legendary_rally_sheet.dart` | MOCK (never opened) | phase 7 |
+| 21 | Gear service sheet | `gear_service_sheet.dart` | **LIVE (migrated)**, opened from Explore | done |
+| 22 | Invite friends sheet | `shared/presentation/invite_friends_sheet.dart` | **LIVE (migrated)** — one picker for clan/community/trip/rally | done |
+| 23 | Legendary rally sheet | `legendary_rally_sheet.dart` | **LIVE (migrated)**, opened from the drop-flag sheet (7.2) | done |
 | 24 | Wonders catalogue | `wonders_catalog_screen.dart` | MOCK, no backend | phase 7 |
 | 25 | Legacy community/tribes | `community_screen.dart` | MOCK (orphan) | delete or phase 7 |
 
@@ -149,7 +149,7 @@ asset data · `MISSING` no API / no UI · `UNREACHABLE` no inbound navigation.
 | Live tracking | socket `trip_location_update` | never emitted |
 | Join / complete | `POST /trips/:tripId/join|complete` | complete live; join not exposed in UI |
 | History | `GET /trips/history` | live |
-| Completion card | — | never triggered (complete posts, then leaves the tracker) |
+| Completion card | `POST /trips/:tripId/complete` → `myBadge` | shown with live trip stats and the server badge |
 | Planner geocoding/ETA | no geocoder | stops picked from live flags; distance/days computed |
 ### Phase 5 — Rankings
 

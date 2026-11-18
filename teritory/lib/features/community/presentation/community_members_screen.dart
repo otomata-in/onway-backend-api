@@ -5,8 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/models/community_models.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../shared/presentation/invite_friends_sheet.dart';
 import '../application/community_detail_provider.dart';
-import 'invite_friends_sheet.dart';
 
 class CommunityMembersScreen extends ConsumerWidget {
   final String communityId;
@@ -37,16 +37,25 @@ class CommunityMembersScreen extends ConsumerWidget {
 
   String _formatDate(DateTime dt) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final membersAsync =
-        ref.watch(communityMembersLiveProvider(communityId));
+    final membersAsync = ref.watch(communityMembersLiveProvider(communityId));
 
     return Scaffold(
       appBar: AppBar(
@@ -66,21 +75,35 @@ class CommunityMembersScreen extends ConsumerWidget {
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () async {
+                  final communityName =
+                      ref
+                          .read(communityDetailProvider(communityId))
+                          .valueOrNull
+                          ?.name ??
+                      'this community';
                   final invited = await InviteFriendsSheet.show(
                     context,
-                    communityId: communityId,
+                    targetType: InviteTargetType.community,
+                    targetId: communityId,
+                    targetName: communityName,
+                    excludeUserIds:
+                        membersAsync.valueOrNull
+                            ?.map((member) => member.userId)
+                            .toSet() ??
+                        const {},
                   );
                   if (invited == null || !context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(invited == 1
-                          ? 'Invitation sent'
-                          : '$invited invitations sent'),
+                      content: Text(
+                        invited == 1
+                            ? 'Invitation sent'
+                            : '$invited invitations sent',
+                      ),
                     ),
                   );
                 },
-                icon:
-                    const Icon(Icons.person_add_rounded, color: Colors.white),
+                icon: const Icon(Icons.person_add_rounded, color: Colors.white),
                 label: Text(
                   'Invite Friends',
                   style: GoogleFonts.plusJakartaSans(
@@ -102,7 +125,8 @@ class CommunityMembersScreen extends ConsumerWidget {
             child: membersAsync.when(
               loading: () => const Center(
                 child: CircularProgressIndicator(
-                    color: TeritoryColors.communityIndigo),
+                  color: TeritoryColors.communityIndigo,
+                ),
               ),
               error: (error, _) => Center(
                 child: Padding(
@@ -110,8 +134,11 @@ class CommunityMembersScreen extends ConsumerWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.cloud_off_rounded,
-                          size: 40, color: TeritoryColors.textMuted),
+                      const Icon(
+                        Icons.cloud_off_rounded,
+                        size: 40,
+                        color: TeritoryColors.textMuted,
+                      ),
                       const SizedBox(height: 10),
                       Text(
                         error is ApiException
@@ -125,8 +152,9 @@ class CommunityMembersScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 10),
                       OutlinedButton(
-                        onPressed: () => ref
-                            .invalidate(communityMembersLiveProvider(communityId)),
+                        onPressed: () => ref.invalidate(
+                          communityMembersLiveProvider(communityId),
+                        ),
                         child: const Text('Retry'),
                       ),
                     ],
@@ -183,7 +211,9 @@ class CommunityMembersScreen extends ConsumerWidget {
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: badgeColor.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
@@ -224,13 +254,10 @@ class _MemberAvatar extends StatelessWidget {
       backgroundImage: member.userAvatar.isEmpty
           ? null
           : NetworkImage(member.userAvatar),
-      onBackgroundImageError:
-          member.userAvatar.isEmpty ? null : (_, _) {},
+      onBackgroundImageError: member.userAvatar.isEmpty ? null : (_, _) {},
       child: member.userAvatar.isEmpty
           ? Text(
-              member.userName.isEmpty
-                  ? '?'
-                  : member.userName[0].toUpperCase(),
+              member.userName.isEmpty ? '?' : member.userName[0].toUpperCase(),
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,

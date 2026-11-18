@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../core/services/api_service.dart';
-import '../../../core/services/teritory_data_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../rally/presentation/legendary_rally_sheet.dart';
 
 class DropFlagModal extends StatefulWidget {
   final LatLng initialCoordinates;
@@ -108,34 +108,26 @@ class _DropFlagModalState extends State<DropFlagModal> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
-      messenger.showSnackBar(SnackBar(
-        content: Text('Could not stake flag: ${e.message}'),
-        backgroundColor: TeritoryColors.expiredRed,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Could not stake flag: ${e.message}'),
+          backgroundColor: TeritoryColors.expiredRed,
+        ),
+      );
       return;
     } catch (_) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
-      messenger.showSnackBar(const SnackBar(
-        content: Text('Could not reach Teritory. Check your connection.'),
-        backgroundColor: TeritoryColors.expiredRed,
-      ));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Could not reach Teritory. Check your connection.'),
+          backgroundColor: TeritoryColors.expiredRed,
+        ),
+      );
       return;
     }
 
     if (!mounted) return;
-
-    // Keep the profile cache in sync locally; the POST already happened above.
-    TeritoryDataService.instance.addFlag(
-      placeName: name,
-      city: city,
-      country: 'India',
-      coordinates: widget.initialCoordinates,
-      isMajorFlag: _isMajorFlag,
-      category: _selectedCategory,
-      notes: notes,
-      persistToBackend: false,
-    );
 
     Navigator.pop(context);
 
@@ -321,8 +313,10 @@ class _DropFlagModalState extends State<DropFlagModal> {
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
                 ),
-                prefixIcon: const Icon(Icons.location_on_rounded,
-                    color: TeritoryColors.primary),
+                prefixIcon: const Icon(
+                  Icons.location_on_rounded,
+                  color: TeritoryColors.primary,
+                ),
               ),
             ),
             const SizedBox(height: 14),
@@ -347,8 +341,10 @@ class _DropFlagModalState extends State<DropFlagModal> {
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
                 ),
-                prefixIcon: const Icon(Icons.apartment_rounded,
-                    color: TeritoryColors.textSecondary),
+                prefixIcon: const Icon(
+                  Icons.apartment_rounded,
+                  color: TeritoryColors.textSecondary,
+                ),
               ),
             ),
             const SizedBox(height: 14),
@@ -376,8 +372,9 @@ class _DropFlagModalState extends State<DropFlagModal> {
                       selectedColor: TeritoryColors.primaryLight,
                       labelStyle: GoogleFonts.plusJakartaSans(
                         fontSize: 12,
-                        fontWeight:
-                            isSelected ? FontWeight.bold : FontWeight.w500,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.w500,
                         color: isSelected
                             ? TeritoryColors.primary
                             : TeritoryColors.textSecondary,
@@ -466,15 +463,18 @@ class _DropFlagModalState extends State<DropFlagModal> {
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: () {
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Legendary Rally mode coming soon!',
-                      style: GoogleFonts.plusJakartaSans(),
-                    ),
-                    backgroundColor: TeritoryColors.rallyGold,
-                  ),
+                // Open the live rally sheet at this flag's spot. The modal's own
+                // context is disposed by the pop, so use the navigator's.
+                final navigator = Navigator.of(context, rootNavigator: true);
+                final placeName = _placeController.text.trim();
+                navigator.pop();
+                LegendaryRallySheet.show(
+                  navigator.context,
+                  latitude: widget.initialCoordinates.latitude,
+                  longitude: widget.initialCoordinates.longitude,
+                  placeName: placeName.isEmpty
+                      ? widget.suggestedPlaceName
+                      : placeName,
                 );
               },
               icon: const Text('🏴', style: TextStyle(fontSize: 18)),

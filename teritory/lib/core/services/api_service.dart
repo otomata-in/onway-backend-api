@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
@@ -37,16 +38,74 @@ class TeritoryApiService {
   static const String _tokenKey = 'teritory_access_token';
   static const String _refreshTokenKey = 'teritory_refresh_token';
 
+  /// Session tokens belong in the platform keystore/keychain, not in plain
+  /// preferences.
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+
+  /// Set when the platform store rejects us (a desktop/test host with no
+  /// keyring). The session then lives in memory for this run only — it is never
+  /// written to plaintext storage as a fallback.
+  bool _secureStorageUnavailable = false;
+
   Future<void> init() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      _token = prefs.getString(_tokenKey);
-      _refreshToken = prefs.getString(_refreshTokenKey);
+      _token = await _secureStorage.read(key: _tokenKey);
+      _refreshToken = await _secureStorage.read(key: _refreshTokenKey);
+      if (_token == null || _token!.isEmpty) {
+        await _migrateLegacyTokens();
+      }
       if (kDebugMode) {
         print('🌐 TeritoryApiService initialized. Token present: $isAuthenticated');
       }
     } catch (e) {
-      if (kDebugMode) print('⚠️ Failed to load stored token: $e');
+      _secureStorageUnavailable = true;
+      if (kDebugMode) {
+        print('⚠️ Secure storage unavailable; session is memory-only: $e');
+      }
+    }
+  }
+
+  /// Older builds kept the tokens in `SharedPreferences`. Move them into secure
+  /// storage once, and only then delete the plaintext copies.
+  Future<void> _migrateLegacyTokens() async {
+    final prefs = await SharedPreferences.getInstance();
+    final legacyToken = prefs.getString(_tokenKey);
+    if (legacyToken == null || legacyToken.isEmpty) return;
+    final legacyRefresh = prefs.getString(_refreshTokenKey);
+
+    final moved = await _persist(_tokenKey, legacyToken);
+    if (legacyRefresh != null && legacyRefresh.isNotEmpty) {
+      await _persist(_refreshTokenKey, legacyRefresh);
+    }
+    if (!moved) return; // keep the plaintext copy rather than lose the session
+
+    _token = legacyToken;
+    if (legacyRefresh != null && legacyRefresh.isNotEmpty) {
+      _refreshToken = legacyRefresh;
+    }
+    await prefs.remove(_tokenKey);
+    await prefs.remove(_refreshTokenKey);
+    if (kDebugMode) print('🔐 Migrated the stored session into secure storage');
+  }
+
+  Future<bool> _persist(String key, String value) async {
+    if (_secureStorageUnavailable) return false;
+    try {
+      await _secureStorage.write(key: key, value: value);
+      return true;
+    } catch (e) {
+      _secureStorageUnavailable = true;
+      if (kDebugMode) print('⚠️ Could not write $key to secure storage: $e');
+      return false;
+    }
+  }
+
+  Future<void> _erase(String key) async {
+    if (_secureStorageUnavailable) return;
+    try {
+      await _secureStorage.delete(key: key);
+    } catch (e) {
+      if (kDebugMode) print('⚠️ Could not delete $key from secure storage: $e');
     }
   }
 
@@ -55,13 +114,15 @@ class TeritoryApiService {
     String? refreshToken,
   }) async {
     _token = accessToken;
-    if (refreshToken != null && refreshToken.isNotEmpty) {
-      _refreshToken = refreshToken;
+    final nextRefresh = (refreshToken != null && refreshToken.isNotEmpty)
+        ? refreshToken
+        : _refreshToken;
+    if (nextRefresh != null && nextRefresh.isNotEmpty) {
+      _refreshToken = nextRefresh;
     }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, accessToken);
-    if (refreshToken != null && refreshToken.isNotEmpty) {
-      await prefs.setString(_refreshTokenKey, refreshToken);
+    await _persist(_tokenKey, accessToken);
+    if (nextRefresh != null && nextRefresh.isNotEmpty) {
+      await _persist(_refreshTokenKey, nextRefresh);
     }
   }
 
@@ -70,9 +131,16 @@ class TeritoryApiService {
   Future<void> clearTokens() async {
     _token = null;
     _refreshToken = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
-    await prefs.remove(_refreshTokenKey);
+    await _erase(_tokenKey);
+    await _erase(_refreshTokenKey);
+    // Also drop any plaintext copy a pre-§20 build may have left behind.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_tokenKey);
+      await prefs.remove(_refreshTokenKey);
+    } catch (e) {
+      if (kDebugMode) print('⚠️ Could not clear legacy token keys: $e');
+    }
   }
 
   Future<void> clearToken() => clearTokens();

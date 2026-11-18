@@ -1,6 +1,7 @@
 const prisma = require('../../config/prisma');
 const ApiResponse = require('../../utils/ApiResponse');
 const ApiError = require('../../utils/ApiError');
+const { notifyMany } = require('../notifications/notifications.service');
 
 const listCommunities = async (req, res, next) => {
   try {
@@ -33,28 +34,53 @@ const createCommunity = async (req, res, next) => {
     const { name, description = '', coverImageUrl, parentClanId, interestTags = [], isPublic = true } = req.body;
     if (!name || !parentClanId) throw ApiError.badRequest('Name and parent clan ID required');
 
-    const community = await prisma.community.create({
-      data: {
-        name,
-        description,
-        coverImageUrl,
-        parentClanId,
-        interestTags,
-        isPublic,
-        memberCount: 1,
-        members: {
-          create: {
-            userId: req.user.id,
-            role: 'CREATOR',
+    // Validate the parent clan up front so a bad id is a 404 instead of a
+    // foreign-key violation bubbling out of Prisma as a 500.
+    const clan = await prisma.clan.findUnique({
+      where: { id: parentClanId },
+      select: { id: true, chieftainId: true },
+    });
+    if (!clan) throw ApiError.notFound('Parent clan not found');
+
+    // A community belongs to a clan its founder is actually part of: otherwise
+    // anyone could attach a community to somebody else's clan.
+    const isChieftain = clan.chieftainId === req.user.id;
+    const membership = isChieftain
+      ? null
+      : await prisma.clanMember.findUnique({
+          where: { clanId_userId: { clanId: parentClanId, userId: req.user.id } },
+          select: { id: true },
+        });
+    if (!isChieftain && !membership) {
+      throw ApiError.forbidden('Only members of this clan can found a community');
+    }
+
+    // The community and the clan's counter move together: a failed counter
+    // update must not leave a community its clan does not count. Batched (not
+    // interactive) so a slow database cannot trip the transaction timeout.
+    const [community] = await prisma.$transaction([
+      prisma.community.create({
+        data: {
+          name,
+          description,
+          coverImageUrl,
+          parentClanId,
+          interestTags,
+          isPublic,
+          memberCount: 1,
+          members: {
+            create: {
+              userId: req.user.id,
+              role: 'CREATOR',
+            },
           },
         },
-      },
-    });
-
-    await prisma.clan.update({
-      where: { id: parentClanId },
-      data: { communitiesCount: { increment: 1 } },
-    });
+      }),
+      prisma.clan.update({
+        where: { id: parentClanId },
+        data: { communitiesCount: { increment: 1 } },
+      }),
+    ]);
 
     return ApiResponse.created(res, community, 'Community founded');
   } catch (err) {
@@ -113,6 +139,32 @@ const joinCommunity = async (req, res, next) => {
         description: `${req.user.displayName} joined the community!`,
       },
     });
+
+    // Tell the community's creators/moderators (never the joiner themselves).
+    const community = await prisma.community.findUnique({
+      where: { id },
+      select: {
+        name: true,
+        parentClanId: true,
+        members: {
+          where: { role: { in: ['CREATOR', 'MODERATOR'] } },
+          select: { userId: true },
+        },
+      },
+    });
+
+    await notifyMany(
+      (community?.members || [])
+        .filter((m) => m.userId !== req.user.id)
+        .map((m) => ({
+          userId: m.userId,
+          type: 'SYSTEM',
+          title: 'New community member',
+          body: `${req.user.displayName} joined ${community.name}.`,
+          icon: 'community',
+          actionUrl: `/clans/${community.parentClanId}/communities/${id}`,
+        })),
+    );
 
     return ApiResponse.created(res, member, 'Joined community');
   } catch (err) {

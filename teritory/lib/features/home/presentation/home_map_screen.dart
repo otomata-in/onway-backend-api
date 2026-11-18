@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/models/api_flag.dart';
 import '../../../core/models/teritory_models.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/location_provider.dart';
+import '../../../core/services/location_service.dart';
 import '../../../core/providers/preferences_provider.dart';
+import '../../../core/services/api_service.dart';
+import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../../../core/widgets/teritory_logo.dart';
 import '../../explore/application/explore_flags_provider.dart';
@@ -26,11 +30,11 @@ class HomeMapScreen extends ConsumerStatefulWidget {
 class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
     with SingleTickerProviderStateMixin {
   late final MapController _mapController;
-  // Single source of truth: the explore query and the marker share one centre.
-  static const LatLng _currentLocation = LatLng(
-    ExploreFlagsNotifier.centerLat,
-    ExploreFlagsNotifier.centerLng,
-  );
+
+  /// The last resolved fix, for use inside callbacks. [build] watches the same
+  /// provider, so the payload and the pulsing pin always share one centre.
+  MapLocation? get _location => ref.read(mapLocationProvider).valueOrNull;
+
   String _selectedFilter = 'All';
   // Mirrors the persisted theme (true = Midnight Oceanic, false = Daylight
   // White); assigned from [mapThemeProvider] at the top of build.
@@ -55,14 +59,94 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
   }
 
   void _recenterToUser() {
-    _mapController.move(_currentLocation, 13.0);
+    final location = _location;
+    if (location != null && location.isDeviceLocation) {
+      _mapController.move(location.coordinates, 13.0);
+      return;
+    }
+    // No fix: say so and offer a fresh attempt instead of pretending the map
+    // centre is where the traveller is.
+    final reason = location?.notice ?? 'Waiting for a location fix';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$reason.', style: GoogleFonts.plusJakartaSans()),
+        action: SnackBarAction(
+          label: 'Retry',
+          onPressed: () => ref.invalidate(mapLocationProvider),
+        ),
+      ),
+    );
   }
 
   Future<void> _openDropFlag() async {
+    final location = _location;
+    // A cached position is fine for reading flags, but a flag records where the
+    // traveller stands, so writing needs a fresh fix.
+    var coordinates =
+        (location?.isDeviceLocation == true && location?.isStale != true)
+        ? location!.coordinates
+        : null;
+
+    if (coordinates == null && location?.isResolving == true) {
+      // The lookup is still running; do not turn that into a failure dialog.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Still finding your location — try again in a moment.',
+            style: GoogleFonts.plusJakartaSans(),
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (coordinates == null) {
+      // Writing a flag without a real fix would pin invented coordinates on the
+      // map, so require an explicit choice (with the reason shown) first.
+      final reason = location?.notice ?? 'Waiting for a location fix';
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(
+            'Location unavailable',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800),
+          ),
+          content: Text(
+            '$reason. A flag records exactly where you stand, so it needs a '
+            'device location.',
+            style: GoogleFonts.plusJakartaSans(fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'fallback'),
+              child: const Text('Use map centre'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'retry'),
+              child: const Text('Retry location'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      if (choice == 'retry') {
+        ref.invalidate(mapLocationProvider);
+        return;
+      }
+      if (choice != 'fallback') return;
+      coordinates = MapLocation.fallback.coordinates;
+    }
+
     await DropFlagModal.show(
       context,
-      coordinates: _currentLocation,
-      suggestedPlaceName: 'Marine Drive Waterfront, Kochi',
+      coordinates: coordinates,
+      suggestedPlaceName: location?.isDeviceLocation == true
+          ? 'Current Location'
+          : 'Marine Drive Waterfront, Kochi',
     );
     if (!mounted) return;
     // Refresh unconditionally: a flag may have been created even if the sheet was
@@ -70,14 +154,102 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
     await ref.read(exploreFlagsProvider.notifier).refresh();
   }
 
+  /// Honest location state under the filters: names the reason the fallback
+  /// centre is in use, or says a cached position is being shown while a fresh
+  /// fix is on its way. It never says "map centre" when a real position is in use.
+  Widget _buildLocationNotice(MapLocation location) {
+    final label = location.isStale
+        ? '${location.notice ?? 'Using a cached position'} — updating…'
+        : '${location.notice ?? 'No fix'} — showing map centre';
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.only(
+            left: 10,
+            right: 2,
+            top: 2,
+            bottom: 2,
+          ),
+          decoration: BoxDecoration(
+            color: _isDarkTheme ? const Color(0xF21E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: TeritoryColors.majorGold.withValues(alpha: 0.5),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                location.isStale
+                    ? Icons.location_searching_rounded
+                    : Icons.location_off_rounded,
+                size: 13,
+                color: TeritoryColors.majorGold,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  color: _isDarkTheme
+                      ? Colors.white
+                      : TeritoryColors.textPrimary,
+                ),
+              ),
+              TextButton(
+                onPressed: () => ref.invalidate(mapLocationProvider),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 30),
+                ),
+                child: const Text('Retry', style: TextStyle(fontSize: 11)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     _isDarkTheme = ref.watch(mapThemeProvider);
+    final mapLocation = ref.watch(mapLocationProvider).valueOrNull;
+    final center = mapLocation?.coordinates ?? MapLocation.fallback.coordinates;
+
+    // The first real fix recentres the map once, so opening the app in a new
+    // city does not leave the traveller looking at Kochi.
+    ref.listen(mapLocationProvider, (previous, next) {
+      final location = next.valueOrNull;
+      if (location == null) return;
+      final prev = previous?.valueOrNull;
+      // Recentre for the first position we get (cached or live), and once more
+      // when the fresh fix replaces a cached one — not on every rebuild.
+      if (prev != null && prev.isDeviceLocation && !prev.isStale) return;
+      try {
+        _mapController.move(location.coordinates, 13.0);
+      } catch (_) {
+        // The map may not be attached yet; its initial centre is already here.
+      }
+    });
+
     final exploreAsync = ref.watch(exploreFlagsProvider);
+    // Sub-Spots have their own 5 km endpoint, so the request is only made while
+    // that filter is selected.
+    final subSpotsAsync = _selectedFilter == 'Sub-Spots'
+        ? ref.watch(subSpotsProvider)
+        : const AsyncValue<List<ApiFlag>>.data(<ApiFlag>[]);
+    final subSpots = subSpotsAsync.valueOrNull ?? const <ApiFlag>[];
     final currentUserId = ref.watch(currentUserProvider).id;
     final isTripMode =
         ref.watch(myProfileProvider).valueOrNull?.isTripMode ?? false;
-    final live = exploreAsync.valueOrNull ??
+    final live =
+        exploreAsync.valueOrNull ??
         const ExploreFlagsData(flags: [], friendIds: <String>{});
 
     // Filters run against live flags only; ownership and friendship are server
@@ -86,21 +258,26 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
       'My Flags' => live.mine(currentUserId),
       'Friends' => live.friends(currentUserId),
       'Major Wonders' => live.major(),
+      'Sub-Spots' => subSpots,
       _ => live.flags,
     };
-    final otherFlags =
-        visible.where((f) => !f.isOwnedBy(currentUserId)).toList();
+    final otherFlags = visible
+        .where((f) => !f.isOwnedBy(currentUserId))
+        .toList();
     final friendFlags = otherFlags.map((f) => f.toFriendFlag()).toList();
     // Distinct travelers, not flags: one friend with three pins is one person.
-    final friendsActiveCount =
-        live.friends(currentUserId).map((f) => f.userId).toSet().length;
+    final friendsActiveCount = live
+        .friends(currentUserId)
+        .map((f) => f.userId)
+        .toSet()
+        .length;
 
     List<Marker> markers = [];
 
     // 1. User Current Location Pulsing Pin
     markers.add(
       Marker(
-        point: _currentLocation,
+        point: center,
         width: 70,
         height: 70,
         alignment: Alignment.center,
@@ -128,493 +305,749 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
     }
 
     return Scaffold(
-          body: Stack(
+      body: Stack(
+        children: [
+          // ── Interactive Map Canvas (100% Free OSM with Classic Dark Mode) ──
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: center,
+              initialZoom: 12.0,
+              minZoom: 2.0,
+              maxZoom: 18.0,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all,
+              ),
+            ),
             children: [
-              // ── Interactive Map Canvas (100% Free OSM with Classic Dark Mode) ──
-              FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: _currentLocation,
-                  initialZoom: 12.0,
-                  minZoom: 2.0,
-                  maxZoom: 18.0,
-                  interactionOptions: const InteractionOptions(
-                    flags: InteractiveFlag.all,
-                  ),
-                ),
-                children: [
-                  TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.onway.teritory',
-                    tileBuilder: _isDarkTheme
-                        ? (context, tileWidget, tile) => ColorFiltered(
-                              colorFilter: const ColorFilter.matrix(<double>[
-                                -0.20, -0.15, -0.30, 0.0, 140,
-                                -0.45,  0.20, -0.35, 0.0, 165,
-                                -0.55,  0.05, -0.05, 0.0, 185,
-                                 0.0,   0.0,   0.0,  1.0, 0,
-                              ]),
-                              child: tileWidget,
-                            )
-                        : null,
-                  ),
-                  MarkerLayer(markers: markers),
-                ],
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.onway.teritory',
+                tileBuilder: _isDarkTheme
+                    ? (context, tileWidget, tile) => ColorFiltered(
+                        colorFilter: const ColorFilter.matrix(<double>[
+                          -0.20,
+                          -0.15,
+                          -0.30,
+                          0.0,
+                          140,
+                          -0.45,
+                          0.20,
+                          -0.35,
+                          0.0,
+                          165,
+                          -0.55,
+                          0.05,
+                          -0.05,
+                          0.0,
+                          185,
+                          0.0,
+                          0.0,
+                          0.0,
+                          1.0,
+                          0,
+                        ]),
+                        child: tileWidget,
+                      )
+                    : null,
               ),
+              MarkerLayer(markers: markers),
+            ],
+          ),
 
-              // ── Top Gradient Scrim for Readability ──
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 140,
-                child: IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: _isDarkTheme ? 0.65 : 0.45),
-                          Colors.transparent,
-                        ],
+          // ── Top Gradient Scrim for Readability ──
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 140,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(
+                        alpha: _isDarkTheme ? 0.65 : 0.45,
                       ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // ── Top Header & Filter Chips ──
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Column(
-                    children: [
-                      // Header Bar
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _isDarkTheme
-                              ? const Color(0xF21E293B)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          border: _isDarkTheme
-                              ? Border.all(
-                                  color: const Color(0xFF334155), width: 1.0)
-                              : null,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.18),
-                              blurRadius: 18,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            TeritoryLogo(
-                              size: 34,
-                              showText: true,
-                              subtitle: 'FOOTPRINTS',
-                              isDark: _isDarkTheme,
-                            ),
-                            const Spacer(),
-                            const NotificationBell(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: _isDarkTheme
-                                    ? const Color(0xFF0F172A)
-                                    : TeritoryColors.primaryLight,
-                                borderRadius: BorderRadius.circular(12),
-                                border: _isDarkTheme
-                                    ? Border.all(
-                                        color: const Color(0xFF334155),
-                                        width: 0.8)
-                                    : null,
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.people_alt_rounded,
-                                      size: 14,
-                                      color: TeritoryColors.primary),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '$friendsActiveCount Friends Active',
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: TeritoryColors.primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (isTripMode) ...[
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: _isDarkTheme
-                                  ? const Color(0xFF1E293B)
-                                  : TeritoryColors.tripRoute
-                                      .withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
-                              border: _isDarkTheme
-                                  ? Border.all(
-                                      color: const Color(0xFF334155),
-                                      width: 0.8)
-                                  : null,
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.route_rounded,
-                                    size: 13,
-                                    color: TeritoryColors.tripRoute),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'On a trip',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: _isDarkTheme
-                                        ? Colors.white
-                                        : TeritoryColors.textPrimary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 10),
-
-                      // Filter Chips
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _buildFilterChip('All', Icons.travel_explore_rounded),
-                            _buildFilterChip(
-                                'Friends', Icons.people_outline_rounded),
-                            _buildFilterChip('My Flags', Icons.flag_outlined),
-                            _buildFilterChip(
-                                'Major Wonders', Icons.star_border_rounded),
-                          ],
-                        ),
-                      ),
+                      Colors.transparent,
                     ],
                   ),
                 ),
               ),
+            ),
+          ),
 
-              // ── Right Side Navigation Buttons ──
-              Positioned(
-                right: 16,
-                bottom: 160,
-                child: Column(
-                  children: [
-                    // Gear rental + nearby food (live /services endpoints)
-                    FloatingActionButton.small(
-                      heroTag: 'services_btn',
-                      tooltip: 'Gear & food nearby',
-                      backgroundColor:
-                          _isDarkTheme ? const Color(0xFF1E293B) : Colors.white,
-                      foregroundColor: TeritoryColors.gearAmber,
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: _isDarkTheme
-                            ? const BorderSide(
-                                color: Color(0xFF334155), width: 1.0)
-                            : BorderSide.none,
-                      ),
-                      onPressed: () => GearServiceSheet.show(
-                        context,
-                        latitude: _currentLocation.latitude,
-                        longitude: _currentLocation.longitude,
-                      ),
-                      child: const Icon(Icons.backpack_rounded),
+          // ── Top Header & Filter Chips ──
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                children: [
+                  // Header Bar
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
                     ),
-                    const SizedBox(height: 8),
-                    // Map Theme Selector (Midnight Oceanic / Daylight White Map)
-                    FloatingActionButton.small(
-                      heroTag: 'theme_toggle_btn',
-                      tooltip: _isDarkTheme
-                          ? 'Switch to Daylight White Map'
-                          : 'Switch to Midnight Oceanic Map',
-                      backgroundColor:
-                          _isDarkTheme ? const Color(0xFF1E293B) : Colors.white,
-                      foregroundColor: _isDarkTheme
-                          ? const Color(0xFF38BDF8)
-                          : const Color(0xFFF59E0B),
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: _isDarkTheme
-                            ? const BorderSide(
-                                color: Color(0xFF334155), width: 1.0)
-                            : BorderSide.none,
-                      ),
-                      onPressed: () => ref
-                          .read(mapThemeProvider.notifier)
-                          .setDark(!_isDarkTheme),
-                      child: Icon(_isDarkTheme
-                          ? Icons.water_drop_rounded
-                          : Icons.light_mode_rounded),
-                    ),
-                    const SizedBox(height: 8),
-                    FloatingActionButton.small(
-                      heroTag: 'recenter_btn',
-                      backgroundColor:
-                          _isDarkTheme ? const Color(0xFF1E293B) : Colors.white,
-                      foregroundColor: _isDarkTheme
-                          ? Colors.white
-                          : TeritoryColors.textPrimary,
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: _isDarkTheme
-                            ? const BorderSide(
-                                color: Color(0xFF334155), width: 1.0)
-                            : BorderSide.none,
-                      ),
-                      onPressed: _recenterToUser,
-                      child: const Icon(Icons.my_location_rounded),
-                    ),
-                    const SizedBox(height: 8),
-                    FloatingActionButton.small(
-                      heroTag: 'zoom_in_btn',
-                      backgroundColor:
-                          _isDarkTheme ? const Color(0xFF1E293B) : Colors.white,
-                      foregroundColor: _isDarkTheme
-                          ? Colors.white
-                          : TeritoryColors.textPrimary,
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: _isDarkTheme
-                            ? const BorderSide(
-                                color: Color(0xFF334155), width: 1.0)
-                            : BorderSide.none,
-                      ),
-                      onPressed: () {
-                        final current = _mapController.camera.zoom;
-                        _mapController.move(
-                          _mapController.camera.center,
-                          current + 1,
-                        );
-                      },
-                      child: const Icon(Icons.add),
-                    ),
-                    const SizedBox(height: 8),
-                    FloatingActionButton.small(
-                      heroTag: 'zoom_out_btn',
-                      backgroundColor:
-                          _isDarkTheme ? const Color(0xFF1E293B) : Colors.white,
-                      foregroundColor: _isDarkTheme
-                          ? Colors.white
-                          : TeritoryColors.textPrimary,
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: _isDarkTheme
-                            ? const BorderSide(
-                                color: Color(0xFF334155), width: 1.0)
-                            : BorderSide.none,
-                      ),
-                      onPressed: () {
-                        final current = _mapController.camera.zoom;
-                        _mapController.move(
-                          _mapController.camera.center,
-                          current - 1,
-                        );
-                      },
-                      child: const Icon(Icons.remove),
-                    ),
-                  ],
-                ),
-              ),
-
-              // ── Bottom Friends Footprint Radar Carousel ──
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 84,
-                child: SizedBox(
-                  height: 64,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: friendFlags.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 10),
-                    itemBuilder: (ctx, index) {
-                      final f = friendFlags[index];
-                      final apiFlag = otherFlags[index];
-                      return GestureDetector(
-                        onTap: () {
-                          _mapController.move(f.coordinates, 14.5);
-                          LiveFlagDetailSheet.show(context, flag: apiFlag);
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.fromLTRB(8, 6, 14, 6),
-                          decoration: BoxDecoration(
-                            color: _isDarkTheme
-                                ? const Color(0xF21E293B)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(30),
-                            border: Border.all(
-                              color: f.isMajorFlag
-                                  ? TeritoryColors.majorGold
-                                  : (_isDarkTheme
-                                      ? const Color(0xFF334155)
-                                      : Colors.white),
-                              width: 1.5,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.15),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              CircleAvatar(
-                                radius: 18,
-                                backgroundImage: NetworkImage(f.friendAvatar),
-                              ),
-                              const SizedBox(width: 8),
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        f.friendName.split(' ').first,
-                                        style: GoogleFonts.plusJakartaSans(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                          color: _isDarkTheme
-                                              ? Colors.white
-                                              : TeritoryColors.textPrimary,
-                                        ),
-                                      ),
-                                      if (f.isMajorFlag) ...[
-                                        const SizedBox(width: 4),
-                                        const Icon(Icons.star_rounded,
-                                            size: 14,
-                                            color: TeritoryColors.majorGold),
-                                      ],
-                                    ],
-                                  ),
-                                  Text(
-                                    f.placeName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontSize: 11,
-                                      color: _isDarkTheme
-                                          ? const Color(0xFF94A3B8)
-                                          : TeritoryColors.textSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
+                    decoration: BoxDecoration(
+                      color: _isDarkTheme
+                          ? const Color(0xF21E293B)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: _isDarkTheme
+                          ? Border.all(
+                              color: const Color(0xFF334155),
+                              width: 1.0,
+                            )
+                          : null,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.18),
+                          blurRadius: 18,
+                          offset: const Offset(0, 4),
                         ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-
-              // ── Primary Action Button: "Flag Current Teritory" ──
-              Positioned(
-                left: 20,
-                right: 20,
-                bottom: 16,
-                child: SizedBox(
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: _openDropFlag,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: TeritoryColors.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 8,
-                      shadowColor:
-                          TeritoryColors.primary.withValues(alpha: 0.45),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28),
-                      ),
+                      ],
                     ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.flag_rounded,
-                              size: 20, color: Colors.white),
+                        TeritoryLogo(
+                          size: 34,
+                          showText: true,
+                          subtitle: 'FOOTPRINTS',
+                          isDark: _isDarkTheme,
                         ),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Flag My Teritory Here',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.3,
+                        const Spacer(),
+                        // Major wonders registry (`GET /flags/wonders`)
+                        IconButton(
+                          onPressed: () => context.push('/wonders'),
+                          tooltip: 'Major wonders registry',
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 32,
+                            height: 32,
+                          ),
+                          icon: Icon(
+                            Icons.military_tech_rounded,
+                            size: 20,
+                            color: _isDarkTheme
+                                ? TeritoryColors.majorGold
+                                : TeritoryColors.majorGoldDark,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const NotificationBell(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _isDarkTheme
+                                ? const Color(0xFF0F172A)
+                                : TeritoryColors.primaryLight,
+                            borderRadius: BorderRadius.circular(12),
+                            border: _isDarkTheme
+                                ? Border.all(
+                                    color: const Color(0xFF334155),
+                                    width: 0.8,
+                                  )
+                                : null,
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.people_alt_rounded,
+                                size: 14,
+                                color: TeritoryColors.primary,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$friendsActiveCount Friends Active',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: TeritoryColors.primary,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
+                  if (isTripMode) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _isDarkTheme
+                              ? const Color(0xFF1E293B)
+                              : TeritoryColors.tripRoute.withValues(
+                                  alpha: 0.15,
+                                ),
+                          borderRadius: BorderRadius.circular(12),
+                          border: _isDarkTheme
+                              ? Border.all(
+                                  color: const Color(0xFF334155),
+                                  width: 0.8,
+                                )
+                              : null,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.route_rounded,
+                              size: 13,
+                              color: TeritoryColors.tripRoute,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'On a trip',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: _isDarkTheme
+                                    ? Colors.white
+                                    : TeritoryColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+
+                  // Filter Chips
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildFilterChip('All', Icons.travel_explore_rounded),
+                        _buildFilterChip(
+                          'Friends',
+                          Icons.people_outline_rounded,
+                        ),
+                        _buildFilterChip('My Flags', Icons.flag_outlined),
+                        _buildFilterChip(
+                          'Major Wonders',
+                          Icons.star_border_rounded,
+                        ),
+                        _buildFilterChip('Sub-Spots', Icons.diamond_outlined),
+                      ],
+                    ),
+                  ),
+
+                  // Why the map is not on the traveller: never silent.
+                  if (mapLocation != null &&
+                      (!mapLocation.isDeviceLocation || mapLocation.isStale))
+                    _buildLocationNotice(mapLocation),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Right Side Navigation Buttons ──
+          Positioned(
+            right: 16,
+            bottom: 252,
+            child: Column(
+              children: [
+                // Gear rental + nearby food (live /services endpoints)
+                FloatingActionButton.small(
+                  heroTag: 'services_btn',
+                  tooltip: 'Gear & food nearby',
+                  backgroundColor: _isDarkTheme
+                      ? const Color(0xFF1E293B)
+                      : Colors.white,
+                  foregroundColor: TeritoryColors.gearAmber,
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: _isDarkTheme
+                        ? const BorderSide(color: Color(0xFF334155), width: 1.0)
+                        : BorderSide.none,
+                  ),
+                  onPressed: () => GearServiceSheet.show(
+                    context,
+                    latitude: center.latitude,
+                    longitude: center.longitude,
+                  ),
+                  child: const Icon(Icons.backpack_rounded),
+                ),
+                const SizedBox(height: 8),
+                // Map Theme Selector (Midnight Oceanic / Daylight White Map)
+                FloatingActionButton.small(
+                  heroTag: 'theme_toggle_btn',
+                  tooltip: _isDarkTheme
+                      ? 'Switch to Daylight White Map'
+                      : 'Switch to Midnight Oceanic Map',
+                  backgroundColor: _isDarkTheme
+                      ? const Color(0xFF1E293B)
+                      : Colors.white,
+                  foregroundColor: _isDarkTheme
+                      ? const Color(0xFF38BDF8)
+                      : const Color(0xFFF59E0B),
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: _isDarkTheme
+                        ? const BorderSide(color: Color(0xFF334155), width: 1.0)
+                        : BorderSide.none,
+                  ),
+                  onPressed: () async {
+                    final nextDark = !_isDarkTheme;
+                    await ref
+                        .read(mapThemeProvider.notifier)
+                        .setDark(nextDark);
+                    try {
+                      await TeritoryRepository.instance.updateMyProfile(
+                        mapStyle:
+                            nextDark ? 'midnight_oceanic' : 'daylight_white',
+                      );
+                      ref.invalidate(myProfileProvider);
+                    } catch (_) {}
+                  },
+                  child: Icon(
+                    _isDarkTheme
+                        ? Icons.water_drop_rounded
+                        : Icons.light_mode_rounded,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton.small(
+                  heroTag: 'recenter_btn',
+                  backgroundColor: _isDarkTheme
+                      ? const Color(0xFF1E293B)
+                      : Colors.white,
+                  foregroundColor: _isDarkTheme
+                      ? Colors.white
+                      : TeritoryColors.textPrimary,
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: _isDarkTheme
+                        ? const BorderSide(color: Color(0xFF334155), width: 1.0)
+                        : BorderSide.none,
+                  ),
+                  onPressed: _recenterToUser,
+                  child: const Icon(Icons.my_location_rounded),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton.small(
+                  heroTag: 'zoom_in_btn',
+                  backgroundColor: _isDarkTheme
+                      ? const Color(0xFF1E293B)
+                      : Colors.white,
+                  foregroundColor: _isDarkTheme
+                      ? Colors.white
+                      : TeritoryColors.textPrimary,
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: _isDarkTheme
+                        ? const BorderSide(color: Color(0xFF334155), width: 1.0)
+                        : BorderSide.none,
+                  ),
+                  onPressed: () {
+                    final current = _mapController.camera.zoom;
+                    _mapController.move(
+                      _mapController.camera.center,
+                      current + 1,
+                    );
+                  },
+                  child: const Icon(Icons.add),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton.small(
+                  heroTag: 'zoom_out_btn',
+                  backgroundColor: _isDarkTheme
+                      ? const Color(0xFF1E293B)
+                      : Colors.white,
+                  foregroundColor: _isDarkTheme
+                      ? Colors.white
+                      : TeritoryColors.textPrimary,
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: _isDarkTheme
+                        ? const BorderSide(color: Color(0xFF334155), width: 1.0)
+                        : BorderSide.none,
+                  ),
+                  onPressed: () {
+                    final current = _mapController.camera.zoom;
+                    _mapController.move(
+                      _mapController.camera.center,
+                      current - 1,
+                    );
+                  },
+                  child: const Icon(Icons.remove),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Bottom Friends Footprint Radar Carousel ──
+          if (_selectedFilter != 'Sub-Spots')
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 176,
+              child: SizedBox(
+                height: 64,
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: friendFlags.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 10),
+                  itemBuilder: (ctx, index) {
+                    final f = friendFlags[index];
+                    final apiFlag = otherFlags[index];
+                    return GestureDetector(
+                      onTap: () {
+                        _mapController.move(f.coordinates, 14.5);
+                        LiveFlagDetailSheet.show(context, flag: apiFlag);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(8, 6, 14, 6),
+                        decoration: BoxDecoration(
+                          color: _isDarkTheme
+                              ? const Color(0xF21E293B)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(30),
+                          border: Border.all(
+                            color: f.isMajorFlag
+                                ? TeritoryColors.majorGold
+                                : (_isDarkTheme
+                                      ? const Color(0xFF334155)
+                                      : Colors.white),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.15),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircleAvatar(
+                              radius: 18,
+                              backgroundImage: NetworkImage(f.friendAvatar),
+                            ),
+                            const SizedBox(width: 8),
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      f.friendName.split(' ').first,
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: _isDarkTheme
+                                            ? Colors.white
+                                            : TeritoryColors.textPrimary,
+                                      ),
+                                    ),
+                                    if (f.isMajorFlag) ...[
+                                      const SizedBox(width: 4),
+                                      const Icon(
+                                        Icons.star_rounded,
+                                        size: 14,
+                                        color: TeritoryColors.majorGold,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                Text(
+                                  f.placeName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    color: _isDarkTheme
+                                        ? const Color(0xFF94A3B8)
+                                        : TeritoryColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
+            ),
 
-              // ── Live data state overlay ──
-              if (exploreAsync.isLoading)
-                const _MapStatusBanner(
-                  icon: Icons.cloud_sync_rounded,
-                  message: 'Loading live flags…',
-                  color: TeritoryColors.sapphireBlue,
+          // ── Sub-Spots shelf (hidden gems within 5 km) ──
+          if (_selectedFilter == 'Sub-Spots')
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 176,
+              child: _buildSubSpotsShelf(subSpotsAsync),
+            ),
+
+          // ── Primary Action Button: "Flag Current Teritory" ──
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 108,
+            child: SizedBox(
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _openDropFlag,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: TeritoryColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 8,
+                  shadowColor: TeritoryColors.primary.withValues(alpha: 0.45),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
+                  ),
                 ),
-              if (exploreAsync.hasError)
-                _MapStatusBanner(
-                  icon: Icons.cloud_off_rounded,
-                  message: 'Teritory is unreachable. Check the API and retry.',
-                  color: TeritoryColors.expiredRed,
-                  onRetry: () =>
-                      ref.read(exploreFlagsProvider.notifier).refresh(),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.flag_rounded,
+                        size: 20,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Flag My Teritory Here',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
                 ),
-              if (live.flags.isEmpty &&
-                  !exploreAsync.isLoading &&
-                  !exploreAsync.hasError)
-                const _MapStatusBanner(
-                  icon: Icons.flag_outlined,
-                  message: 'No flags here yet — be the first to drop one.',
-                  color: TeritoryColors.primary,
+              ),
+            ),
+          ),
+
+          // ── Live data state overlay ──
+          if (exploreAsync.isLoading)
+            const _MapStatusBanner(
+              icon: Icons.cloud_sync_rounded,
+              message: 'Loading live flags…',
+              color: TeritoryColors.sapphireBlue,
+            ),
+          if (exploreAsync.hasError)
+            _MapStatusBanner(
+              icon: Icons.cloud_off_rounded,
+              message: 'Teritory is unreachable. Check the API and retry.',
+              color: TeritoryColors.expiredRed,
+              onRetry: () => ref.read(exploreFlagsProvider.notifier).refresh(),
+            ),
+          if (live.flags.isEmpty &&
+              !exploreAsync.isLoading &&
+              !exploreAsync.hasError)
+            const _MapStatusBanner(
+              icon: Icons.flag_outlined,
+              message: 'No flags here yet — be the first to drop one.',
+              color: TeritoryColors.primary,
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Horizontal shelf for the Sub-Spots filter: live hidden gems within 5 km,
+  /// ordered by the server (HIDDEN_GEM reactions, then distance).
+  Widget _buildSubSpotsShelf(AsyncValue<List<ApiFlag>> spotsAsync) {
+    final textColor = _isDarkTheme ? Colors.white : TeritoryColors.textPrimary;
+    final surface = _isDarkTheme ? const Color(0xF21E293B) : Colors.white;
+
+    Widget pill({required Widget child}) => Container(
+      height: 58,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(29),
+        border: Border.all(
+          color: _isDarkTheme ? const Color(0xFF334155) : Colors.white,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Center(child: child),
+    );
+
+    return spotsAsync.when(
+      loading: () => pill(
+        child: const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+      error: (error, _) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: pill(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.cloud_off_rounded,
+                size: 16,
+                color: TeritoryColors.expiredRed,
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  error is ApiException
+                      ? error.message
+                      : 'Could not load Sub-Spots.',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11.5,
+                    color: textColor,
+                  ),
                 ),
+              ),
+              TextButton(
+                onPressed: () => ref.invalidate(subSpotsProvider),
+                child: const Text('Retry', style: TextStyle(fontSize: 12)),
+              ),
             ],
           ),
+        ),
+      ),
+      data: (spots) {
+        if (spots.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: pill(
+              child: Text(
+                'No hidden gems within 5 km of the map centre yet.',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11.5,
+                  color: _isDarkTheme
+                      ? const Color(0xFF94A3B8)
+                      : TeritoryColors.textSecondary,
+                ),
+              ),
+            ),
+          );
+        }
+
+        return SizedBox(
+          height: 64,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: spots.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final spot = spots[index];
+              return GestureDetector(
+                onTap: () {
+                  _mapController.move(spot.coordinates, 15.5);
+                  LiveFlagDetailSheet.show(context, flag: spot);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: surface,
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(
+                      color: spot.hiddenGemCount > 0
+                          ? TeritoryColors.subTerritoryTeal
+                          : (_isDarkTheme
+                                ? const Color(0xFF334155)
+                                : Colors.white),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.15),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.diamond_outlined,
+                        size: 18,
+                        color: TeritoryColors.subTerritoryTeal,
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            spot.placeName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: textColor,
+                            ),
+                          ),
+                          Text(
+                            '${spot.hiddenGemCount} gem'
+                            '${spot.hiddenGemCount == 1 ? '' : 's'} • '
+                            '${spot.distanceKm.toStringAsFixed(1)} km',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 11,
+                              color: _isDarkTheme
+                                  ? const Color(0xFF94A3B8)
+                                  : TeritoryColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
         );
+      },
+    );
   }
 
   Widget _buildFilterChip(String label, IconData icon) {
@@ -654,7 +1087,9 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                 size: 15,
                 color: isSelected
                     ? Colors.white
-                    : (_isDarkTheme ? const Color(0xFFCBD5E1) : TeritoryColors.textPrimary),
+                    : (_isDarkTheme
+                          ? const Color(0xFFCBD5E1)
+                          : TeritoryColors.textPrimary),
               ),
               const SizedBox(width: 6),
               Text(
@@ -664,7 +1099,9 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                   color: isSelected
                       ? Colors.white
-                      : (_isDarkTheme ? const Color(0xFFCBD5E1) : TeritoryColors.textPrimary),
+                      : (_isDarkTheme
+                            ? const Color(0xFFCBD5E1)
+                            : TeritoryColors.textPrimary),
                 ),
               ),
             ],
@@ -691,7 +1128,9 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                 height: 50,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: TeritoryColors.primary.withValues(alpha: opacity * 0.45),
+                  color: TeritoryColors.primary.withValues(
+                    alpha: opacity * 0.45,
+                  ),
                 ),
               ),
             ),
@@ -789,10 +1228,7 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
           decoration: BoxDecoration(
             color: pinBg,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: pinBorder,
-              width: 1.8,
-            ),
+            border: Border.all(color: pinBorder, width: 1.8),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.25),
@@ -811,8 +1247,11 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                     ? NetworkImage(fFlag.friendAvatar)
                     : null,
                 child: fFlag.friendAvatar.isEmpty
-                    ? const Icon(Icons.person_rounded,
-                        size: 14, color: Colors.white)
+                    ? const Icon(
+                        Icons.person_rounded,
+                        size: 14,
+                        color: Colors.white,
+                      )
                     : null,
               ),
               const SizedBox(width: 6),
@@ -824,25 +1263,19 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
-                    color: _isDarkTheme ? Colors.white : TeritoryColors.textPrimary,
+                    color: _isDarkTheme
+                        ? Colors.white
+                        : TeritoryColors.textPrimary,
                   ),
                 ),
               ),
               const SizedBox(width: 4),
-              Icon(
-                Icons.flag_rounded,
-                size: 13,
-                color: pinBorder,
-              ),
+              Icon(Icons.flag_rounded, size: 13, color: pinBorder),
               const SizedBox(width: 2),
             ],
           ),
         ),
-        Icon(
-          Icons.arrow_drop_down,
-          size: 18,
-          color: pinBorder,
-        ),
+        Icon(Icons.arrow_drop_down, size: 18, color: pinBorder),
       ],
     );
   }

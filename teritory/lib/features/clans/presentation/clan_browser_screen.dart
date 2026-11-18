@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/models/clan_models.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../profile/application/profile_providers.dart';
 import '../application/clans_provider.dart';
 import 'create_clan_sheet.dart';
 
@@ -46,27 +47,50 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
     super.dispose();
   }
 
-  List<Clan> _filterClans(List<Clan> clans) {
+  List<Clan> _filterClans(List<Clan> clans, {String? userRegion, String? userCountry}) {
     var filtered = clans;
 
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
       filtered = filtered
-          .where((c) =>
-              c.name.toLowerCase().contains(query) ||
-              c.region.toLowerCase().contains(query) ||
-              c.description.toLowerCase().contains(query))
+          .where(
+            (c) =>
+                c.name.toLowerCase().contains(query) ||
+                c.region.toLowerCase().contains(query) ||
+                c.description.toLowerCase().contains(query),
+          )
           .toList();
     }
 
     if (_selectedCategory == 'Popular') {
       filtered = List.from(filtered)
         ..sort((a, b) => b.memberCount.compareTo(a.memberCount));
+    } else if (_selectedCategory == 'Nearby') {
+      final regionMatch = userRegion?.trim().toLowerCase() ?? '';
+      final countryMatch = userCountry?.trim().toLowerCase() ?? '';
+
+      filtered = List.from(filtered)..sort((a, b) {
+        final aRegion = a.region.toLowerCase();
+        final bRegion = b.region.toLowerCase();
+
+        bool isNear(String r) {
+          if (regionMatch.isNotEmpty && r.contains(regionMatch)) return true;
+          if (countryMatch.isNotEmpty && r.contains(countryMatch)) return true;
+          return r.contains('india') || r.contains('kerala') || r.contains('south') || r.contains('asia');
+        }
+
+        final aNear = isNear(aRegion);
+        final bNear = isNear(bRegion);
+        if (aNear && !bNear) return -1;
+        if (!aNear && bNear) return 1;
+        return b.memberCount.compareTo(a.memberCount);
+      });
     } else if (_categoryTags.containsKey(_selectedCategory)) {
       final tags = _categoryTags[_selectedCategory]!;
       filtered = filtered
           .where(
-              (c) => tags.any((tag) => c.interestTag.toLowerCase().contains(tag)))
+            (c) => tags.any((tag) => c.interestTag.toLowerCase().contains(tag)),
+          )
           .toList();
     }
 
@@ -123,7 +147,12 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
   Widget build(BuildContext context) {
     final clansAsync = ref.watch(clansProvider);
     final data = clansAsync.valueOrNull;
-    final filteredClans = _filterClans(data?.clans ?? const <Clan>[]);
+    final myProfile = ref.watch(myProfileProvider).valueOrNull;
+    final filteredClans = _filterClans(
+      data?.clans ?? const <Clan>[],
+      userRegion: myProfile?.state.isNotEmpty == true ? myProfile?.state : myProfile?.district,
+      userCountry: myProfile?.country,
+    );
 
     return Scaffold(
       backgroundColor: TeritoryColors.background,
@@ -132,8 +161,11 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
         elevation: 0,
         title: Row(
           children: [
-            const Icon(Icons.shield_rounded,
-                color: TeritoryColors.clanPurple, size: 22),
+            const Icon(
+              Icons.shield_rounded,
+              color: TeritoryColors.clanPurple,
+              size: 22,
+            ),
             const SizedBox(width: 8),
             Text(
               'Clans',
@@ -187,12 +219,18 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
                     fontSize: 14,
                     color: TeritoryColors.textMuted,
                   ),
-                  prefixIcon: const Icon(Icons.search_rounded,
-                      color: TeritoryColors.textMuted, size: 20),
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    color: TeritoryColors.textMuted,
+                    size: 20,
+                  ),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear_rounded,
-                              size: 18, color: TeritoryColors.textMuted),
+                          icon: const Icon(
+                            Icons.clear_rounded,
+                            size: 18,
+                            color: TeritoryColors.textMuted,
+                          ),
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _searchQuery = '');
@@ -200,8 +238,10 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
                         )
                       : null,
                   border: InputBorder.none,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                 ),
               ),
             ),
@@ -222,8 +262,10 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
                 return GestureDetector(
                   onTap: () => setState(() => _selectedCategory = category),
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: isSelected
                           ? TeritoryColors.clanPurple
@@ -264,8 +306,11 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.cloud_off_rounded,
-                      size: 16, color: TeritoryColors.expiredRed),
+                  const Icon(
+                    Icons.cloud_off_rounded,
+                    size: 16,
+                    color: TeritoryColors.expiredRed,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -293,20 +338,21 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
             ),
 
           // Clan list
-          Expanded(
-            child: _buildBody(clansAsync, data, filteredClans),
-          ),
+          Expanded(child: _buildBody(clansAsync, data, filteredClans)),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openCreateClan,
-        backgroundColor: TeritoryColors.primary,
-        icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: Text(
-          'Create Clan',
-          style: GoogleFonts.plusJakartaSans(
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 24),
+        child: FloatingActionButton.extended(
+          onPressed: _openCreateClan,
+          backgroundColor: TeritoryColors.primary,
+          icon: const Icon(Icons.add_rounded, color: Colors.white),
+          label: Text(
+            'Create Clan',
+            style: GoogleFonts.plusJakartaSans(
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
           ),
         ),
       ),
@@ -530,8 +576,11 @@ class _ClanCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.location_on_rounded,
-                          size: 14, color: TeritoryColors.textSecondary),
+                      const Icon(
+                        Icons.location_on_rounded,
+                        size: 14,
+                        color: TeritoryColors.textSecondary,
+                      ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
@@ -564,7 +613,9 @@ class _ClanCard extends StatelessWidget {
                         onTap: isPending ? null : onJoinToggle,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: isJoined
                                 ? TeritoryColors.surfaceContainer
@@ -576,7 +627,8 @@ class _ClanCard extends StatelessWidget {
                                   width: 14,
                                   height: 14,
                                   child: CircularProgressIndicator(
-                                      strokeWidth: 2),
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : Text(
                                   isJoined ? 'Joined ✓' : 'Join',

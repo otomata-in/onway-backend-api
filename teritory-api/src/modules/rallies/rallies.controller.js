@@ -197,12 +197,21 @@ const completeRally = async (req, res, next) => {
       data: { status: 'COMPLETED', completedAt: new Date() },
     });
 
+    // The collective flag inherits the host's country: a rally stores no
+    // country of its own, and `Flag.country` is required (this used to 500).
+    const host = await prisma.user.findUnique({
+      where: { id: rally.createdById },
+      select: { country: true, countryCode: true },
+    });
+
     // Create collective Major Flag
     await prisma.flag.create({
       data: {
         userId: req.user.id,
         placeName: rally.placeName,
         city: 'Collective Rally',
+        country: host?.country || 'Unknown',
+        countryCode: host?.countryCode || 'IN',
         latitude: rally.latitude,
         longitude: rally.longitude,
         isMajorFlag: true,

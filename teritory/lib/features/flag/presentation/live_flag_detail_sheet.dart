@@ -8,10 +8,10 @@ import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../../explore/application/explore_flags_provider.dart';
+import '../../trips/application/trips_provider.dart';
 
 /// Live flag detail: reads `GET /v1/flags/:id` and writes reactions, kudos and
-/// comments back to the API. The bundled-asset `FlagDetailSheet` remains for
-/// screens that still render local data (profile, wonders).
+/// comments back to the API. Every surface that shows a flag opens this sheet.
 class LiveFlagDetailSheet extends ConsumerStatefulWidget {
   final ApiFlag flag;
 
@@ -36,6 +36,8 @@ class _LiveFlagDetailSheetState extends ConsumerState<LiveFlagDetailSheet> {
   final Set<String> _pendingReactions = {};
   bool _sendingComment = false;
   bool _sendingKudos = false;
+  bool _savingWishlist = false;
+  bool? _isSavedOverride;
   // `POST /flags/:id/kudos` always increments, so the sheet allows one send per
   // open instead of letting taps inflate the count.
   bool _kudosSent = false;
@@ -70,6 +72,7 @@ class _LiveFlagDetailSheetState extends ConsumerState<LiveFlagDetailSheet> {
       await TeritoryRepository.instance.toggleFlagReaction(widget.flag.id, type);
       if (!mounted) return;
       ref.invalidate(flagDetailProvider(widget.flag.id));
+      ref.invalidate(savedFlagsLiveProvider);
     } on ApiException catch (e) {
       _toast(e.message, error: true);
     } catch (_) {
@@ -98,6 +101,35 @@ class _LiveFlagDetailSheetState extends ConsumerState<LiveFlagDetailSheet> {
     }
   }
 
+  Future<void> _toggleWishlist(bool currentSaved) async {
+    if (_savingWishlist) return;
+    setState(() => _savingWishlist = true);
+    try {
+      final isSaved =
+          await TeritoryRepository.instance.toggleSaveFlag(widget.flag.id);
+      if (!mounted) return;
+      setState(() {
+        _isSavedOverride = isSaved;
+      });
+      ref.invalidate(flagDetailProvider(widget.flag.id));
+      ref.invalidate(savedFlagsLiveProvider);
+      _toast(
+        isSaved
+            ? 'Added to your wishlist!'
+            : 'Removed from your wishlist.',
+      );
+    } on ApiException catch (e) {
+      _toast(e.message, error: true);
+    } catch (_) {
+      _toast(
+        'Could not update wishlist. Check your connection.',
+        error: true,
+      );
+    } finally {
+      if (mounted) setState(() => _savingWishlist = false);
+    }
+  }
+
   Future<void> _sendComment() async {
     final text = _commentController.text.trim();
     if (text.isEmpty || _sendingComment) return;
@@ -107,6 +139,7 @@ class _LiveFlagDetailSheetState extends ConsumerState<LiveFlagDetailSheet> {
       if (!mounted) return;
       _commentController.clear();
       ref.invalidate(flagDetailProvider(widget.flag.id));
+      ref.invalidate(savedFlagsLiveProvider);
     } on ApiException catch (e) {
       _toast(e.message, error: true);
     } catch (_) {
@@ -418,19 +451,55 @@ class _LiveFlagDetailSheetState extends ConsumerState<LiveFlagDetailSheet> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () => _toast(
-                            'Wishlist needs the bucket-list API, which is not implemented yet.',
-                          ),
-                          icon: const Icon(Icons.bookmark_add_rounded, size: 18),
+                          onPressed: _savingWishlist
+                              ? null
+                              : () {
+                                  final isSaved = _isSavedOverride ??
+                                      detail?.isSaved ??
+                                      false;
+                                  _toggleWishlist(isSaved);
+                                },
+                          icon: _savingWishlist
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Icon(
+                                  (_isSavedOverride ?? detail?.isSaved ?? false)
+                                      ? Icons.bookmark_added_rounded
+                                      : Icons.bookmark_add_rounded,
+                                  size: 18,
+                                  color: (_isSavedOverride ??
+                                          detail?.isSaved ??
+                                          false)
+                                      ? TeritoryColors.primary
+                                      : null,
+                                ),
                           label: Text(
-                            'Wishlist',
+                            (_isSavedOverride ?? detail?.isSaved ?? false)
+                                ? 'Wishlisted'
+                                : 'Wishlist',
                             style: GoogleFonts.plusJakartaSans(
                               fontWeight: FontWeight.bold,
+                              color: (_isSavedOverride ??
+                                      detail?.isSaved ??
+                                      false)
+                                  ? TeritoryColors.primary
+                                  : null,
                             ),
                           ),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 12),
-                            side: const BorderSide(color: TeritoryColors.border),
+                            side: BorderSide(
+                              color: (_isSavedOverride ??
+                                      detail?.isSaved ??
+                                      false)
+                                  ? TeritoryColors.primary
+                                  : TeritoryColors.border,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),

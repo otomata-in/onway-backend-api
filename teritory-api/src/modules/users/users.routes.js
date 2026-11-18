@@ -5,6 +5,7 @@ const { authenticate } = require('../../middleware/authenticate');
 
 router.get('/me', authenticate, usersController.getMyProfile);
 router.patch('/me', authenticate, usersController.updateMyProfile);
+router.delete('/me', authenticate, usersController.deleteMyAccount);
 router.patch('/me/trip-mode', authenticate, usersController.toggleTripMode);
 
 // Social & Friends

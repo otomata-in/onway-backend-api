@@ -388,9 +388,21 @@ const completeTrip = async (req, res, next) => {
 
     if (!trip) throw ApiError.notFound('Trip not found');
 
+    const isLeader = trip.createdById === req.user.id;
+    const isParticipant = trip.participants.some((p) => p.userId === req.user.id);
+    if (!isLeader && !isParticipant) {
+      throw ApiError.forbidden('Only trip leaders or participants can complete this trip');
+    }
+
+    if (trip.status === 'COMPLETED') {
+      throw ApiError.badRequest('This trip has already been completed');
+    }
+
     const totalWaypointsCount = trip.tripPlan.waypoints.length;
 
-    // Evaluate each participant's validations
+    // Evaluate each participant's validations. The caller's own badge is
+    // returned with the trip so the completion card can show the real result.
+    let myBadge = 'NONE';
     for (const p of trip.participants) {
       const validCount = await prisma.waypointValidation.count({
         where: { tripId, userId: p.userId, isValid: true },
@@ -406,6 +418,8 @@ const completeTrip = async (req, res, next) => {
         badge = 'PARTIAL';
         status = 'COMPLETED';
       }
+
+      if (p.userId === req.user.id) myBadge = badge;
 
       await prisma.tripParticipant.update({
         where: { id: p.id },
@@ -434,7 +448,7 @@ const completeTrip = async (req, res, next) => {
       include: { participants: true },
     });
 
-    return ApiResponse.success(res, updated, 'Trip marked completed!');
+    return ApiResponse.success(res, { ...updated, myBadge }, 'Trip marked completed!');
   } catch (err) {
     next(err);
   }

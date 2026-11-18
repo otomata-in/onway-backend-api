@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user_models.dart';
 import '../services/api_service.dart';
-import '../services/mock_data_service.dart';
 import '../services/socket_service.dart';
 import 'data_providers.dart';
 import '../services/teritory_repository.dart';
@@ -9,8 +8,9 @@ import '../services/teritory_repository.dart';
 /// Session state that the router uses as its gate.
 enum AuthStatus { restoring, signedOut, signedIn }
 
-final authStatusProvider =
-    NotifierProvider<AuthNotifier, AuthStatus>(AuthNotifier.new);
+final authStatusProvider = NotifierProvider<AuthNotifier, AuthStatus>(
+  AuthNotifier.new,
+);
 
 class AuthNotifier extends Notifier<AuthStatus> {
   @override
@@ -63,6 +63,9 @@ class AuthNotifier extends Notifier<AuthStatus> {
     await TeritoryRepository.instance.logout();
     SocketService.instance.disconnect();
     ref.invalidate(notificationsNotifierProvider);
+    // Drop the previous traveler from memory: the notifier falls back to the
+    // neutral anonymous user rather than keeping the signed-out profile.
+    ref.invalidate(currentUserNotifierProvider);
     state = AuthStatus.signedOut;
   }
 }
@@ -70,27 +73,20 @@ class AuthNotifier extends Notifier<AuthStatus> {
 class CurrentUserNotifier extends Notifier<User> {
   @override
   User build() {
-    // Placeholder until the session gate resolves; signed-out traffic never
-    // reaches a screen that reads this.
-    return MockDataService.instance.currentUser;
+    // Neutral placeholder until the session gate resolves; signed-out traffic
+    // never reaches a screen that reads this.
+    return anonymousUser;
   }
 
   void updateUser(User user) {
     state = user;
   }
-
-  Future<void> refreshFromServer() async {
-    state = await TeritoryRepository.instance.fetchMyProfileOrThrow();
-  }
 }
 
-final currentUserNotifierProvider =
-    NotifierProvider<CurrentUserNotifier, User>(CurrentUserNotifier.new);
+final currentUserNotifierProvider = NotifierProvider<CurrentUserNotifier, User>(
+  CurrentUserNotifier.new,
+);
 
 final currentUserProvider = Provider<User>((ref) {
   return ref.watch(currentUserNotifierProvider);
-});
-
-final isLoggedInProvider = Provider<bool>((ref) {
-  return ref.watch(authStatusProvider) == AuthStatus.signedIn;
 });

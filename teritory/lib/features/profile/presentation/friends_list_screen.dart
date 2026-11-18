@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/models/api_user.dart';
+import '../../../core/models/user_models.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
@@ -142,6 +143,24 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen>
           ),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Discover Travelers',
+            icon: const Icon(
+              Icons.person_search_rounded,
+              color: TeritoryColors.primary,
+            ),
+            onPressed: () {
+              final friends = friendsAsync.valueOrNull ?? const [];
+              final friendUserIds = friends.map((f) => f.user.id).toSet();
+              showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) =>
+                    _FindTravelersSheet(existingFriendIds: friendUserIds),
+              );
+            },
+          ),
           if (pending > 0)
             Padding(
               padding: const EdgeInsets.only(right: 8),
@@ -554,6 +573,426 @@ class _MessageState extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _FindTravelersSheet extends ConsumerStatefulWidget {
+  const _FindTravelersSheet({required this.existingFriendIds});
+
+  final Set<String> existingFriendIds;
+
+  @override
+  ConsumerState<_FindTravelersSheet> createState() => _FindTravelersSheetState();
+}
+
+class _FindTravelersSheetState extends ConsumerState<_FindTravelersSheet> {
+  final TextEditingController _queryController = TextEditingController();
+  List<User>? _results;
+  bool _searching = false;
+  String? _error;
+  final Set<String> _sentRequests = {};
+  String? _sendingToUserId;
+
+  @override
+  void dispose() {
+    _queryController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _doSearch(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      setState(() {
+        _results = null;
+        _error = null;
+        _searching = false;
+      });
+      return;
+    }
+    setState(() {
+      _searching = true;
+      _error = null;
+    });
+    try {
+      final res = await TeritoryRepository.instance.searchUsers(trimmed);
+      if (!mounted) return;
+      setState(() {
+        _results = res;
+        _searching = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+        _searching = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Could not search travelers. Check connection.';
+        _searching = false;
+      });
+    }
+  }
+
+  Future<void> _sendFriendRequest(User user) async {
+    setState(() => _sendingToUserId = user.id);
+    try {
+      await TeritoryRepository.instance.sendFriendRequest(user.id);
+      if (!mounted) return;
+      setState(() {
+        _sentRequests.add(user.id);
+        _sendingToUserId = null;
+      });
+      ref.invalidate(friendRequestsLiveProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Friend request sent to ${user.displayName}!')),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _sendingToUserId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _sendingToUserId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not send friend request.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.82,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: TeritoryColors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Discover Travelers',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: TeritoryColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        'Find explorers across the globe',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          color: TeritoryColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _queryController,
+              autofocus: true,
+              onChanged: _doSearch,
+              decoration: InputDecoration(
+                hintText: 'Search by name or @handle...',
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                suffixIcon: _queryController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, size: 18),
+                        onPressed: () {
+                          _queryController.clear();
+                          _doSearch('');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: TeritoryColors.surfaceContainer,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(child: _buildBody()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_searching) {
+      return const Center(
+        child: CircularProgressIndicator(color: TeritoryColors.primary),
+      );
+    }
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _error!,
+                style: GoogleFonts.plusJakartaSans(
+                  color: TeritoryColors.expiredRed,
+                ),
+              ),
+              const SizedBox(height: 8),
+              FilledButton(
+                onPressed: () => _doSearch(_queryController.text),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_results == null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.travel_explore_rounded,
+              size: 48,
+              color: TeritoryColors.textMuted.withValues(alpha: 0.5),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Type a name or handle to find travelers',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 14,
+                color: TeritoryColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_results!.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.person_off_rounded,
+              size: 48,
+              color: TeritoryColors.textMuted.withValues(alpha: 0.5),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No travelers found matching "${_queryController.text}"',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 14,
+                color: TeritoryColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      itemCount: _results!.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        final user = _results![index];
+        final isFriend = widget.existingFriendIds.contains(user.id);
+        final isRequested = _sentRequests.contains(user.id);
+        final isSending = _sendingToUserId == user.id;
+
+        return Material(
+          color: TeritoryColors.surfaceContainer,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () {
+              Navigator.of(context).pop();
+              context.push('/profile/friends/${user.id}');
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: TeritoryColors.primaryLight,
+                    backgroundImage: user.avatarUrl.isNotEmpty
+                        ? NetworkImage(user.avatarUrl)
+                        : null,
+                    child: user.avatarUrl.isEmpty
+                        ? Text(
+                            user.displayName.isNotEmpty
+                                ? user.displayName[0].toUpperCase()
+                                : '?',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.w700,
+                              color: TeritoryColors.primary,
+                            ),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.displayName,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: TeritoryColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          '@${user.handle}',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            color: TeritoryColors.textSecondary,
+                          ),
+                        ),
+                        if (user.bio.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              user.bio,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                color: TeritoryColors.textMuted,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (isFriend)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: TeritoryColors.validatedGreen.withValues(
+                          alpha: 0.12,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Friends',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: TeritoryColors.validatedGreen,
+                        ),
+                      ),
+                    )
+                  else if (isRequested)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: TeritoryColors.primaryLight,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.check_rounded,
+                            size: 14,
+                            color: TeritoryColors.primary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Sent',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: TeritoryColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    FilledButton(
+                      onPressed: isSending
+                          ? null
+                          : () => _sendFriendRequest(user),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: TeritoryColors.primary,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: isSending
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              'Add',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

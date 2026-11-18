@@ -237,25 +237,47 @@ const inviteFriends = async (req, res, next) => {
       TRIP: 'TRIP_INVITE',
       RALLY: 'RALLY_INVITE',
     };
-    const notifType = typeMap[type.toUpperCase()] || 'COMMUNITY_INVITE';
+    const key = String(type).toUpperCase();
+    const notifType = typeMap[key];
+    if (!notifType) {
+      throw ApiError.badRequest(`Unsupported invite type: ${type}`);
+    }
+    if (!targetId) {
+      throw ApiError.badRequest(`A targetId is required for ${key} invites`);
+    }
+
+    // A bad target used to be reported as a successful invite that deep-linked
+    // nowhere; resolve it first and let a missing target be a 404.
+    const targetExists = async () => {
+      if (key === 'CLAN') {
+        return Boolean(await prisma.clan.findUnique({ where: { id: targetId }, select: { id: true } }));
+      }
+      if (key === 'TRIP') {
+        return Boolean(await prisma.tripPlan.findUnique({ where: { id: targetId }, select: { id: true } }));
+      }
+      if (key === 'RALLY') {
+        return Boolean(await prisma.legendaryRally.findUnique({ where: { id: targetId }, select: { id: true } }));
+      }
+      return Boolean(await prisma.community.findUnique({ where: { id: targetId }, select: { id: true } }));
+    };
+    if (!(await targetExists())) {
+      throw ApiError.notFound(`${key} target not found`);
+    }
 
     // Build paths the mobile router can resolve, not bare ids.
     let actionUrl = '/notifications';
-    if (targetId) {
-      const key = type.toUpperCase();
-      if (key === 'CLAN') {
-        actionUrl = `/clans/${targetId}`;
-      } else if (key === 'TRIP') {
-        actionUrl = `/trips/${targetId}`;
-      } else if (key === 'COMMUNITY') {
-        const community = await prisma.community.findUnique({
-          where: { id: targetId },
-          select: { parentClanId: true },
-        });
-        actionUrl = community
-          ? `/clans/${community.parentClanId}/communities/${targetId}`
-          : '/notifications';
-      }
+    if (key === 'CLAN') {
+      actionUrl = `/clans/${targetId}`;
+    } else if (key === 'TRIP') {
+      actionUrl = `/trips/${targetId}`;
+    } else if (key === 'COMMUNITY') {
+      const community = await prisma.community.findUnique({
+        where: { id: targetId },
+        select: { parentClanId: true },
+      });
+      actionUrl = community
+        ? `/clans/${community.parentClanId}/communities/${targetId}`
+        : '/notifications';
     }
 
     const notifications = targetUserIds.map((userId) => ({
@@ -370,6 +392,49 @@ const respondFriendRequest = async (req, res, next) => {
   }
 };
 
+// Permanently delete own account (revokes tokens, removes friendships, soft-deletes profile)
+const deleteMyAccount = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    // Revoke refresh tokens
+    await prisma.refreshToken.deleteMany({ where: { userId } });
+
+    // Remove friendship relationships
+    await prisma.friendRelationship.deleteMany({
+      where: {
+        OR: [{ senderId: userId }, { receiverId: userId }],
+      },
+    });
+
+    // Remove clan & community memberships
+    await prisma.clanMember.deleteMany({ where: { userId } });
+    await prisma.communityMember.deleteMany({ where: { userId } });
+
+    // Clean notifications
+    await prisma.notification.deleteMany({ where: { userId } });
+
+    // Soft-delete user row to maintain FK integrity with existing flags/waypoints
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        isActive: false,
+        displayName: 'Deleted Traveler',
+        handle: `deleted_${userId.substring(0, 8)}`,
+        bio: '',
+        phone: null,
+        email: null,
+        avatarUrl: null,
+        coverImageUrl: null,
+      },
+    });
+
+    return ApiResponse.success(res, { deleted: true }, 'Account successfully deleted');
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getMyProfile,
   updateMyProfile,
@@ -383,5 +448,6 @@ module.exports = {
   inviteFriends,
   sendFriendRequest,
   respondFriendRequest,
+  deleteMyAccount,
 };
 

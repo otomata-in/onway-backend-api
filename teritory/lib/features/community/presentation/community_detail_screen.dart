@@ -8,8 +8,9 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../shared/presentation/invite_friends_sheet.dart';
+import '../../trips/presentation/trip_planner_screen.dart';
 import '../application/community_detail_provider.dart';
-import 'invite_friends_sheet.dart';
 
 class CommunityDetailScreen extends ConsumerStatefulWidget {
   final String communityId;
@@ -21,8 +22,7 @@ class CommunityDetailScreen extends ConsumerStatefulWidget {
       _CommunityDetailScreenState();
 }
 
-class _CommunityDetailScreenState
-    extends ConsumerState<CommunityDetailScreen> {
+class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
   final TextEditingController _chatController = TextEditingController();
   final Set<String> _pendingVotes = {};
 
@@ -148,8 +148,9 @@ class _CommunityDetailScreenState
     if (_pendingVotes.contains(planId)) return;
     setState(() => _pendingVotes.add(planId));
     try {
-      final voted =
-          await TeritoryRepository.instance.toggleTripPlanVote(planId);
+      final voted = await TeritoryRepository.instance.toggleTripPlanVote(
+        planId,
+      );
       if (!mounted) return;
       ref.invalidate(communityPlansProvider(widget.communityId));
       _toast(voted ? 'Vote added' : 'Vote removed');
@@ -176,18 +177,27 @@ class _CommunityDetailScreenState
     } on ApiException catch (e) {
       _toast(e.message, error: true);
     } catch (_) {
-      _toast('Could not send your message. Check your connection.',
-          error: true);
+      _toast(
+        'Could not send your message. Check your connection.',
+        error: true,
+      );
     } finally {
       if (mounted) setState(() => _sendingMessage = false);
     }
   }
 
   Future<void> _openInviteSheet(String communityName) async {
+    final members =
+        ref
+            .read(communityMembersLiveProvider(widget.communityId))
+            .valueOrNull ??
+        const <CommunityMember>[];
     final invited = await InviteFriendsSheet.show(
       context,
-      communityId: widget.communityId,
-      communityName: communityName,
+      targetType: InviteTargetType.community,
+      targetId: widget.communityId,
+      targetName: communityName,
+      excludeUserIds: members.map((member) => member.userId).toSet(),
     );
     if (!mounted || invited == null) return;
     _toast(invited == 1 ? 'Invitation sent' : '$invited invitations sent');
@@ -197,8 +207,9 @@ class _CommunityDetailScreenState
 
   @override
   Widget build(BuildContext context) {
-    final communityAsync =
-        ref.watch(communityDetailProvider(widget.communityId));
+    final communityAsync = ref.watch(
+      communityDetailProvider(widget.communityId),
+    );
     final community = communityAsync.valueOrNull;
 
     if (community == null) {
@@ -208,17 +219,20 @@ class _CommunityDetailScreenState
           child: communityAsync.hasError
               ? _TabError(
                   message: _errorMessage(communityAsync.error!),
-                  onRetry: () => ref
-                      .invalidate(communityDetailProvider(widget.communityId)),
+                  onRetry: () => ref.invalidate(
+                    communityDetailProvider(widget.communityId),
+                  ),
                 )
               : const CircularProgressIndicator(
-                  color: TeritoryColors.communityIndigo),
+                  color: TeritoryColors.communityIndigo,
+                ),
         ),
       );
     }
 
-    final membersAsync =
-        ref.watch(communityMembersLiveProvider(widget.communityId));
+    final membersAsync = ref.watch(
+      communityMembersLiveProvider(widget.communityId),
+    );
     final members = membersAsync.valueOrNull;
     final currentUserId = ref.watch(currentUserProvider).id;
     final isMember =
@@ -315,8 +329,10 @@ class _CommunityDetailScreenState
               ),
               if (community.parentClanName.isNotEmpty)
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: TeritoryColors.communityIndigo,
                     borderRadius: BorderRadius.circular(12),
@@ -346,8 +362,11 @@ class _CommunityDetailScreenState
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(Icons.people_rounded,
-                  size: 16, color: TeritoryColors.communityIndigo),
+              const Icon(
+                Icons.people_rounded,
+                size: 16,
+                color: TeritoryColors.communityIndigo,
+              ),
               const SizedBox(width: 4),
               Text(
                 '${community.memberCount} members',
@@ -411,7 +430,8 @@ class _CommunityDetailScreenState
       ),
       error: (error, _) => _TabError(
         message: _errorMessage(error),
-        onRetry: () => ref.invalidate(communityFeedProvider(widget.communityId)),
+        onRetry: () =>
+            ref.invalidate(communityFeedProvider(widget.communityId)),
       ),
       data: (activities) {
         if (activities.isEmpty) {
@@ -447,8 +467,9 @@ class _CommunityDetailScreenState
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: TeritoryColors.communityIndigo
-                            .withValues(alpha: 0.1),
+                        color: TeritoryColors.communityIndigo.withValues(
+                          alpha: 0.1,
+                        ),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(
@@ -540,11 +561,73 @@ class _CommunityDetailScreenState
       ),
       data: (plans) {
         if (plans.isEmpty) {
-          return const _TabMessage(text: 'No trip plans yet');
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.explore_off_rounded,
+                      size: 48, color: TeritoryColors.textMuted),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No expedition plans yet',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: TeritoryColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Be the first to propose an expedition for this community!',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13,
+                      color: TeritoryColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      final communityName = ref
+                          .read(communityDetailProvider(widget.communityId))
+                          .valueOrNull
+                          ?.name;
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => TripPlannerScreen(
+                            communityId: widget.communityId,
+                            communityName: communityName,
+                          ),
+                        ),
+                      );
+                      if (!mounted) return;
+                      ref.invalidate(communityPlansProvider(widget.communityId));
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: TeritoryColors.communityIndigo,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Propose First Plan'),
+                  ),
+                ],
+              ),
+            ),
+          );
         }
 
-        final highestScore =
-            plans.map((plan) => plan.voteScore).reduce((a, b) => a > b ? a : b);
+        final highestScore = plans
+            .map((plan) => plan.voteScore)
+            .reduce((a, b) => a > b ? a : b);
 
         return Stack(
           children: [
@@ -556,15 +639,32 @@ class _CommunityDetailScreenState
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
                 itemCount: plans.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 12),
-                itemBuilder: (context, index) =>
-                    _buildPlanCard(plans[index], plans[index].voteScore == highestScore),
+                itemBuilder: (context, index) => _buildPlanCard(
+                  plans[index],
+                  plans[index].voteScore == highestScore,
+                ),
               ),
             ),
             Positioned(
               bottom: 16,
               right: 16,
               child: FloatingActionButton.extended(
-                onPressed: () => _toast('Trip plan creation is not available yet'),
+                onPressed: () async {
+                  final communityName = ref
+                      .read(communityDetailProvider(widget.communityId))
+                      .valueOrNull
+                      ?.name;
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => TripPlannerScreen(
+                        communityId: widget.communityId,
+                        communityName: communityName,
+                      ),
+                    ),
+                  );
+                  if (!mounted) return;
+                  ref.invalidate(communityPlansProvider(widget.communityId));
+                },
                 backgroundColor: TeritoryColors.communityIndigo,
                 icon: const Icon(Icons.add, color: Colors.white),
                 label: Text(
@@ -610,8 +710,11 @@ class _CommunityDetailScreenState
           Row(
             children: [
               if (isWinning) ...[
-                const Icon(Icons.emoji_events_rounded,
-                    size: 20, color: TeritoryColors.majorGold),
+                const Icon(
+                  Icons.emoji_events_rounded,
+                  size: 20,
+                  color: TeritoryColors.majorGold,
+                ),
                 const SizedBox(width: 6),
               ],
               Expanded(
@@ -629,8 +732,11 @@ class _CommunityDetailScreenState
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(Icons.place_rounded,
-                  size: 14, color: TeritoryColors.communityIndigo),
+              const Icon(
+                Icons.place_rounded,
+                size: 14,
+                color: TeritoryColors.communityIndigo,
+              ),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
@@ -687,8 +793,9 @@ class _CommunityDetailScreenState
   // ─── Members Tab ────────────────────────────────────────────────────
 
   Widget _buildMembersTab(Community community) {
-    final membersAsync =
-        ref.watch(communityMembersLiveProvider(widget.communityId));
+    final membersAsync = ref.watch(
+      communityMembersLiveProvider(widget.communityId),
+    );
 
     return Column(
       children: [
@@ -720,12 +827,14 @@ class _CommunityDetailScreenState
           child: membersAsync.when(
             loading: () => const Center(
               child: CircularProgressIndicator(
-                  color: TeritoryColors.communityIndigo),
+                color: TeritoryColors.communityIndigo,
+              ),
             ),
             error: (error, _) => _TabError(
               message: _errorMessage(error),
-              onRetry: () => ref
-                  .invalidate(communityMembersLiveProvider(widget.communityId)),
+              onRetry: () => ref.invalidate(
+                communityMembersLiveProvider(widget.communityId),
+              ),
             ),
             data: (members) {
               if (members.isEmpty) {
@@ -754,7 +863,9 @@ class _CommunityDetailScreenState
                     ),
                     trailing: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: badgeColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
@@ -781,8 +892,9 @@ class _CommunityDetailScreenState
   // ─── Chat Tab ───────────────────────────────────────────────────────
 
   Widget _buildChatTab(String currentUserId) {
-    final messagesAsync =
-        ref.watch(communityMessagesProvider(widget.communityId));
+    final messagesAsync = ref.watch(
+      communityMessagesProvider(widget.communityId),
+    );
 
     return Column(
       children: [
@@ -790,12 +902,13 @@ class _CommunityDetailScreenState
           child: messagesAsync.when(
             loading: () => const Center(
               child: CircularProgressIndicator(
-                  color: TeritoryColors.communityIndigo),
+                color: TeritoryColors.communityIndigo,
+              ),
             ),
             error: (error, _) => _TabError(
               message: _errorMessage(error),
-              onRetry: () => ref.invalidate(
-                  communityMessagesProvider(widget.communityId)),
+              onRetry: () =>
+                  ref.invalidate(communityMessagesProvider(widget.communityId)),
             ),
             data: (messages) {
               if (messages.isEmpty) {
@@ -851,10 +964,14 @@ class _CommunityDetailScreenState
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide(
-                            color: TeritoryColors.communityIndigo, width: 1.5),
+                          color: TeritoryColors.communityIndigo,
+                          width: 1.5,
+                        ),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
                       isDense: true,
                     ),
                   ),
@@ -881,8 +998,9 @@ class _CommunityDetailScreenState
 
   Widget _buildChatBubble(CommunityMessage msg, bool isSelf) {
     return Row(
-      mainAxisAlignment:
-          isSelf ? MainAxisAlignment.end : MainAxisAlignment.start,
+      mainAxisAlignment: isSelf
+          ? MainAxisAlignment.end
+          : MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         if (!isSelf) ...[
@@ -1008,8 +1126,11 @@ class _TabError extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_rounded,
-                size: 40, color: TeritoryColors.textMuted),
+            const Icon(
+              Icons.cloud_off_rounded,
+              size: 40,
+              color: TeritoryColors.textMuted,
+            ),
             const SizedBox(height: 10),
             Text(
               message,
@@ -1020,10 +1141,7 @@ class _TabError extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            OutlinedButton(
-              onPressed: onRetry,
-              child: const Text('Retry'),
-            ),
+            OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
           ],
         ),
       ),

@@ -74,8 +74,11 @@ class _TripsHubScreenState extends ConsumerState<TripsHubScreen>
                 color: TeritoryColors.tripRoute.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.explore_rounded,
-                  color: TeritoryColors.tripRoute, size: 22),
+              child: const Icon(
+                Icons.explore_rounded,
+                color: TeritoryColors.tripRoute,
+                size: 22,
+              ),
             ),
             const SizedBox(width: 10),
             Text(
@@ -88,6 +91,13 @@ class _TripsHubScreenState extends ConsumerState<TripsHubScreen>
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Saved Expeditions & Wishlist',
+            icon: const Icon(Icons.bookmark_outline_rounded),
+            onPressed: () => context.push('/trips/saved'),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: TeritoryColors.primary,
@@ -113,23 +123,23 @@ class _TripsHubScreenState extends ConsumerState<TripsHubScreen>
         controller: _tabController,
         children: [
           const _ActiveTripsTab(),
-          _PlansTab(
-            startingPlanId: _startingPlanId,
-            onStart: _startPlan,
-          ),
+          _PlansTab(startingPlanId: _startingPlanId, onStart: _startPlan),
           const _TripHistoryTab(),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/trips/planner'),
-        backgroundColor: TeritoryColors.primary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: Text(
-          'Plan New Trip',
-          style: GoogleFonts.plusJakartaSans(
-            fontWeight: FontWeight.w700,
-            fontSize: 14,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 24),
+        child: FloatingActionButton.extended(
+          onPressed: () => context.push('/trips/planner'),
+          backgroundColor: TeritoryColors.primary,
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.add_rounded),
+          label: Text(
+            'Plan New Trip',
+            style: GoogleFonts.plusJakartaSans(
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+            ),
           ),
         ),
       ),
@@ -236,8 +246,9 @@ class _ActiveTripCard extends StatelessWidget {
                     TeritoryColors.tripRoute.withValues(alpha: 0.02),
                   ],
                 ),
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -246,7 +257,9 @@ class _ActiveTripCard extends StatelessWidget {
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: TeritoryColors.validatedGreen,
                           borderRadius: BorderRadius.circular(20),
@@ -345,7 +358,8 @@ class _ActiveTripCard extends StatelessWidget {
                           minHeight: 8,
                           backgroundColor: TeritoryColors.surfaceContainer,
                           valueColor: const AlwaysStoppedAnimation(
-                              TeritoryColors.tripRoute),
+                            TeritoryColors.tripRoute,
+                          ),
                         ),
                       ),
                     ],
@@ -369,7 +383,9 @@ class _ActiveTripCard extends StatelessWidget {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      ...trip.participants.take(4).map(
+                      ...trip.participants
+                          .take(4)
+                          .map(
                             (p) => Padding(
                               padding: const EdgeInsets.only(right: 4),
                               child: _ParticipantAvatar(participant: p),
@@ -391,7 +407,9 @@ class _ActiveTripCard extends StatelessWidget {
                       const Spacer(),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: TeritoryColors.primary,
                           borderRadius: BorderRadius.circular(20),
@@ -399,8 +417,11 @@ class _ActiveTripCard extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.map_rounded,
-                                color: Colors.white, size: 16),
+                            const Icon(
+                              Icons.map_rounded,
+                              color: Colors.white,
+                              size: 16,
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               'View Map',
@@ -579,8 +600,10 @@ class _PlanCard extends StatelessWidget {
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: _statusColor(plan.status).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
@@ -849,8 +872,11 @@ class _HistoryCard extends StatelessWidget {
                 color: TeritoryColors.rallyGold.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.emoji_events_rounded,
-                  color: TeritoryColors.rallyGold, size: 18),
+              child: const Icon(
+                Icons.emoji_events_rounded,
+                color: TeritoryColors.rallyGold,
+                size: 18,
+              ),
             ),
           ],
         ],
@@ -881,8 +907,7 @@ class _ParticipantAvatar extends StatelessWidget {
       backgroundImage: participant.userAvatar.isEmpty
           ? null
           : NetworkImage(participant.userAvatar),
-      onBackgroundImageError:
-          participant.userAvatar.isEmpty ? null : (_, _) {},
+      onBackgroundImageError: participant.userAvatar.isEmpty ? null : (_, _) {},
       child: participant.userAvatar.isEmpty
           ? Text(
               initial,
@@ -911,8 +936,11 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_rounded,
-                size: 44, color: TeritoryColors.textMuted),
+            const Icon(
+              Icons.cloud_off_rounded,
+              size: 44,
+              color: TeritoryColors.textMuted,
+            ),
             const SizedBox(height: 12),
             Text(
               message,
@@ -1082,8 +1110,11 @@ class _ActionButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 14, color: onTap == null ? color.withValues(alpha: 0.5) : color),
+            Icon(
+              icon,
+              size: 14,
+              color: onTap == null ? color.withValues(alpha: 0.5) : color,
+            ),
             const SizedBox(width: 4),
             Text(
               label,

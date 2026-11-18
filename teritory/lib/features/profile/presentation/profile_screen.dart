@@ -80,6 +80,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         actions: [
           const NotificationBell(),
           IconButton(
+            tooltip: 'Saved Expeditions & Wishlist',
+            icon: const Icon(Icons.bookmark_outline_rounded, size: 20),
+            onPressed: () => context.push('/trips/saved'),
+          ),
+          IconButton(
             tooltip: 'Edit profile',
             icon: const Icon(Icons.edit_outlined, size: 20),
             onPressed: () => _openEditProfile(profileAsync.valueOrNull),

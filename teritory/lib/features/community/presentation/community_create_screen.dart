@@ -1,13 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../clans/application/clans_provider.dart';
 import '../../../core/theme/teritory_theme.dart';
 
+/// The repository call the screen makes, exposed so a test can supply a fake
+/// without a live server.
+typedef CreateCommunityCall =
+    Future<void> Function({
+      required String name,
+      required String description,
+      required List<String> interestTags,
+      required bool isPublic,
+      String? coverImageUrl,
+    });
+
 class CommunityCreateScreen extends ConsumerStatefulWidget {
-  final String? clanId;
-  const CommunityCreateScreen({super.key, this.clanId});
+  /// The clan the community is founded in. Required: a community has no home
+  /// without a parent clan, so the form is only reachable from a clan page.
+  final String clanId;
+
+  /// Test seam; defaults to the live repository call.
+  final CreateCommunityCall? create;
+
+  const CommunityCreateScreen({
+    super.key,
+    required this.clanId,
+    this.create,
+  });
 
   @override
   ConsumerState<CommunityCreateScreen> createState() => _CommunityCreateScreenState();
@@ -17,7 +39,10 @@ class _CommunityCreateScreenState extends ConsumerState<CommunityCreateScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _coverController = TextEditingController();
   bool _isPublic = true;
+  bool _busy = false;
+  String? _error;
 
   static const List<String> _availableTags = [
     'Nature',
@@ -36,57 +61,77 @@ class _CommunityCreateScreenState extends ConsumerState<CommunityCreateScreen> {
   void dispose() {
     _nameController.dispose();
     _descriptionController.dispose();
+    _coverController.dispose();
     super.dispose();
   }
 
   Future<void> _createCommunity() async {
+    if (_busy) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     final name = _nameController.text.trim();
     final desc = _descriptionController.text.trim();
-    final parentClan = widget.clanId ?? 'c1';
+    final parentClan = widget.clanId;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        duration: Duration(seconds: 1),
-        content: Text('Founding community in backend...'),
-      ),
-    );
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
 
-    final created = await TeritoryRepository.instance.createCommunity(
-      name: name,
-      parentClanId: parentClan,
-      description: desc,
-      interestTags: _selectedTags.toList(),
-      isPublic: _isPublic,
-    );
+    try {
+      final cover = _coverController.text.trim();
+      await (widget.create ?? _createLive)(
+        name: name,
+        description: desc,
+        interestTags: _selectedTags.toList(),
+        isPublic: _isPublic,
+        coverImageUrl: cover.isEmpty ? null : cover,
+      );
 
-    if (!mounted) return;
-    if (created == null) {
+      if (!mounted) return;
+      // The clan header renders its communities from `GET /clans/:id`.
+      ref.invalidate(clanDetailProvider(parentClan));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Could not create "$name". Check the API and try again.',
-            style: GoogleFonts.plusJakartaSans(),
+            '🛡️ Community "$name" founded successfully!',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
           ),
-          backgroundColor: TeritoryColors.expiredRed,
+          backgroundColor: TeritoryColors.emeraldGreen,
         ),
       );
-      return;
+      Navigator.pop(context);
+    } on ApiException catch (e) {
+      // The server's own validation message (duplicate name, missing clan, ...).
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = e.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = 'Could not create "$name". Check your connection and retry.';
+      });
     }
+  }
 
-    // The clan header renders its communities from `GET /clans/:id`.
-    ref.invalidate(clanDetailProvider(parentClan));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '🛡️ Community "$name" founded successfully!',
-          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
-        ),
-        backgroundColor: TeritoryColors.emeraldGreen,
-      ),
+  Future<void> _createLive({
+    required String name,
+    required String description,
+    required List<String> interestTags,
+    required bool isPublic,
+    String? coverImageUrl,
+  }) {
+    return TeritoryRepository.instance.createCommunity(
+      name: name,
+      parentClanId: widget.clanId,
+      description: description,
+      interestTags: interestTags,
+      isPublic: isPublic,
+      coverImageUrl: coverImageUrl,
     );
-    Navigator.pop(context);
   }
 
   @override
@@ -172,6 +217,38 @@ class _CommunityCreateScreenState extends ConsumerState<CommunityCreateScreen> {
                   return null;
                 },
               ),
+              const SizedBox(height: 16),
+
+              // ── Cover Image ──
+              TextFormField(
+                controller: _coverController,
+                keyboardType: TextInputType.url,
+                style: GoogleFonts.plusJakartaSans(fontSize: 14),
+                decoration: InputDecoration(
+                  labelText: 'Cover image URL (optional)',
+                  helperText: 'Leave empty for a generated gradient cover',
+                  labelStyle: GoogleFonts.plusJakartaSans(
+                    color: TeritoryColors.textSecondary,
+                    fontSize: 14,
+                  ),
+                  helperStyle: GoogleFonts.plusJakartaSans(
+                    color: TeritoryColors.textSecondary,
+                    fontSize: 11,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: TeritoryColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                        color: TeritoryColors.communityIndigo, width: 1.5),
+                  ),
+                ),
+              ),
               const SizedBox(height: 20),
 
               // ── Interest Tags ──
@@ -252,23 +329,66 @@ class _CommunityCreateScreenState extends ConsumerState<CommunityCreateScreen> {
                 activeTrackColor: TeritoryColors.communityIndigo,
                 contentPadding: EdgeInsets.zero,
               ),
+              if (_error != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: TeritoryColors.expiredRed.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: TeritoryColors.expiredRed.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _error!,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          color: TeritoryColors.expiredRed,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _busy ? null : _createCommunity,
+                          child: Text(
+                            'Retry',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: TeritoryColors.primary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
 
               // ── Create Button ──
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _createCommunity,
+                  onPressed: _busy ? null : _createCommunity,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: TeritoryColors.primary,
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor:
+                        TeritoryColors.primary.withValues(alpha: 0.4),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                   child: Text(
-                    'Create Community',
+                    _busy ? 'Founding…' : 'Create Community',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,

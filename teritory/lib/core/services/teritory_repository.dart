@@ -12,7 +12,6 @@ import '../models/service_models.dart';
 import '../models/leaderboard_models.dart';
 import '../models/notification_models.dart';
 import 'api_service.dart';
-import 'mock_data_service.dart';
 
 class TeritoryRepository {
   static final TeritoryRepository _instance = TeritoryRepository._internal();
@@ -31,10 +30,10 @@ class TeritoryRepository {
   /// Signs in and returns the live profile. Errors propagate so the login
   /// screen can show the server message instead of failing silently.
   Future<User> loginWithOtp(String phone, String otp) async {
-    final res = await _api.post('/auth/verify-otp', body: {
-      'phone': phone,
-      'otp': otp,
-    });
+    final res = await _api.post(
+      '/auth/verify-otp',
+      body: {'phone': phone, 'otp': otp},
+    );
 
     if (res is! Map<String, dynamic> || res['accessToken'] == null) {
       throw ApiException('Sign-in failed: the server did not return a session');
@@ -57,21 +56,17 @@ class TeritoryRepository {
     return User.fromJson(res);
   }
 
-  Future<User> fetchMyProfile() async {
-    try {
-      return await fetchMyProfileOrThrow();
-    } catch (e) {
-      if (kDebugMode) print('⚠️ [TeritoryRepository.fetchMyProfile] Falling back to mock: $e');
-    }
-    return MockDataService.instance.currentUser;
-  }
-
   /// Revokes the refresh token server-side, then clears the local session.
   Future<void> logout() async {
     try {
-      await _api.post('/auth/logout', body: {'refreshToken': _api.refreshToken});
+      await _api.post(
+        '/auth/logout',
+        body: {'refreshToken': _api.refreshToken},
+      );
     } catch (e) {
-      if (kDebugMode) print('⚠️ [TeritoryRepository.logout] Server revoke failed: $e');
+      if (kDebugMode) {
+        print('⚠️ [TeritoryRepository.logout] Server revoke failed: $e');
+      }
     } finally {
       await _api.clearTokens();
     }
@@ -87,176 +82,6 @@ class TeritoryRepository {
       return res['isTripMode'] as bool;
     }
     throw ApiException('Unexpected response while updating trip mode');
-  }
-
-  // ─── CLANS ───────────────────────────────────────────────────────────
-
-  Future<List<Clan>> fetchClans() async {
-    try {
-      final res = await _api.get('/clans');
-      if (res is List) {
-        return res.map((e) => Clan.fromJson(e as Map<String, dynamic>)).toList();
-      }
-    } catch (e) {
-      if (kDebugMode) print('⚠️ [fetchClans] Falling back to mock: $e');
-    }
-    return MockDataService.instance.clans;
-  }
-
-  Future<Clan?> fetchClanById(String id) async {
-    try {
-      final res = await _api.get('/clans/$id');
-      if (res is Map<String, dynamic>) {
-        return Clan.fromJson(res);
-      }
-    } catch (e) {
-      if (kDebugMode) print('⚠️ [fetchClanById] Falling back to mock: $e');
-    }
-    return MockDataService.instance.clanById(id);
-  }
-
-  // ─── COMMUNITIES ─────────────────────────────────────────────────────
-
-  Future<List<Community>> fetchCommunities({String? clanId}) async {
-    try {
-      final res = await _api.get(
-        '/communities',
-        queryParams: clanId != null ? {'clanId': clanId} : null,
-      );
-      if (res is List) {
-        return res.map((e) => Community.fromJson(e as Map<String, dynamic>)).toList();
-      }
-    } catch (e) {
-      if (kDebugMode) print('⚠️ [fetchCommunities] Falling back to mock: $e');
-    }
-    return clanId != null
-        ? MockDataService.instance.communitiesByClan(clanId)
-        : MockDataService.instance.communities;
-  }
-
-  Future<Community?> fetchCommunityById(String id) async {
-    try {
-      final res = await _api.get('/communities/$id');
-      if (res is Map<String, dynamic>) {
-        return Community.fromJson(res);
-      }
-    } catch (e) {
-      if (kDebugMode) print('⚠️ [fetchCommunityById] Falling back to mock: $e');
-    }
-    return MockDataService.instance.communityById(id);
-  }
-
-  Future<List<CommunityMember>> fetchCommunityMembers(String id) async {
-    try {
-      final res = await _api.get('/communities/$id/members');
-      if (res is List) {
-        return res.map((e) {
-          final m = e as Map<String, dynamic>;
-          String uName = '';
-          String uAvatar = '';
-          if (m['user'] is Map) {
-            uName = m['user']['displayName'] as String? ?? '';
-            uAvatar = m['user']['avatarUrl'] as String? ?? '';
-          }
-          final roleStr = (m['role'] as String? ?? 'member').toLowerCase();
-          CommunityRole role = CommunityRole.member;
-          if (roleStr == 'creator') role = CommunityRole.creator;
-          if (roleStr == 'moderator') role = CommunityRole.moderator;
-
-          return CommunityMember(
-            id: m['id'] as String? ?? '',
-            communityId: m['communityId'] as String? ?? id,
-            userId: m['userId'] as String? ?? '',
-            userName: uName,
-            userAvatar: uAvatar,
-            role: role,
-            joinedAt: m['joinedAt'] != null
-                ? DateTime.parse(m['joinedAt'] as String)
-                : DateTime.now(),
-          );
-        }).toList();
-      }
-    } catch (e) {
-      if (kDebugMode) print('⚠️ [fetchCommunityMembers] Falling back to mock: $e');
-    }
-    return MockDataService.instance.communityMembers(id);
-  }
-
-  Future<List<CommunityMessage>> fetchCommunityMessages(String id) async {
-    try {
-      final res = await _api.get('/communities/$id/messages');
-      if (res is List) {
-        return res
-            .map((e) => CommunityMessage.fromJson(e as Map<String, dynamic>))
-            .toList();
-      }
-    } catch (e) {
-      if (kDebugMode) print('⚠️ [fetchCommunityMessages] Falling back to mock: $e');
-    }
-    return MockDataService.instance.messagesByCommunity(id);
-  }
-
-  Future<CommunityMessage?> sendCommunityMessage(String id, String text) async {
-    try {
-      final res = await _api.post('/communities/$id/messages', body: {'text': text});
-      if (res is Map<String, dynamic>) {
-        return CommunityMessage.fromJson(res);
-      }
-    } catch (e) {
-      if (kDebugMode) print('❌ [sendCommunityMessage] Error: $e');
-    }
-    return null;
-  }
-
-  // ─── TRIPS & PLANS ───────────────────────────────────────────────────
-
-  Future<List<TripPlan>> fetchProposedTripPlans() async {
-    try {
-      final res = await _api.get('/trips/hub');
-      if (res is Map<String, dynamic> && res['proposedPlans'] is List) {
-        return (res['proposedPlans'] as List)
-            .map((e) => TripPlan.fromJson(e as Map<String, dynamic>))
-            .toList();
-      }
-    } catch (e) {
-      if (kDebugMode) print('⚠️ [fetchProposedTripPlans] Falling back to mock: $e');
-    }
-    return MockDataService.instance.tripPlans;
-  }
-
-  Future<List<Trip>> fetchActiveTrips() async {
-    try {
-      final res = await _api.get('/trips/hub');
-      if (res is Map<String, dynamic> && res['activeTrip'] != null) {
-        return [Trip.fromJson(res['activeTrip'] as Map<String, dynamic>)];
-      }
-    } catch (e) {
-      if (kDebugMode) print('⚠️ [fetchActiveTrips] Falling back to mock: $e');
-    }
-    return MockDataService.instance.activeTrips
-        .where((t) => t.status == TripStatus.active)
-        .toList();
-  }
-
-  Future<Map<String, dynamic>?> validateWaypoint(
-    String tripId,
-    String waypointId,
-    double lat,
-    double lng,
-  ) async {
-    try {
-      final res = await _api.post('/trips/$tripId/validate-waypoint', body: {
-        'waypointId': waypointId,
-        'latitude': lat,
-        'longitude': lng,
-      });
-      if (res is Map<String, dynamic>) {
-        return res;
-      }
-    } catch (e) {
-      if (kDebugMode) print('❌ [validateWaypoint] Error: $e');
-    }
-    return null;
   }
 
   // ─── RANKINGS ────────────────────────────────────────────────────────
@@ -300,19 +125,99 @@ class TeritoryRepository {
     return MyRank.fromJson(res);
   }
 
-  // ─── RALLIES ─────────────────────────────────────────────────────────
+  // ─── LEGENDARY RALLIES (live-only, no mock fallback) ─────────────────
 
-  Future<List<LegendaryRally>> fetchRallies() async {
-    try {
-      final res = await _api.get('/rallies/nearby');
-      if (res is List) {
-        return res.map((e) => LegendaryRally.fromJson(e as Map<String, dynamic>)).toList();
-      }
-    } catch (e) {
-      if (kDebugMode) print('⚠️ [fetchRallies] Falling back to mock: $e');
+  Future<List<LegendaryRally>> fetchNearbyRallies({
+    double? latitude,
+    double? longitude,
+    double radiusKm = 100,
+  }) async {
+    final res = await _api.get(
+      '/rallies/nearby',
+      queryParams: {
+        if (latitude != null && longitude != null) 'lat': latitude,
+        if (latitude != null && longitude != null) 'lng': longitude,
+        if (latitude != null && longitude != null) 'radiusKm': radiusKm,
+      },
+    );
+    if (res is! List) {
+      throw ApiException('Unexpected response while loading rallies');
     }
-    return MockDataService.instance.rallies;
+    return res
+        .whereType<Map<String, dynamic>>()
+        .map(LegendaryRally.fromJson)
+        .toList();
   }
+
+  Future<RallyDetail> fetchRallyDetail(
+    String rallyId, {
+    double? latitude,
+    double? longitude,
+  }) async {
+    final res = await _api.get(
+      '/rallies/$rallyId',
+      queryParams: {
+        if (latitude != null && longitude != null) 'lat': latitude,
+        if (latitude != null && longitude != null) 'lng': longitude,
+      },
+    );
+    if (res is! Map<String, dynamic>) {
+      throw ApiException('Unexpected response while loading the rally');
+    }
+    return RallyDetail.fromJson(res);
+  }
+
+  Future<LegendaryRally> createRally({
+    required String name,
+    required String placeName,
+    required double latitude,
+    required double longitude,
+    String description = '',
+    int minParticipants = 2,
+    int expiresHours = 2,
+  }) async {
+    final res = await _api.post(
+      '/rallies',
+      body: {
+        'name': name,
+        'description': description,
+        'placeName': placeName,
+        'latitude': latitude,
+        'longitude': longitude,
+        'minParticipants': minParticipants,
+        'expiresHours': expiresHours,
+      },
+    );
+    if (res is! Map<String, dynamic>) {
+      throw ApiException('Unexpected response while creating the rally');
+    }
+    return LegendaryRally.fromJson(res);
+  }
+
+  Future<void> joinRally(String rallyId) async {
+    await _api.post('/rallies/$rallyId/join');
+  }
+
+  Future<RallyArrivalResult> markRallyArrival(
+    String rallyId, {
+    required double latitude,
+    required double longitude,
+  }) async {
+    final res = await _api.post(
+      '/rallies/$rallyId/arrive',
+      body: {'latitude': latitude, 'longitude': longitude},
+    );
+    if (res is! Map<String, dynamic>) {
+      throw ApiException('Unexpected response while checking your arrival');
+    }
+    return RallyArrivalResult.fromJson(res);
+  }
+
+  Future<void> completeRally(String rallyId) async {
+    await _api.post('/rallies/$rallyId/complete');
+  }
+
+  /// Legacy mock-fallback getter kept for the still-mock rally surfaces.
 
   // ─── SERVICES ────────────────────────────────────────────────────────
 
@@ -321,35 +226,36 @@ class TeritoryRepository {
   Future<List<ServiceProvider>> fetchGearProviders({
     double? latitude,
     double? longitude,
-  }) =>
-      _fetchServiceProviders(
-        '/services/gear',
-        latitude: latitude,
-        longitude: longitude,
-      );
+  }) => _fetchServiceProviders(
+    '/services/gear',
+    latitude: latitude,
+    longitude: longitude,
+  );
 
   /// Live `GET /services/nearby-food` (the API keeps a 10 km radius).
   Future<List<ServiceProvider>> fetchNearbyFoodProviders({
     double? latitude,
     double? longitude,
-  }) =>
-      _fetchServiceProviders(
-        '/services/nearby-food',
-        latitude: latitude,
-        longitude: longitude,
-      );
+  }) => _fetchServiceProviders(
+    '/services/nearby-food',
+    latitude: latitude,
+    longitude: longitude,
+  );
 
   Future<List<ServiceProvider>> _fetchServiceProviders(
     String path, {
     double? latitude,
     double? longitude,
   }) async {
-    final res = await _api.get(path, queryParams: {
-      if (latitude != null && longitude != null) ...{
-        'lat': latitude.toStringAsFixed(5),
-        'lng': longitude.toStringAsFixed(5),
+    final res = await _api.get(
+      path,
+      queryParams: {
+        if (latitude != null && longitude != null) ...{
+          'lat': latitude.toStringAsFixed(5),
+          'lng': longitude.toStringAsFixed(5),
+        },
       },
-    });
+    );
     if (res is! List) {
       throw ApiException('Unexpected response while loading nearby services');
     }
@@ -384,34 +290,27 @@ class TeritoryRepository {
 
   // ─── FRIENDS, SEARCH & INVITES ───────────────────────────────────────
 
+  /// Live-only people search. An empty query short-circuits locally; every
+  /// other outcome is the server's, including failures, which propagate as
+  /// [ApiException] so callers can show the real message.
   Future<List<User>> searchUsers(String query) async {
     if (query.trim().isEmpty) return [];
-    try {
-      final res = await _api.get('/users/search', queryParams: {'q': query.trim()});
-      if (res is List) {
-        return res.map((e) => User.fromJson(e as Map<String, dynamic>)).toList();
-      }
-    } catch (e) {
-      if (kDebugMode) print('❌ [searchUsers] Error: $e');
+    final res = await _api.get(
+      '/users/search',
+      queryParams: {'q': query.trim()},
+    );
+    if (res is! List) {
+      throw ApiException('Unexpected response while searching travellers');
     }
-    return [];
+    return res
+        .whereType<Map<String, dynamic>>()
+        .map(User.fromJson)
+        .toList();
   }
 
-  Future<bool> inviteFriends(List<String> targetUserIds, String type, String targetId) async {
-    try {
-      final res = await _api.post('/users/invites', body: {
-        'targetUserIds': targetUserIds,
-        'type': type,
-        'targetId': targetId,
-      });
-      return res != null;
-    } catch (e) {
-      if (kDebugMode) print('❌ [inviteFriends] Error: $e');
-    }
-    return false;
-  }
-
-  Future<Community?> createCommunity({
+  /// Founds a community. Returns the created row or throws [ApiException]
+  /// carrying the server's validation message so the create screen can show it.
+  Future<Community> createCommunity({
     required String name,
     required String parentClanId,
     String description = '',
@@ -419,23 +318,24 @@ class TeritoryRepository {
     bool isPublic = true,
     String? coverImageUrl,
   }) async {
-    try {
-      final res = await _api.post('/communities', body: {
+    final res = await _api.post(
+      '/communities',
+      body: {
         'name': name,
         'parentClanId': parentClanId,
         'description': description,
         'interestTags': interestTags,
         'isPublic': isPublic,
-        'coverImageUrl': coverImageUrl ??
-            'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600',
-      });
-      if (res is Map<String, dynamic>) {
-        return Community.fromJson(res);
-      }
-    } catch (e) {
-      if (kDebugMode) print('❌ [createCommunity] Error: $e');
+        // No stock default: an empty cover is rendered as a gradient by the UI,
+        // so every community does not share the same stock photo.
+        if (coverImageUrl != null && coverImageUrl.trim().isNotEmpty)
+          'coverImageUrl': coverImageUrl.trim(),
+      },
+    );
+    if (res is! Map<String, dynamic>) {
+      throw ApiException('Unexpected response while creating the community');
     }
-    return null;
+    return Community.fromJson(res);
   }
 
   /// Creates a flag. Failures propagate as [ApiException] so the drop-flag
@@ -454,19 +354,22 @@ class TeritoryRepository {
     String notes = '',
     String? photoUrl,
   }) async {
-    await _api.post('/flags', body: {
-      'placeName': placeName,
-      'city': city,
-      'country': country,
-      'countryCode': countryCode,
-      'continent': continent,
-      'latitude': latitude,
-      'longitude': longitude,
-      'isMajorFlag': isMajorFlag,
-      'category': category,
-      'notes': notes,
-      'photoUrl': photoUrl,
-    });
+    await _api.post(
+      '/flags',
+      body: {
+        'placeName': placeName,
+        'city': city,
+        'country': country,
+        'countryCode': countryCode,
+        'continent': continent,
+        'latitude': latitude,
+        'longitude': longitude,
+        'isMajorFlag': isMajorFlag,
+        'category': category,
+        'notes': notes,
+        'photoUrl': photoUrl,
+      },
+    );
   }
 
   // ─── EXPLORE MAP (live-only, no mock fallback) ───────────────────────
@@ -495,10 +398,24 @@ class TeritoryRepository {
       throw ApiException('Unexpected response while loading flags');
     }
 
-    return res
-        .whereType<Map<String, dynamic>>()
-        .map(ApiFlag.fromJson)
-        .toList();
+    return res.whereType<Map<String, dynamic>>().map(ApiFlag.fromJson).toList();
+  }
+
+  /// Hidden gems within 5 km of a point (`GET /flags/sub-territories`). The
+  /// server sorts by HIDDEN_GEM reactions, then distance, and returns
+  /// `distanceKm`/`hiddenGemCount` per row.
+  Future<List<ApiFlag>> fetchSubTerritories({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final res = await _api.get(
+      '/flags/sub-territories',
+      queryParams: {'lat': latitude, 'lng': longitude},
+    );
+    if (res is! List) {
+      throw ApiException('Unexpected response while loading sub-territories');
+    }
+    return res.whereType<Map<String, dynamic>>().map(ApiFlag.fromJson).toList();
   }
 
   Future<ApiFlagDetail> fetchFlagDetail(String flagId) async {
@@ -507,6 +424,39 @@ class TeritoryRepository {
       throw ApiException('Unexpected response while loading flag detail');
     }
     return ApiFlagDetail.fromJson(res);
+  }
+
+  /// Toggles saving a flag to the traveler's wishlist (`POST /flags/:id/save`).
+  Future<bool> toggleSaveFlag(String flagId) async {
+    final res = await _api.post('/flags/$flagId/save');
+    if (res is Map<String, dynamic> && res['isSaved'] is bool) {
+      return res['isSaved'] as bool;
+    }
+    throw ApiException('Unexpected response while saving this flag');
+  }
+
+  /// Loads flags saved to the traveler's wishlist (`GET /flags/saved`).
+  Future<List<ApiFlag>> fetchSavedFlags() async {
+    final res = await _api.get('/flags/saved');
+    if (res is! List) {
+      throw ApiException('Unexpected response while loading saved flags');
+    }
+    return res.whereType<Map<String, dynamic>>().map(ApiFlag.fromJson).toList();
+  }
+
+  /// Major wonders registry (`GET /flags/wonders`), derived server-side from
+  /// flags staked as major wonders. Live-only: no bundled catalogue exists.
+  Future<List<ApiWonder>> fetchWonders() async {
+    final res = await _api.get('/flags/wonders');
+    if (res is! List) {
+      throw ApiException(
+        'Unexpected response while loading the wonders registry',
+      );
+    }
+    return res
+        .whereType<Map<String, dynamic>>()
+        .map(ApiWonder.fromJson)
+        .toList();
   }
 
   /// Toggles an `EPIC` / `HIDDEN_GEM` / `GREAT_SHOT` reaction.
@@ -562,8 +512,7 @@ class TeritoryRepository {
       '/clans',
       queryParams: {
         if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
-        if (region != null && region.trim().isNotEmpty)
-          'region': region.trim(),
+        if (region != null && region.trim().isNotEmpty) 'region': region.trim(),
       },
     );
     if (res is! List) {
@@ -608,14 +557,17 @@ class TeritoryRepository {
     String interestTag = '',
     String? coverImageUrl,
   }) async {
-    final res = await _api.post('/clans', body: {
-      'name': name,
-      'description': description,
-      'region': region,
-      'interestTag': interestTag,
-      if (coverImageUrl != null && coverImageUrl.isNotEmpty)
-        'coverImageUrl': coverImageUrl,
-    });
+    final res = await _api.post(
+      '/clans',
+      body: {
+        'name': name,
+        'description': description,
+        'region': region,
+        'interestTag': interestTag,
+        if (coverImageUrl != null && coverImageUrl.isNotEmpty)
+          'coverImageUrl': coverImageUrl,
+      },
+    );
     if (res is! Map<String, dynamic>) {
       throw ApiException('Unexpected response while founding the clan');
     }
@@ -633,7 +585,8 @@ class TeritoryRepository {
   }
 
   Future<List<CommunityMember>> fetchCommunityMembersLive(
-      String communityId) async {
+    String communityId,
+  ) async {
     final res = await _api.get('/communities/$communityId/members');
     if (res is! List) {
       throw ApiException('Unexpected response while loading community members');
@@ -644,11 +597,12 @@ class TeritoryRepository {
         .toList();
   }
 
-  Future<List<CommunityActivity>> fetchCommunityFeed(
-      String communityId) async {
+  Future<List<CommunityActivity>> fetchCommunityFeed(String communityId) async {
     final res = await _api.get('/communities/$communityId/feed');
     if (res is! List) {
-      throw ApiException('Unexpected response while loading the community feed');
+      throw ApiException(
+        'Unexpected response while loading the community feed',
+      );
     }
     return res
         .whereType<Map<String, dynamic>>()
@@ -668,7 +622,8 @@ class TeritoryRepository {
   }
 
   Future<List<CommunityMessage>> fetchCommunityMessagesLive(
-      String communityId) async {
+    String communityId,
+  ) async {
     final res = await _api.get('/communities/$communityId/messages');
     if (res is! List) {
       throw ApiException('Unexpected response while loading messages');
@@ -680,7 +635,9 @@ class TeritoryRepository {
   }
 
   Future<CommunityMessage> sendCommunityMessageLive(
-      String communityId, String text) async {
+    String communityId,
+    String text,
+  ) async {
     final res = await _api.post(
       '/communities/$communityId/messages',
       body: {'text': text},
@@ -741,10 +698,7 @@ class TeritoryRepository {
     if (res is! List) {
       throw ApiException('Unexpected response while loading flags');
     }
-    return res
-        .whereType<Map<String, dynamic>>()
-        .map(ApiFlag.fromJson)
-        .toList();
+    return res.whereType<Map<String, dynamic>>().map(ApiFlag.fromJson).toList();
   }
 
   Future<List<ApiFriend>> fetchFriends() async {
@@ -801,6 +755,7 @@ class TeritoryRepository {
     String? country,
     String? state,
     String? district,
+    String? mapStyle,
     bool? isPrivate,
   }) async {
     final changes = <String, dynamic>{
@@ -811,6 +766,7 @@ class TeritoryRepository {
       'country': ?country,
       'state': ?state,
       'district': ?district,
+      'mapStyle': ?mapStyle,
       'isPrivate': ?isPrivate,
     };
 
@@ -819,6 +775,11 @@ class TeritoryRepository {
       throw ApiException('Unexpected response while saving your profile');
     }
     return ApiUser.fromJson(res);
+  }
+
+  /// Permanently deletes own traveler account (`DELETE /users/me`).
+  Future<void> deleteMyAccount() async {
+    await _api.delete('/users/me');
   }
 
   // ─── TRIPS (live-only, no mock fallback) ───────────────────────────
@@ -901,25 +862,39 @@ class TeritoryRepository {
     return ActiveTripDetail.fromJson(res, userId: userId);
   }
 
+  /// Joins an in-progress expedition (`POST /trips/:tripId/join`).
+  Future<void> joinActiveTrip(String tripId) async {
+    await _api.post('/trips/$tripId/join');
+  }
+
   Future<WaypointValidationResult> validateWaypointAt({
     required String tripId,
     required String waypointId,
     required double latitude,
     required double longitude,
   }) async {
-    final res = await _api.post('/trips/$tripId/validate-waypoint', body: {
-      'waypointId': waypointId,
-      'latitude': latitude,
-      'longitude': longitude,
-    });
+    final res = await _api.post(
+      '/trips/$tripId/validate-waypoint',
+      body: {
+        'waypointId': waypointId,
+        'latitude': latitude,
+        'longitude': longitude,
+      },
+    );
     if (res is! Map<String, dynamic>) {
       throw ApiException('Unexpected response while validating this waypoint');
     }
     return WaypointValidationResult.fromJson(res);
   }
 
-  Future<void> completeTrip(String tripId) async {
-    await _api.post('/trips/$tripId/complete');
+  /// Completes the trip and returns this traveler's badge (`FULL`, `PARTIAL`
+  /// or `NONE`) as evaluated by the server.
+  Future<String> completeTrip(String tripId) async {
+    final res = await _api.post('/trips/$tripId/complete');
+    if (res is Map<String, dynamic>) {
+      return res['myBadge'] as String? ?? 'NONE';
+    }
+    return 'NONE';
   }
 
   Future<List<TripPlan>> fetchSavedPlans() async {
@@ -945,16 +920,19 @@ class TeritoryRepository {
     int estimatedDays = 1,
     List<Map<String, dynamic>> waypoints = const [],
   }) async {
-    final res = await _api.post('/trips/plans', body: {
-      'name': name,
-      'description': description,
-      'originName': originName,
-      'destinationName': destinationName,
-      'communityId': ?communityId,
-      'totalDistanceKm': totalDistanceKm,
-      'estimatedDays': estimatedDays,
-      'waypoints': waypoints,
-    });
+    final res = await _api.post(
+      '/trips/plans',
+      body: {
+        'name': name,
+        'description': description,
+        'originName': originName,
+        'destinationName': destinationName,
+        'communityId': ?communityId,
+        'totalDistanceKm': totalDistanceKm,
+        'estimatedDays': estimatedDays,
+        'waypoints': waypoints,
+      },
+    );
     if (res is! Map<String, dynamic>) {
       throw ApiException('Unexpected response while creating this plan');
     }
@@ -984,12 +962,20 @@ class TeritoryRepository {
     required List<String> userIds,
     required String type,
     String? targetId,
+    String? title,
+    String? message,
   }) async {
-    final res = await _api.post('/users/invites', body: {
-      'targetUserIds': userIds,
-      'type': type,
-      'targetId': targetId,
-    });
+    final res = await _api.post(
+      '/users/invites',
+      body: {
+        'targetUserIds': userIds,
+        'type': type,
+        'targetId': targetId,
+        if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
+        if (message != null && message.trim().isNotEmpty)
+          'message': message.trim(),
+      },
+    );
     if (res is Map<String, dynamic> && res['invitedCount'] is int) {
       return res['invitedCount'] as int;
     }

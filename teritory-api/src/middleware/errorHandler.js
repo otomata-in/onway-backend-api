@@ -26,6 +26,11 @@ const errorHandler = (err, req, res, next) => {
     statusCode = 404;
     message = 'Requested record not found';
     code = 'NOT_FOUND';
+  } else if (err.code === 'P2003') {
+    // Prisma foreign key violation: the request referenced a missing record.
+    statusCode = 400;
+    message = 'A referenced record does not exist';
+    code = 'INVALID_REFERENCE';
   } else {
     console.error('Unhandled Server Error:', err);
   }

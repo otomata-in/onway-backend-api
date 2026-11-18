@@ -14,7 +14,12 @@ import '../../../core/theme/teritory_theme.dart';
 import '../application/trips_provider.dart';
 
 class TripPlannerScreen extends ConsumerStatefulWidget {
-  const TripPlannerScreen({super.key});
+  /// Opens the planner with a community already selected, so a community plan
+  /// is created against that community without a second picker step.
+  final String? communityId;
+  final String? communityName;
+
+  const TripPlannerScreen({super.key, this.communityId, this.communityName});
 
   @override
   ConsumerState<TripPlannerScreen> createState() => _TripPlannerScreenState();
@@ -36,6 +41,13 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
   /// Typical road day. Kept explicit so the ETA is a stated assumption rather
   /// than a number pulled out of the air.
   static const double _kmPerDay = 150;
+
+  @override
+  void initState() {
+    super.initState();
+    _communityId = widget.communityId;
+    _communityName = widget.communityName;
+  }
 
   @override
   void dispose() {
@@ -149,8 +161,10 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
     final origin = _origin;
     final destination = _destination;
     if (origin == null || destination == null) {
-      _toast('Pick an origin and a destination from flagged places.',
-          error: true);
+      _toast(
+        'Pick an origin and a destination from flagged places.',
+        error: true,
+      );
       return;
     }
 
@@ -312,10 +326,26 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
               children: [
                 ColorFiltered(
                   colorFilter: const ColorFilter.matrix([
-                    -0.20, -0.15, -0.30, 0.0, 140,
-                    -0.45, 0.20, -0.35, 0.0, 165,
-                    -0.55, 0.05, -0.05, 0.0, 185,
-                    0.0, 0.0, 0.0, 1.0, 0,
+                    -0.20,
+                    -0.15,
+                    -0.30,
+                    0.0,
+                    140,
+                    -0.45,
+                    0.20,
+                    -0.35,
+                    0.0,
+                    165,
+                    -0.55,
+                    0.05,
+                    -0.05,
+                    0.0,
+                    185,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                    0,
                   ]),
                   child: FlutterMap(
                     mapController: _mapController,
@@ -371,8 +401,10 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                                 decoration: BoxDecoration(
                                   color: TeritoryColors.rallyGold,
                                   shape: BoxShape.circle,
-                                  border:
-                                      Border.all(color: Colors.white, width: 2),
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2,
+                                  ),
                                 ),
                                 child: Center(
                                   child: Text(
@@ -399,7 +431,9 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                     left: 12,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E293B).withValues(alpha: 0.85),
                         borderRadius: BorderRadius.circular(20),
@@ -407,8 +441,11 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.route_rounded,
-                              color: TeritoryColors.tripRoute, size: 16),
+                          const Icon(
+                            Icons.route_rounded,
+                            color: TeritoryColors.tripRoute,
+                            size: 16,
+                          ),
                           const SizedBox(width: 6),
                           Text(
                             '~${_distanceKm.toStringAsFixed(1)} km',
@@ -460,8 +497,7 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                           label: 'Waypoints',
                           icon: Icons.add_location_alt_rounded,
                           isSelected: !_showDetailsForm,
-                          onTap: () =>
-                              setState(() => _showDetailsForm = false),
+                          onTap: () => setState(() => _showDetailsForm = false),
                         ),
                         const SizedBox(width: 8),
                         _ToggleChip(
@@ -504,8 +540,7 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                   : const Icon(Icons.save_rounded, size: 18),
               label: Text(
                 'Save Plan',
-                style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.w700),
+                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: TeritoryColors.primary,
@@ -547,13 +582,16 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                 return Container(
                   key: ValueKey('wp_${wp.name}_$index'),
                   margin: const EdgeInsets.only(right: 8),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: TeritoryColors.tripRoute.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                        color: TeritoryColors.tripRoute.withValues(alpha: 0.3)),
+                      color: TeritoryColors.tripRoute.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -582,8 +620,11 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                       const SizedBox(width: 4),
                       GestureDetector(
                         onTap: () => _removeWaypoint(index),
-                        child: const Icon(Icons.close_rounded,
-                            size: 16, color: TeritoryColors.textMuted),
+                        child: const Icon(
+                          Icons.close_rounded,
+                          size: 16,
+                          color: TeritoryColors.textMuted,
+                        ),
                       ),
                     ],
                   ),
@@ -671,17 +712,23 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                     child: ListTile(
                       dense: true,
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 2),
+                        horizontal: 12,
+                        vertical: 2,
+                      ),
                       leading: Container(
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color:
-                              TeritoryColors.rallyGold.withValues(alpha: 0.15),
+                          color: TeritoryColors.rallyGold.withValues(
+                            alpha: 0.15,
+                          ),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.place_rounded,
-                            color: TeritoryColors.rallyGold, size: 20),
+                        child: const Icon(
+                          Icons.place_rounded,
+                          color: TeritoryColors.rallyGold,
+                          size: 20,
+                        ),
                       ),
                       title: Text(
                         place.placeName,
@@ -692,9 +739,10 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                         ),
                       ),
                       subtitle: Text(
-                        [place.city, place.category]
-                            .where((part) => part.isNotEmpty)
-                            .join(' · '),
+                        [
+                          place.city,
+                          place.category,
+                        ].where((part) => part.isNotEmpty).join(' · '),
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 11,
                           color: TeritoryColors.textMuted,
@@ -705,11 +753,16 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                         child: Container(
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
-                            color: TeritoryColors.primary.withValues(alpha: 0.1),
+                            color: TeritoryColors.primary.withValues(
+                              alpha: 0.1,
+                            ),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.add_rounded,
-                              color: TeritoryColors.primary, size: 18),
+                          child: const Icon(
+                            Icons.add_rounded,
+                            color: TeritoryColors.primary,
+                            size: 18,
+                          ),
                         ),
                       ),
                     ),
@@ -741,7 +794,9 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
           TextField(
             controller: _nameController,
             style: GoogleFonts.plusJakartaSans(
-                fontSize: 14, fontWeight: FontWeight.w600),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
             decoration: InputDecoration(
               hintText: 'e.g. Western Ghats Ridge Run',
               hintStyle: GoogleFonts.plusJakartaSans(
@@ -754,8 +809,10 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -772,7 +829,9 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
             controller: _descController,
             maxLines: 3,
             style: GoogleFonts.plusJakartaSans(
-                fontSize: 14, fontWeight: FontWeight.w500),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
             decoration: InputDecoration(
               hintText: 'Describe the trek, terrain, and highlights...',
               hintStyle: GoogleFonts.plusJakartaSans(
@@ -803,21 +862,13 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                   label: 'Est. distance',
                   value: '~${_distanceKm.toStringAsFixed(0)} km',
                 ),
-                Container(
-                  width: 1,
-                  height: 40,
-                  color: TeritoryColors.border,
-                ),
+                Container(width: 1, height: 40, color: TeritoryColors.border),
                 _EstimateField(
                   icon: Icons.schedule_rounded,
                   label: 'Est. days',
                   value: '~$_estimatedDays',
                 ),
-                Container(
-                  width: 1,
-                  height: 40,
-                  color: TeritoryColors.border,
-                ),
+                Container(width: 1, height: 40, color: TeritoryColors.border),
                 _EstimateField(
                   icon: Icons.flag_rounded,
                   label: 'Stops',
@@ -849,16 +900,18 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
           GestureDetector(
             onTap: _pickCommunity,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               decoration: BoxDecoration(
                 color: TeritoryColors.surfaceContainer,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.groups_rounded,
-                      color: TeritoryColors.communityIndigo, size: 20),
+                  const Icon(
+                    Icons.groups_rounded,
+                    color: TeritoryColors.communityIndigo,
+                    size: 20,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -870,8 +923,10 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                       ),
                     ),
                   ),
-                  const Icon(Icons.chevron_right_rounded,
-                      color: TeritoryColors.textMuted),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: TeritoryColors.textMuted,
+                  ),
                 ],
               ),
             ),
@@ -942,8 +997,11 @@ class _PlaceField extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.unfold_more_rounded,
-                color: TeritoryColors.textMuted, size: 18),
+            const Icon(
+              Icons.unfold_more_rounded,
+              color: TeritoryColors.textMuted,
+              size: 18,
+            ),
           ],
         ),
       ),
@@ -965,10 +1023,7 @@ class _MapPin extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 3),
         boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.4),
-            blurRadius: 8,
-          ),
+          BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 8),
         ],
       ),
       child: Icon(icon, color: Colors.white, size: 18),
@@ -1018,8 +1073,10 @@ class _PlacePickerSheet extends StatelessWidget {
               itemBuilder: (context, index) {
                 final place = places[index];
                 return ListTile(
-                  leading: const Icon(Icons.place_rounded,
-                      color: TeritoryColors.tripRoute),
+                  leading: const Icon(
+                    Icons.place_rounded,
+                    color: TeritoryColors.tripRoute,
+                  ),
                   title: Text(
                     place.placeName,
                     style: GoogleFonts.plusJakartaSans(
@@ -1028,9 +1085,10 @@ class _PlacePickerSheet extends StatelessWidget {
                     ),
                   ),
                   subtitle: Text(
-                    [place.city, place.category]
-                        .where((part) => part.isNotEmpty)
-                        .join(' · '),
+                    [
+                      place.city,
+                      place.category,
+                    ].where((part) => part.isNotEmpty).join(' · '),
                     style: GoogleFonts.plusJakartaSans(fontSize: 11),
                   ),
                   onTap: () => Navigator.of(context).pop(place),
@@ -1090,8 +1148,10 @@ class _CommunityPickerSheet extends StatelessWidget {
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.person_rounded,
-                color: TeritoryColors.textSecondary),
+            leading: const Icon(
+              Icons.person_rounded,
+              color: TeritoryColors.textSecondary,
+            ),
             title: Text(
               'Personal plan',
               style: GoogleFonts.plusJakartaSans(
@@ -1099,9 +1159,9 @@ class _CommunityPickerSheet extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            onTap: () => Navigator.of(context).pop(
-              const _CommunityChoice(name: 'Personal plan'),
-            ),
+            onTap: () => Navigator.of(
+              context,
+            ).pop(const _CommunityChoice(name: 'Personal plan')),
           ),
           Flexible(
             child: ListView.builder(
@@ -1110,8 +1170,10 @@ class _CommunityPickerSheet extends StatelessWidget {
               itemBuilder: (context, index) {
                 final community = communities[index];
                 return ListTile(
-                  leading: const Icon(Icons.groups_rounded,
-                      color: TeritoryColors.communityIndigo),
+                  leading: const Icon(
+                    Icons.groups_rounded,
+                    color: TeritoryColors.communityIndigo,
+                  ),
                   title: Text(
                     community.name,
                     style: GoogleFonts.plusJakartaSans(
@@ -1164,20 +1226,18 @@ class _ToggleChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 16,
-                color: isSelected
-                    ? Colors.white
-                    : TeritoryColors.textSecondary),
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? Colors.white : TeritoryColors.textSecondary,
+            ),
             const SizedBox(width: 6),
             Text(
               label,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: isSelected
-                    ? Colors.white
-                    : TeritoryColors.textSecondary,
+                color: isSelected ? Colors.white : TeritoryColors.textSecondary,
               ),
             ),
           ],

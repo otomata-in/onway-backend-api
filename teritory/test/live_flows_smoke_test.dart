@@ -66,7 +66,9 @@ void main() {
         'communities ${detail.communities.length}');
   });
 
-  test('Communities: detail, members, feed, plans, chat send', () async {
+  test(
+    'Communities: detail, members, feed, plans, chat send',
+    () async {
     final communities = await repo.fetchCommunitiesLive();
     expect(communities, isNotEmpty, reason: 'seed communities');
     final community = communities.first;
@@ -99,7 +101,7 @@ void main() {
     print('community "${community.name}": members ${members.length}, '
         'feed ${feed.length}, plans ${plans.length}, '
         'messages ${history.length}->${after.length}');
-  });
+  }, timeout: const Timeout(Duration(minutes: 2)));
 
   test('Trips: hub, plan detail, active trip, history, saved', () async {
     final hub = await repo.fetchTripsHub();
@@ -130,7 +132,7 @@ void main() {
         'waypoints ${tracker.waypoints.length}, validated '
         '${tracker.validatedWaypointIds.length}, saved ${saved.length}, '
         'history ${history.length}');
-  });
+  }, timeout: const Timeout(Duration(minutes: 2)));
 
   test('Rankings: board, week window, my rank', () async {
     final board = await repo.fetchLeaderboard();
@@ -148,7 +150,7 @@ void main() {
     print('rankings: ${board.length} rows, leader ${board.first.userId} '
         '(${board.first.compositeScore}), me rank ${me.globalRank} '
         'score ${me.score}');
-  });
+  }, timeout: const Timeout(Duration(minutes: 2)));
 
   test('Profile & social: me, friends, requests, search, profiles', () async {
     final me = await repo.fetchMyProfileLive();
@@ -290,6 +292,28 @@ void main() {
     print('socket: new_message received from ${message.userName} '
         'in ${community.name}');
   }, timeout: const Timeout(Duration(minutes: 3)));
+
+  test('Wishlist: toggle save flag, list saved flags', () async {
+    final flags = await repo.fetchExploreFlags(
+      latitude: 9.97,
+      longitude: 76.28,
+      radiusKm: 100,
+    );
+    expect(flags, isNotEmpty);
+    final targetFlag = flags.first;
+
+    final isSaved = await repo.toggleSaveFlag(targetFlag.id);
+    expect(isSaved, isTrue);
+
+    final savedList = await repo.fetchSavedFlags();
+    expect(savedList.any((f) => f.id == targetFlag.id), isTrue);
+
+    final isSavedAfter = await repo.toggleSaveFlag(targetFlag.id);
+    expect(isSavedAfter, isFalse);
+
+    // ignore: avoid_print
+    print('wishlist: saved flag ${targetFlag.placeName}, verified list count ${savedList.length}, toggled back');
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }
 
 Future<bool> _waitFor(
