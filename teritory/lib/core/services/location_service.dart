@@ -31,9 +31,9 @@ class MapLocation {
     this.isStale = false,
   });
 
-  /// Kochi — the same centre the explore query used before device location.
-  static const double fallbackLat = 9.9790;
-  static const double fallbackLng = 76.2760;
+  /// Kazhakkoottam, Thiruvananthapuram — home base for testing & exploration.
+  static const double fallbackLat = 8.5686;
+  static const double fallbackLng = 76.8731;
 
   static const MapLocation fallback = MapLocation(
     coordinates: LatLng(fallbackLat, fallbackLng),

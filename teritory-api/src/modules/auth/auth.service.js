@@ -27,8 +27,16 @@ const generateTokens = async (userId, handle) => {
   return { accessToken, refreshToken: rawRefreshToken };
 };
 
+const normalizePhone = (phone) => {
+  if (!phone) return '';
+  const trimmed = phone.trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length === 10) return `+91${digits}`;
+  return `+${digits}`;
+};
+
 const sendOtp = async (phone) => {
-  const cleanPhone = phone.trim();
+  const cleanPhone = normalizePhone(phone);
   const testOtp = '12345'; // Development bypass OTP to cut SMS provider costs
 
   // Cache in redis/memory for 5 minutes
@@ -41,7 +49,7 @@ const sendOtp = async (phone) => {
 };
 
 const verifyOtp = async (phone, otp) => {
-  const cleanPhone = phone.trim();
+  const cleanPhone = normalizePhone(phone);
   const cachedOtp = await redis.get(`otp:${cleanPhone}`);
 
   // Allow '12345' (or legacy 123456) as static dev bypass in non-production, or match cached OTP
@@ -53,7 +61,13 @@ const verifyOtp = async (phone, otp) => {
 
   // Find or create user
   let user = await prisma.user.findFirst({
-    where: { phone: cleanPhone },
+    where: {
+      OR: [
+        { phone: cleanPhone },
+        { phone: phone.trim() },
+        { phone: phone.replace(/\s+/g, '') },
+      ],
+    },
   });
 
   let isNewUser = false;

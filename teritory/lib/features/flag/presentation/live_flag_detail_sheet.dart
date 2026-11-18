@@ -252,6 +252,12 @@ class _LiveFlagDetailSheetState extends ConsumerState<LiveFlagDetailSheet> {
                           ),
                         ),
                       ),
+                      IconButton(
+                        tooltip: 'Share spot',
+                        icon: const Icon(Icons.share_outlined, size: 20),
+                        color: TeritoryColors.textSecondary,
+                        onPressed: () => _shareSpot(flag),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
