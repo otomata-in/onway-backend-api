@@ -50,5 +50,7 @@ services:
         value: "500"
       - key: SUB_TERITORY_RADIUS_METERS
         value: "5000"
+      - key: ALLOW_DEV_OTP
+        value: "true"
 
 

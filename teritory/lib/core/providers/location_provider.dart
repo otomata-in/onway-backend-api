@@ -5,24 +5,19 @@ import '../services/location_service.dart';
 /// Single source of truth for "where am I" across the map: the pulsing pin, the
 /// explore query centre, Sub-Spots and the services sheet all read this.
 ///
-/// Emits without waiting on GPS:
-///  1. a cached device position when one exists (`isStale`), else
-///     [MapLocation.resolving] — the labelled fallback centre;
-///  2. the fresh device fix (or a labelled failure) once the lookup completes.
+/// Emits the cached position first when there is one, then every device fix from
+/// the position stream (at most once per [LocationService.distanceFilterMeters]),
+/// or one labelled fallback if location cannot be provided at all. Until the
+/// first value arrives the map shows its own default centre and a loading
+/// banner — it never waits on a GPS fix to draw something.
 ///
-/// Consumers that `watch` the provider re-run on the second value, so pins load
-/// immediately and are replaced with ones from the traveller's actual position.
+/// Consumers react to each value, so the pin follows while the app is open. The
+/// map screen moves its camera once per new position, and the explore query only
+/// re-runs when the centre has moved far enough to matter (see
+/// `ExploreFlagsNotifier`).
 ///
-/// `ref.invalidate(mapLocationProvider)` asks for a fresh fix (recenter button,
-/// permission granted, backgrounded too long).
-final mapLocationProvider = StreamProvider<MapLocation>((ref) async* {
-  // Reading the cache is a fast platform call, so it is safe to await — but it
-  // is bounded just in case a platform leaves the call hanging, and the first
-  // value must never wait on the GPS itself.
-  final cached = await LocationService.instance
-      .lastKnown()
-      .timeout(const Duration(milliseconds: 750), onTimeout: () => null);
-
-  yield cached ?? MapLocation.resolving;
-  yield await LocationService.instance.resolve();
+/// `ref.invalidate(mapLocationProvider)` restarts the stream: a fresh cached
+/// read, a fresh permission check and a fresh subscription.
+final mapLocationProvider = StreamProvider<MapLocation>((ref) {
+  return LocationService.instance.watch();
 });

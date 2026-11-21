@@ -87,12 +87,13 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
         ? location!.coordinates
         : null;
 
-    if (coordinates == null && location?.isResolving == true) {
-      // The lookup is still running; do not turn that into a failure dialog.
+    if (coordinates == null && (location == null || location.isStale)) {
+      // No fresh fix yet — still acquiring, or only a cached position. This is
+      // not a failure, so do not open the map-centre dialog.
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Still finding your location — try again in a moment.',
+            'Waiting for a fresh location fix — try again in a moment.',
             style: GoogleFonts.plusJakartaSans(),
           ),
         ),
@@ -159,7 +160,7 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
   /// fix is on its way. It never says "map centre" when a real position is in use.
   Widget _buildLocationNotice(MapLocation location) {
     final label = location.isStale
-        ? '${location.notice ?? 'Using a cached position'} — updating…'
+        ? (location.notice ?? 'Using a cached position')
         : '${location.notice ?? 'No fix'} — showing map centre';
 
     return Padding(
@@ -248,9 +249,22 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
     final currentUserId = ref.watch(currentUserProvider).id;
     final isTripMode =
         ref.watch(myProfileProvider).valueOrNull?.isTripMode ?? false;
-    final live =
+    // Keeping the previous payload during a re-query is what stops the pins
+    // flickering. The radius filter is what stops them showing another city: a
+    // payload loaded for an older centre keeps only the flags that still lie
+    // inside the query radius of where the traveller is now.
+    final raw =
         exploreAsync.valueOrNull ??
         const ExploreFlagsData(flags: [], friendIds: <String>{});
+    final live = ExploreFlagsData(
+      flags: [
+        for (final flag in raw.flags)
+          if (distanceMeters(center, flag.coordinates) <=
+              ExploreFlagsNotifier.radiusKm * 1000)
+            flag,
+      ],
+      friendIds: raw.friendIds,
+    );
 
     // Filters run against live flags only; ownership and friendship are server
     // facts, not bundled sample data.

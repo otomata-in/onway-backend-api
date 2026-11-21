@@ -1,7 +1,7 @@
 const prisma = require('../../config/prisma');
 const ApiResponse = require('../../utils/ApiResponse');
 const ApiError = require('../../utils/ApiError');
-const { haversineDistanceMeters, haversineDistanceKm } = require('../../utils/geo');
+const { haversineDistanceMeters, haversineDistanceKm, getBoundingBox } = require('../../utils/geo');
 const { notify } = require('../notifications/notifications.service');
 
 // Major wonders registry — derived from the major flags travelers have staked.
@@ -85,7 +85,15 @@ const exploreFlags = async (req, res, next) => {
       where.userId = userId;
     }
 
-    const allFlags = await prisma.flag.findMany({
+    // High performance SQL bounding box filter using @@index([latitude, longitude])
+    if (!isNaN(centerLat) && !isNaN(centerLng)) {
+      const radius = parseFloat(radiusKm) || 50;
+      const box = getBoundingBox(centerLat, centerLng, radius);
+      where.latitude = { gte: box.minLat, lte: box.maxLat };
+      where.longitude = { gte: box.minLng, lte: box.maxLng };
+    }
+
+    const flags = await prisma.flag.findMany({
       where,
       include: {
         user: {
@@ -97,10 +105,10 @@ const exploreFlags = async (req, res, next) => {
       },
     });
 
-    // If center coordinates supplied, filter by radius
+    // If center coordinates supplied, refine with exact Haversine distance and sort
     if (!isNaN(centerLat) && !isNaN(centerLng)) {
-      const radiusMeters = parseFloat(radiusKm) * 1000;
-      const filtered = allFlags
+      const radiusMeters = (parseFloat(radiusKm) || 50) * 1000;
+      const filtered = flags
         .map((f) => {
           const distanceM = haversineDistanceMeters(centerLat, centerLng, f.latitude, f.longitude);
           return { ...f, distanceKm: Math.round((distanceM / 1000) * 10) / 10 };
@@ -111,7 +119,7 @@ const exploreFlags = async (req, res, next) => {
       return ApiResponse.success(res, filtered);
     }
 
-    return ApiResponse.success(res, allFlags);
+    return ApiResponse.success(res, flags);
   } catch (err) {
     next(err);
   }
@@ -128,9 +136,15 @@ const getSubTerritories = async (req, res, next) => {
       throw ApiError.badRequest('Latitude and longitude required');
     }
 
+    const radiusMeters = parseInt(process.env.SUB_TERITORY_RADIUS_METERS, 10) || 5000;
+    const radiusKm = radiusMeters / 1000;
+    const box = getBoundingBox(centerLat, centerLng, radiusKm);
+
     const flags = await prisma.flag.findMany({
       where: {
         isMajorFlag: false,
+        latitude: { gte: box.minLat, lte: box.maxLat },
+        longitude: { gte: box.minLng, lte: box.maxLng },
       },
       include: {
         reactions: true,
@@ -159,6 +173,9 @@ const getSubTerritories = async (req, res, next) => {
 };
 
 // Drop Flag
+const MAX_FLAGS_PER_HOUR = 30;
+const DUPLICATE_FLAG_RADIUS_METERS = 25;
+
 const dropFlag = async (req, res, next) => {
   try {
     const {
@@ -175,52 +192,110 @@ const dropFlag = async (req, res, next) => {
       photoUrl,
     } = req.body;
 
-    if (!placeName || latitude === undefined || longitude === undefined) {
-      throw ApiError.badRequest('Place name, latitude and longitude are required');
+    const name = typeof placeName === 'string' ? placeName.trim() : '';
+    if (!name || name.length > 120) {
+      throw ApiError.badRequest('Place name is required (max 120 characters)');
     }
 
-    const flag = await prisma.flag.create({
-      data: {
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lng) > 180
+    ) {
+      throw ApiError.badRequest('Latitude and longitude must be valid coordinates');
+    }
+
+    // A flag carries ranking points, stamps and territory, so it must not be
+    // possible to farm them with a script: one flag per spot, a modest rate, and
+    // only real coordinates.
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const flagsLastHour = await prisma.flag.count({
+      where: { userId: req.user.id, createdAt: { gte: hourAgo } },
+    });
+    if (flagsLastHour >= MAX_FLAGS_PER_HOUR) {
+      throw ApiError.tooManyRequests(
+        `You can stake at most ${MAX_FLAGS_PER_HOUR} flags an hour.`
+      );
+    }
+
+    const box = getBoundingBox(lat, lng, 0.1);
+    const nearby = await prisma.flag.findMany({
+      where: {
         userId: req.user.id,
-        placeName,
-        city: city || '',
-        country,
-        countryCode,
-        continent,
-        latitude: parseFloat(latitude),
-        longitude: parseFloat(longitude),
-        isMajorFlag: Boolean(isMajorFlag),
-        category,
-        notes,
-        photoUrl,
+        latitude: { gte: box.minLat, lte: box.maxLat },
+        longitude: { gte: box.minLng, lte: box.maxLng },
       },
+      select: { placeName: true, latitude: true, longitude: true },
     });
+    const duplicate = nearby.find(
+      (f) =>
+        haversineDistanceMeters(lat, lng, f.latitude, f.longitude) <=
+        DUPLICATE_FLAG_RADIUS_METERS
+    );
+    if (duplicate) {
+      throw ApiError.conflict(
+        `You already staked this spot${
+          duplicate.placeName ? ` ("${duplicate.placeName}")` : ''
+        }.`
+      );
+    }
 
-    // Update user stats
-    const userFlags = await prisma.flag.count({ where: { userId: req.user.id } });
-    const majorCount = await prisma.flag.count({ where: { userId: req.user.id, isMajorFlag: true } });
+    // `Boolean('false')` is true, so parse the flag rather than trusting truthiness.
+    const major = isMajorFlag === true || isMajorFlag === 'true';
 
-    await prisma.user.update({
-      where: { id: req.user.id },
-      data: {
-        totalFlags: userFlags,
-        majorFlags: majorCount,
-      },
+    // Counts and the first-flag stamp move with the flag itself, in one batched
+    // transaction, so a failure cannot leave a flag the profile does not count.
+    const existingFlags = await prisma.flag.count({
+      where: { userId: req.user.id },
     });
+    const existingMajor = await prisma.flag.count({
+      where: { userId: req.user.id, isMajorFlag: true },
+    });
+    const totalFlags = existingFlags + 1;
+    const majorFlags = existingMajor + (major ? 1 : 0);
 
-    // Award first flag stamp if milestone
-    if (userFlags === 1) {
-      await prisma.passportStamp.create({
+    const [flag] = await prisma.$transaction([
+      prisma.flag.create({
         data: {
           userId: req.user.id,
-          title: 'First Flag Dropped',
-          category: 'Milestone',
-          date: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-          badgeColor: '#10B981',
-          icon: 'flag',
+          placeName: name,
+          city: city || '',
+          country,
+          countryCode,
+          continent,
+          latitude: lat,
+          longitude: lng,
+          isMajorFlag: major,
+          category,
+          notes,
+          photoUrl,
         },
-      });
-    }
+      }),
+      prisma.user.update({
+        where: { id: req.user.id },
+        data: { totalFlags, majorFlags },
+      }),
+      ...(totalFlags === 1
+        ? [
+            prisma.passportStamp.create({
+              data: {
+                userId: req.user.id,
+                title: 'First Flag Dropped',
+                category: 'Milestone',
+                date: new Date().toLocaleDateString('en-US', {
+                  month: 'short',
+                  year: 'numeric',
+                }),
+                badgeColor: '#10B981',
+                icon: 'flag',
+              },
+            }),
+          ]
+        : []),
+    ]);
 
     return ApiResponse.created(res, flag, 'Flag dropped successfully!');
   } catch (err) {

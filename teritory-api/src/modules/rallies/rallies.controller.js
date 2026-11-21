@@ -1,7 +1,7 @@
 const prisma = require('../../config/prisma');
 const ApiResponse = require('../../utils/ApiResponse');
 const ApiError = require('../../utils/ApiError');
-const { haversineDistanceMeters } = require('../../utils/geo');
+const { haversineDistanceMeters, getBoundingBox } = require('../../utils/geo');
 const { notify } = require('../notifications/notifications.service');
 
 const createRally = async (req, res, next) => {
@@ -48,8 +48,17 @@ const getNearbyRallies = async (req, res, next) => {
     const centerLat = parseFloat(lat);
     const centerLng = parseFloat(lng);
 
+    const where = { status: { in: ['GATHERING', 'ACTIVE'] } };
+
+    if (!isNaN(centerLat) && !isNaN(centerLng)) {
+      const radius = parseFloat(radiusKm) || 100;
+      const box = getBoundingBox(centerLat, centerLng, radius);
+      where.latitude = { gte: box.minLat, lte: box.maxLat };
+      where.longitude = { gte: box.minLng, lte: box.maxLng };
+    }
+
     const rallies = await prisma.legendaryRally.findMany({
-      where: { status: { in: ['GATHERING', 'ACTIVE'] } },
+      where,
       include: {
         host: { select: { id: true, displayName: true, avatarUrl: true } },
         participants: { include: { user: { select: { id: true, displayName: true, avatarUrl: true } } } },

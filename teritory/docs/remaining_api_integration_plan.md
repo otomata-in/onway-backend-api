@@ -16,7 +16,7 @@
 |---|---|
 | HTTP client | `TeritoryApiService` — token in `SharedPreferences`, 15 s timeout, unwraps `body['data']`, throws `ApiException` |
 | Repository | 30+ live methods; **every `MockDataService` fallback is gone (§16)** and no method swallows its errors any more — `searchUsers`/`createCommunity` throw (§18) |
-| Location | **Live device fix via `geolocator`** (§19); the map centre, explore radius, Sub-Spots and services all use `mapLocationProvider`, with a labelled Kochi fallback when no fix exists. The map queries immediately and re-queries when the fix lands (§20.1) |
+| Location | **Live device fix via `geolocator`** (§19); the map centre, explore radius, Sub-Spots and services all use `mapLocationProvider`. It loads from the cached position first, else the labelled fallback, then re-queries on the fresh fix (§20.1, §21) |
 | Session | Access/refresh tokens in the platform keystore via `flutter_secure_storage`, with a one-time migration from preferences (§20.2) |
 | State | Live pages use `FutureProvider`/`AsyncNotifier` with loading / empty / error+retry; no mock-seeded provider remains (§16–§17) |
 | Auth | **Live.** `/login` (phone + OTP), access **and refresh** tokens in `SharedPreferences`, silent 401 → refresh + one retry, logout revokes server-side |
@@ -341,7 +341,8 @@ Overall: **~92% of surfaces wired**; **61 / 70 endpoints are reachable from a sc
 **Environment**: `teritory-api` on `:4000` against the Neon seed DB.
 The shell environment exports `PORT=0`, which `dotenv` does not override, so `npm start`
 silently binds an ephemeral port; the server was started as
-`PORT=4000 node src/server.js`. Seeded data: 5 travelers, 2 clans, 2 communities,
+`ALLOW_DEV_OTP=true PORT=4000 node src/server.js` (§25 — without the flag the API now refuses to
+mint an OTP). Seeded data: 5 travelers, 2 clans, 2 communities,
 2 flags within 100 km of Kochi, 3 trip plans, 1 active trip with 5 waypoints,
 1 incoming friend request, 0 notifications, 1 rally, 2 gear providers.
 
@@ -1017,6 +1018,187 @@ repository.
 
 ---
 
+## 21. Cached position first, then the fix — 18 Nov 2026
+
+### 21.1 What was still wrong
+
+- §20.1 stopped the *GPS fix* from blocking the first query, but the first emission was always
+  `MapLocation.resolving` — i.e. the **fallback map centre** — even when the device already had a
+  cached position from a previous run. So a traveller reopening the app in another city still saw
+  Kochi flags until GPS answered, and the notice pill was hidden for that whole window.
+- Users are not asked for permission until `resolve()` runs, so the cached read had to be
+  permission-checked independently and must never prompt.
+
+### 21.2 What changed
+
+- `LocationService.lastKnown()` reads `Geolocator.getLastKnownPosition()` when permission was
+  already granted. It never prompts, never throws, and returns `null` when there is no cache or no
+  plugin.
+- `mapLocationProvider` now yields the cached position when there is one, else `MapLocation.resolving`
+  (the labelled fallback), and then the fresh fix. The cache read is bounded with a 750 ms timeout so
+  a hanging platform call cannot delay the map either.
+- `MapLocation` gained `isStale` and a `MapLocation.lastKnown(...)` factory: a cached position is a
+  real device position (`isDeviceLocation: true`, so nothing claims "map centre") but is marked
+  stale, and it is replaced by the fresh fix seconds later.
+- `ExploreFlagsNotifier` remembers the last completed centre/payload and returns it when the
+  provider re-emits effectively the same place (`< 0.0001°`), so a cached → fresh handoff at the same
+  spot does not spend a second request; a genuinely different centre still re-queries.
+- The notice pill is now a `_buildLocationNotice` helper with two honest texts:
+  `<reason> — showing map centre` when the fallback centre is actually in use (including while the
+  GPS lookup is still running, since that is exactly what the pins come from), and
+  `Using your last known location — updating…` when a cached position is in use. It never says
+  "map centre" while a device position is being shown.
+- Writing is stricter than reading: dropping a flag still requires a **non-stale** fix, so the cached
+  position never becomes flag coordinates; while a lookup is in flight the action says
+  `Still finding your location — try again in a moment` instead of opening the failure dialog.
+
+### 21.3 Verification
+
+- `flutter analyze` → **No issues found**.
+- `flutter test test/location_service_test.dart test/widget_test.dart test/preferences_test.dart test/community_create_error_test.dart`
+  → 8/8 passed. The new `location_service_test.dart` pins the contract: cached positions are device
+  positions but stale and never claim the map centre; the fallback is not a device position; and
+  `lastKnown()` returns `null` instead of throwing on a host without the geolocator plugin (observed:
+  `MissingPluginException` logged, `null` returned).
+- Live against `:4000`: the `Explore: flags, detail, user footprint` and `Clans: list, membership,
+  detail, communities` cases pass standalone (explore: 2 flags, footprint 3). The **full** suite does
+  not currently pass for two reasons unrelated to this change: (a) its `seed active trip` assertion
+  now fails because the only `ACTIVE` trip belongs to `u_akhil` — earlier live runs consumed the
+  seeded trip for `u1` (the documented "live tests mutate the shared dev DB" side effect); (b) cold
+  dev-database latency reached **22 s** on `GET /clans/my`, above the client's 15 s request timeout,
+  which timed out the planner and wishlist cases in that run.
+- **Not verified:** no device/emulator run, so the real cached-position → fresh-fix handoff, the
+  single-recentre behaviour and the two pill texts were compiled and analyzed but not observed. Note
+  the live smoke tests call the repository directly, so they do not exercise the provider/banner
+  wiring either way.
+
+---
+
+## 22. Live position stream instead of a one-shot resolve — 18 Nov 2026
+
+### 22.1 `LocationService.watch()` replaces `resolve()`
+
+- `resolve()` (one `getCurrentPosition`, then stop) is gone. `LocationService.watch()` is a stream
+  that emits:
+  1. immediately — the cached position when there is one (bounded 750 ms read, `isStale`), else
+     `MapLocation.resolving` (the labelled fallback centre);
+  2. every device fix from `Geolocator.getPositionStream(...)`, at most once per
+     `LocationService.distanceFilterMeters = 50`;
+  3. a labelled fallback and then closes when location cannot be provided (web build, no plugin,
+     service off, permission denied/blocked).
+- The stream keeps the banner truthful in the two awkward cases: 45 s of silence after a cached fix
+  re-emits that position as `staleWith('No fresh fix yet')` (so it stops claiming "updating…"
+  forever), and a stream that dies after real fixes re-emits the cached position as
+  `staleWith('Location updates stopped')` instead of snapping the map back to Kochi or freezing the
+  pin silently.
+- `mapLocationProvider` is now just `StreamProvider((ref) => LocationService.instance.watch())`. The
+  provider stays alive while the map is mounted; `ref.invalidate` restarts the stream (fresh cached
+  read, fresh permission check, fresh subscription) for the banner's `Retry`.
+
+### 22.2 Query throttling — following without hammering the API
+
+- `ExploreFlagsNotifier` no longer compares coordinates for near-equality; it keeps the last query
+  centre and only re-queries when `distanceMeters(lastCenter, center) >= requeryMeters` (2 km, about
+  a neighbourhood). Movement below that returns the previous payload, so a 50 m position update does
+  not cost a request while the pin still moves.
+- `distanceMeters()` is a top-level haversine helper in `explore_flags_provider.dart`, testable
+  without a device.
+- `subSpotsProvider` (5 km shelf) snaps its centre to a ~1 km grid for the same reason: it follows
+  the traveller without re-firing on every step.
+- The map camera still recentres only for the first position (cached or live) and once when a fresh
+  fix replaces a cached one — it does not chase the traveller and fight their panning.
+
+### 22.3 Verification
+
+- `flutter analyze` → **No issues found**.
+- `flutter test test/location_service_test.dart` → 6/6 passed, including: the stream's first value
+  never waits for a fix; a fallback always carries a notice; a stale re-emission keeps the cached
+  coordinates; and `distanceMeters` is below `requeryMeters` across the street but above it in the
+  next district.
+- `flutter test test/widget_test.dart test/preferences_test.dart test/community_create_error_test.dart`
+  → 4/4 passed.
+- **Not verified:** no device/emulator run, so the stream itself (permission prompt, 50 m filter,
+  moving pin, camera behaviour) and battery impact were not observed; the live smoke tests bypass the
+  provider, so they do not cover this wiring.
+- On this Linux test host the plugin is absent, and the stream behaves as designed: it emits the
+  resolving value, logs `MissingPluginException`, emits the labelled fallback and closes.
+
+### 22.4 Still open
+
+- No app-lifecycle handling: the subscription is dropped only when the map is disposed, not when the
+  app is backgrounded; iOS pauses updates on its own, Android keeps the listener registered.
+- Location updates are foreground-only (no background service / `foregroundNotificationConfig`).
+
+---
+
+## 23. Offline proof of the location → explore contract — 18 Nov 2026
+
+### 23.1 The one seam added
+
+- `explore_flags_provider.dart` now declares `ExploreDataSource` (`fetchExploreFlags`, `fetchFriendIds`)
+  with a `LiveExploreDataSource` that delegates to `TeritoryRepository.instance`, exposed as
+  `exploreDataSourceProvider`. `ExploreFlagsNotifier._load()` reads that provider instead of naming
+  the singleton; production behaviour is unchanged (default is the live data source).
+- Location needed no new seam: `mapLocationProvider` is already a `StreamProvider`, so a test can
+  override it with a controlled stream.
+
+### 23.2 `test/explore_location_query_test.dart`
+
+- **"queries the map centre immediately, before any position arrives"** — with no position event at
+  all, the first query is already in flight and used the fallback centre coordinates, proving the
+  map does not wait for a GPS fix.
+- **"a first cached position replaces the fallback with one query"** — a cached position emitted
+  before any fix (the value `LocationService.watch()` leads with) causes exactly one more query, with
+  the cached coordinates.
+- **"the fresh fix costs at most one extra query, never one per update"** — a GPS fix next to the
+  cached position adds **no** query; a fix in another district adds exactly **one**; the near update
+  after it adds **nothing**. This pins the 2 km `requeryMeters` gate from §22.2.
+- Both seams are overridden, so no HTTP request and no location plugin is involved; the fake data
+  source returns empty flag lists and empty friend ids.
+
+### 23.3 Verification
+
+- `flutter analyze` → **No issues found**.
+- `flutter test test/explore_location_query_test.dart` → 3/3 passed.
+- `flutter test test/explore_location_query_test.dart test/location_service_test.dart test/widget_test.dart test/preferences_test.dart test/community_create_error_test.dart`
+  → 14/14 passed offline.
+- No new production behaviour to verify on a device: the only production change is reading the data
+  source from a provider whose default value is the existing repository.
+
+---
+
+## 24. Review of the location flow — 18 Nov 2026
+
+### 24.1 What the review found
+
+| Finding | Verdict |
+|---|---|
+| **The query guard keyed on data, not on the query.** `build()` required `_lastData != null` before it would reuse a result, so a position arriving *while a query was in flight* fell through and fired another request — the exact case that happens when the fallback query is still running and the cached position lands. | **Fixed.** The guard now keys on `_lastCenter` + `_lastLoad` (the newest query's future, in flight or resolved), so a burst of fixes during a slow request reuses it. `_lastData` is gone. |
+| **Silence/failure could yank the pin backwards.** The 45 s silence notice and the stream-failure notice both re-emitted `cached`, so after fixes moved the pin, a later failure would snap it back to the (older) cached position. | **Fixed.** `watch()` tracks `latest` (the newest value actually yielded) and both notices use it. |
+| **Wrong-city pins during the handoff.** While a re-query runs, Riverpod keeps the previous payload (that is what prevents flicker), so pins from the old centre stayed on screen — potentially another city — until the new response landed. | **Fixed at the render layer.** The map keeps only flags within `radiusKm` (100 km) of the *current* centre. Nearby pins are untouched (no flicker); a cross-city jump simply stops drawing the old pins. |
+| `isResolving` was a third flag carrying "not final yet", which only drove a snackbar branch and an `— updating…` suffix. `isStale` already means "not a fresh fix", and *no value yet* is `null`. | **Removed** (`MapLocation.resolving`, `isResolving`, the suffix, and the dedicated snackbar branch). `MapLocation` is now `coordinates` + `isDeviceLocation` + `isStale` + `notice`. |
+| Two banner texts | **Kept, simplified**: stale → the notice verbatim (`Using your last known location`, `No fresh fix yet`, `Location updates stopped`); not a device position → `<reason> — showing map centre`. No text ever claims the map centre while a device position is on screen. |
+
+### 24.2 Behaviour after the changes
+
+- **First paint:** `ExploreFlagsNotifier.build()` queries immediately from the provider's value or `MapLocation.fallback`; the provider's own first value is the cached position when there is one. So the common case is one query from a real, if stale, position — the old fallback-then-cached double query is now the fallback-only case.
+- **Handoff:** a fix within 2 km reuses the running/finished query (no request, pins unchanged); a fix further away issues exactly one new query while the previous pins stay visible under the existing `Loading live flags…` banner, with out-of-range pins filtered out.
+- **No fresh fix:** dropping a flag while the position is `null` or stale shows `Waiting for a fresh location fix — try again in a moment`; the map-centre dialog is reserved for a real "we cannot locate you" fallback, where it is the honest choice.
+- **Permission denied / services off after a cached fix:** the cached position is kept and labelled with the reason instead of jumping the map to Kochi.
+
+### 24.3 Verification
+
+- `flutter analyze` → **No issues found**.
+- `flutter test test/explore_location_query_test.dart test/location_service_test.dart` → 10/10 passed, including a new case: with a re-query deliberately held open, the state is `isLoading` **and still holds the previous payload** (no flicker), a fix on top of the cached position adds **no** third request, and completing the hold yields data.
+- `flutter test` across the offline suite (`explore_location_query`, `location_service`, `widget`, `preferences`, `community_create_error`) → 15/15 passed.
+- **Not verified:** still no device/emulator run, so the real handoff, the radius filter on live pins and the banner transitions were not observed. The radius filter uses the same 100 km constant as the query, so it is only visible when the payload is older than a cross-city move.
+
+### 24.4 Superseded descriptions
+
+- §20.1, §21.2, §22.1 and §23.2 still mention `MapLocation.resolving` / `isResolving`; those states no longer exist. The current behaviour is described here.
+
+---
+
 ## 21. Phase 7.6 — User Search, Active Trip Join, Waypoint Validation Fix & Clan Nearby Filter
 
 Implemented on 18 Nov 2026. Closes multiple broken chains highlighted in the Master Architectural Audit.
@@ -1051,7 +1233,7 @@ Implemented on 18 Nov 2026. Closes multiple broken chains highlighted in the Mas
 
 ### 21.6 Backend Security Hardening
 - `trips.controller.js`: Secured `completeTrip` with ownership and participant verification, preventing unauthorized trip completion. Added duplicate completion guard.
-- `auth.service.js`: Restricted dev OTP bypass code `12345` strictly to non-production environments (`process.env.NODE_ENV !== 'production'`).
+- `auth.service.js`: Restricted dev OTP bypass code `12345` strictly to non-production environments (`process.env.NODE_ENV !== 'production'`). **This was not sufficient** — see §25: the cached OTP was itself the literal `12345`, so production still accepted it.
 
 ---
 
@@ -1124,3 +1306,66 @@ Implemented on 18 Nov 2026. Closes gaps around saved items, community proposals,
 - `node --check` → Clean on all backend controllers and routes.
 - `live_auth_smoke_test.dart` → 4/4 passed.
 - `live_flows_smoke_test.dart` → 9/9 passed (Explore, Clans, Communities, Trips, Rankings, Profile & Social, Planner mutations, Communities chat socket, Wishlist save & list roundtrip).
+
+---
+
+## 25. Phase 8.1 — Auth fail-closed + flag integrity (21 Nov 2026)
+
+Two server-side holes found while reviewing the ranked follow-up list. Both are
+about the API trusting whoever calls it; both are small, local changes.
+
+### 25.1 OTP sign-in fails closed (`auth.service.js`)
+**Was**: `sendOtp` cached the literal `'12345'` for every phone in every environment,
+and the `NODE_ENV !== 'production'` bypass protected the *static* comparison only —
+the cached value was itself `12345`, so a production deploy accepted `12345` for any
+phone number. Nothing throttled OTP sends or guesses.
+
+**Now**:
+- A fixed code exists only when `ALLOW_DEV_OTP=true` is set explicitly. Unset (the
+default, including an unset `NODE_ENV`) refuses it.
+- `sendOtp` with the flag off throws `503 OTP_DELIVERY_UNAVAILABLE` — there is no SMS
+provider yet, and minting a code nobody can receive (or one everybody can guess) is
+not delivery.
+- `verifyOtp` carries a 5-attempt limit per phone (15 min window) and `sendOtp` allows
+3 codes per phone per 10 minutes; both `429`.
+- Successful sign-in clears the cached code and the attempt counter.
+
+**Dev/test**: the API must be started as `ALLOW_DEV_OTP=true PORT=4000 node src/server.js`
+for `12345` and the live smoke tests; without it, sign-in is deliberately unavailable.
+
+### 25.2 Flag integrity (`flags.controller.js` `dropFlag`)
+**Was**: any `placeName`/`latitude`/`longitude` was accepted (`parseFloat('abc')` → `NaN`),
+the same point could be flagged without limit (inflating `totalFlags`, passport stamps and
+`GET /rankings`), `Boolean('false')` counted as `true`, and the flag insert, the user-stats
+update and the first-flag stamp were three independent writes.
+
+**Now**:
+- `placeName` required, trimmed, ≤120 chars; coordinates must be finite and in range
+  (±90 / ±180) → `400`.
+- At most 30 flags per user per hour → `429`.
+- A second flag within 25 m of one the same user already staked → `409 You already staked
+  this spot ("…")`. The client already shows `ApiException.message` in the drop-flag
+  snackbar, so no client change was needed.
+- `isMajorFlag` parses `true`/`'true'` (not truthiness).
+- Flag create + `totalFlags`/`majorFlags` + first-flag stamp run in one batched
+  `$transaction([...])` (interactive transactions still time out on this DB).
+
+### 25.3 Verification
+- `node --check` on `auth.service.js`, `flags.controller.js`, `ApiError.js` → clean.
+- `ApiError.tooManyRequests` (429, `RATE_LIMITED`) added.
+- Live, with `ALLOW_DEV_OTP=true`: send-otp `200`; verify `12345` → tokens; probe flag
+  `201`; same spot `409`; point 40 m away `201`; `latitude: 999` → `400`.
+- Live, flag unset: send-otp `503 OTP delivery is not configured yet…`; verify `12345`
+  and legacy `123456` → `400 Invalid or expired OTP code`.
+- `live_auth_smoke_test.dart` 4/4; `live_flows_smoke_test.dart` Explore case passed.
+  (First auth run failed on the cold-DB 15 s timeout; rerun green — same DB-latency
+  flakiness noted in §9.)
+- Probe flags deleted and `totalFlags`/`majorFlags` recomputed for every user.
+
+### 25.4 Still open on this thread
+- Real SMS delivery: `sendOtp` is the single seam; a provider (MSG91/Twilio-class) plus
+  its key is all that is missing. Until then, production sign-in is intentionally down.
+- No global rate limiting on the rest of the API (only login and flag-drop are
+  throttled); edge/WAF rules or an `express-rate-limit` middleware remain the fix.
+- `searchUsers` still returns `isPrivate` users with `state`/`district`; privacy
+  enforcement is a product decision, not something this pass guessed at.

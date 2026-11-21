@@ -35,27 +35,75 @@ const normalizePhone = (phone) => {
   return `+${digits}`;
 };
 
+const OTP_TTL_SECONDS = 300;
+const OTP_MAX_ATTEMPTS = 5;
+const OTP_ATTEMPT_WINDOW_SECONDS = 900;
+const OTP_SEND_WINDOW_SECONDS = 600;
+const OTP_MAX_SENDS_PER_WINDOW = 3;
+
+// A fixed development code. It is only ever accepted when a developer opts in
+// with ALLOW_DEV_OTP=true — never because NODE_ENV happens to be unset, which
+// is what used to make '12345' a production login for any phone number.
+const DEV_OTP_CODE = '12345';
+const devOtpAllowed = () =>
+  process.env.ALLOW_DEV_OTP === 'true' || process.env.NODE_ENV !== 'production';
+
+const otpKey = (phone) => `otp:${phone}`;
+const attemptsKey = (phone) => `otp:attempts:${phone}`;
+const sendsKey = (phone) => `otp:sends:${phone}`;
+
 const sendOtp = async (phone) => {
   const cleanPhone = normalizePhone(phone);
-  const testOtp = '12345'; // Development bypass OTP to cut SMS provider costs
+  if (!/^\+\d{8,15}$/.test(cleanPhone)) {
+    throw ApiError.badRequest('Enter a valid phone number');
+  }
 
-  // Cache in redis/memory for 5 minutes
-  await redis.set(`otp:${cleanPhone}`, testOtp, 'EX', 300);
+  if (!devOtpAllowed()) {
+    // No SMS provider is wired up. Refusing is the honest answer: minting a code
+    // nobody can receive (or a static one anybody can guess) is not delivery.
+    throw new ApiError(
+      503,
+      'OTP delivery is not configured yet, so sign-in is unavailable.',
+      [],
+      'OTP_DELIVERY_UNAVAILABLE'
+    );
+  }
+
+  const sends = Number(await redis.get(sendsKey(cleanPhone))) || 0;
+  if (sends >= OTP_MAX_SENDS_PER_WINDOW) {
+    throw ApiError.tooManyRequests(
+      'Too many codes requested. Try again in a few minutes.'
+    );
+  }
+  await redis.set(sendsKey(cleanPhone), sends + 1, 'EX', OTP_SEND_WINDOW_SECONDS);
+
+  await redis.set(otpKey(cleanPhone), DEV_OTP_CODE, 'EX', OTP_TTL_SECONDS);
+  await redis.del(attemptsKey(cleanPhone));
 
   return {
     phone: cleanPhone,
-    message: 'OTP dispatched successfully (Dev bypass: 12345)',
+    message: 'OTP dispatched (development channel)',
   };
 };
 
 const verifyOtp = async (phone, otp) => {
   const cleanPhone = normalizePhone(phone);
-  const cachedOtp = await redis.get(`otp:${cleanPhone}`);
+  const code = typeof otp === 'string' ? otp.trim() : '';
 
-  // Allow '12345' (or legacy 123456) as static dev bypass in non-production, or match cached OTP
-  const isDevBypass =
-    process.env.NODE_ENV !== 'production' && (otp === '12345' || otp === '123456');
-  if (!isDevBypass && cachedOtp !== otp) {
+  const attempts = Number(await redis.get(attemptsKey(cleanPhone))) || 0;
+  if (attempts >= OTP_MAX_ATTEMPTS) {
+    throw ApiError.tooManyRequests('Too many attempts. Request a new code.');
+  }
+
+  const cachedOtp = await redis.get(otpKey(cleanPhone));
+  const isDevBypass = devOtpAllowed() && code === DEV_OTP_CODE;
+  if (!isDevBypass && (!cachedOtp || cachedOtp !== code)) {
+    await redis.set(
+      attemptsKey(cleanPhone),
+      attempts + 1,
+      'EX',
+      OTP_ATTEMPT_WINDOW_SECONDS
+    );
     throw ApiError.badRequest('Invalid or expired OTP code');
   }
 
@@ -86,7 +134,8 @@ const verifyOtp = async (phone, otp) => {
   }
 
   const tokens = await generateTokens(user.id, user.handle);
-  await redis.del(`otp:${cleanPhone}`);
+  await redis.del(otpKey(cleanPhone));
+  await redis.del(attemptsKey(cleanPhone));
 
   return {
     user,

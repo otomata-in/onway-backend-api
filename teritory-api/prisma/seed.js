@@ -766,6 +766,7 @@ async function main() {
       participants: {
         create: [
           { userId: 'u_akhil', status: 'IN_PROGRESS', badge: 'NONE' },
+          { userId: 'u1', status: 'IN_PROGRESS', badge: 'NONE' },
           { userId: 'u5', status: 'IN_PROGRESS', badge: 'NONE' },
           { userId: 'u3', status: 'JOINED', badge: 'NONE' },
           { userId: 'u2', status: 'JOINED', badge: 'NONE' },

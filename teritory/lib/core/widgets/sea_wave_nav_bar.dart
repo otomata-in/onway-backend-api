@@ -280,6 +280,65 @@ class _SeaWavePainter extends CustomPainter {
   final double waveOverflow;
   final double bottomPadding;
 
+  // Cached paint and shader instances to eliminate 120 FPS GC pressure
+  static Size? _cachedSize;
+  static bool? _cachedIsDark;
+  static Paint? _cachedBgTidePaint;
+  static Paint? _cachedMainWavePaint;
+  static Paint? _cachedShadowPaint;
+  static final Paint _foamPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2.2
+    ..strokeCap = StrokeCap.round;
+
+  static void _ensurePaints(Size size, bool isDark) {
+    if (_cachedSize == size && _cachedIsDark == isDark && _cachedBgTidePaint != null) {
+      return;
+    }
+    _cachedSize = size;
+    _cachedIsDark = isDark;
+    final w = size.width;
+    final h = size.height;
+
+    _cachedBgTidePaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: isDark
+            ? [
+                const Color(0xFF0369A1).withValues(alpha: 0.28),
+                const Color(0xFF0284C7).withValues(alpha: 0.05),
+              ]
+            : [
+                const Color(0xFF38BDF8).withValues(alpha: 0.38),
+                const Color(0xFFBAE6FD).withValues(alpha: 0.12),
+              ],
+      ).createShader(Rect.fromLTWH(0, 0, w, h))
+      ..style = PaintingStyle.fill;
+
+    _cachedMainWavePaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: isDark
+            ? [
+                const Color(0xFF0F172A),
+                const Color(0xFF020617),
+              ]
+            : [
+                Colors.white,
+                const Color(0xFFF1F5F9),
+              ],
+      ).createShader(Rect.fromLTWH(0, 0, w, h))
+      ..style = PaintingStyle.fill;
+
+    _cachedShadowPaint = Paint()
+      ..color = (isDark ? const Color(0xFF0284C7) : Colors.black).withValues(
+        alpha: isDark ? 0.22 : 0.08,
+      )
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
+  }
+
   _SeaWavePainter({
     required this.itemCount,
     required this.activePosition,
@@ -299,23 +358,9 @@ class _SeaWavePainter extends CustomPainter {
     // Baseline where flat nav bar begins
     final baseLineY = waveOverflow + 4.0;
 
-    // ── 1. Soft Flowing Background Tide Swell (Continuous Live Motion) ──
-    final bgTidePaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: isDark
-            ? [
-                const Color(0xFF0369A1).withValues(alpha: 0.28),
-                const Color(0xFF0284C7).withValues(alpha: 0.05),
-              ]
-            : [
-                const Color(0xFF38BDF8).withValues(alpha: 0.38),
-                const Color(0xFFBAE6FD).withValues(alpha: 0.12),
-              ],
-      ).createShader(Rect.fromLTWH(0, 0, w, h))
-      ..style = PaintingStyle.fill;
+    _ensurePaints(size, isDark);
 
+    // ── 1. Soft Flowing Background Tide Swell (Continuous Live Motion) ──
     final bgPath = Path();
     bgPath.moveTo(0, baseLineY + 6);
     for (double x = 0; x <= w; x += 10) {
@@ -328,31 +373,7 @@ class _SeaWavePainter extends CustomPainter {
     bgPath.lineTo(w, h);
     bgPath.lineTo(0, h);
     bgPath.close();
-    canvas.drawPath(bgPath, bgTidePaint);
-
-    // ── 2. Main Sea Wave Body ──
-    final mainWavePaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: isDark
-            ? [
-                const Color(0xFF0F172A), // Deep Midnight Oceanic Abyss
-                const Color(0xFF020617),
-              ]
-            : [
-                Colors.white, // Crisp Nautical White Deck
-                const Color(0xFFF1F5F9),
-              ],
-      ).createShader(Rect.fromLTWH(0, 0, w, h))
-      ..style = PaintingStyle.fill;
-
-    // Ambient drop shadow
-    final shadowPaint = Paint()
-      ..color = (isDark ? const Color(0xFF0284C7) : Colors.black).withValues(
-        alpha: isDark ? 0.22 : 0.08,
-      )
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
+    canvas.drawPath(bgPath, _cachedBgTidePaint!);
 
     // Dynamic crest swell height influenced by continuous wave breathing
     final liveCrestOffset = math.sin(wavePhase) * 1.5;
@@ -419,35 +440,31 @@ class _SeaWavePainter extends CustomPainter {
     wavePath.close();
 
     // Draw shadow first
-    canvas.drawPath(wavePath, shadowPaint);
+    canvas.drawPath(wavePath, _cachedShadowPaint!);
     // Draw solid wave body
-    canvas.drawPath(wavePath, mainWavePaint);
+    canvas.drawPath(wavePath, _cachedMainWavePaint!);
 
     // ── 3. Continuous Sea Foam Crest Stroke (Shimmering Water Foam) ──
     final shimmerOffset = math.sin(wavePhase * 1.2) * 20.0;
 
-    final foamPaint = Paint()
-      ..shader = LinearGradient(
-        colors: isDark
-            ? [
-                const Color(0xFF38BDF8).withValues(alpha: 0.10),
-                const Color(0xFF38BDF8).withValues(alpha: 0.85),
-                const Color(0xFF67E8F9).withValues(alpha: 1.0),
-                const Color(0xFF38BDF8).withValues(alpha: 0.85),
-                const Color(0xFF38BDF8).withValues(alpha: 0.10),
-              ]
-            : [
-                const Color(0xFF0284C7).withValues(alpha: 0.15),
-                const Color(0xFF38BDF8).withValues(alpha: 0.85),
-                const Color(0xFF60A5FA).withValues(alpha: 0.95),
-                const Color(0xFF38BDF8).withValues(alpha: 0.85),
-                const Color(0xFF0284C7).withValues(alpha: 0.15),
-              ],
-        stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
-      ).createShader(Rect.fromLTWH(crestX - 80 + shimmerOffset, 0, 160, 24))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2
-      ..strokeCap = StrokeCap.round;
+    _foamPaint.shader = LinearGradient(
+      colors: isDark
+          ? [
+              const Color(0xFF38BDF8).withValues(alpha: 0.10),
+              const Color(0xFF38BDF8).withValues(alpha: 0.85),
+              const Color(0xFF67E8F9).withValues(alpha: 1.0),
+              const Color(0xFF38BDF8).withValues(alpha: 0.85),
+              const Color(0xFF38BDF8).withValues(alpha: 0.10),
+            ]
+          : [
+              const Color(0xFF0284C7).withValues(alpha: 0.15),
+              const Color(0xFF38BDF8).withValues(alpha: 0.85),
+              const Color(0xFF60A5FA).withValues(alpha: 0.95),
+              const Color(0xFF38BDF8).withValues(alpha: 0.85),
+              const Color(0xFF0284C7).withValues(alpha: 0.15),
+            ],
+      stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
+    ).createShader(Rect.fromLTWH(crestX - 80 + shimmerOffset, 0, 160, 24));
 
     final foamPath = Path();
     final foamLeft = math.max(0.0, crestX - 72);
@@ -471,7 +488,7 @@ class _SeaWavePainter extends CustomPainter {
       baseLineY,
     );
 
-    canvas.drawPath(foamPath, foamPaint);
+    canvas.drawPath(foamPath, _foamPaint);
   }
 
   @override

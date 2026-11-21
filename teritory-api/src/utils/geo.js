@@ -36,9 +36,29 @@ function isWithinRadius(lat1, lon1, lat2, lon2, radiusMeters) {
   return haversineDistanceMeters(lat1, lon1, lat2, lon2) <= radiusMeters;
 }
 
+/**
+ * Computes bounding box { minLat, maxLat, minLng, maxLng } for a given center and radius (km).
+ * 1 degree latitude ~ 111 km.
+ * 1 degree longitude ~ 111 km * cos(latitude).
+ */
+function getBoundingBox(centerLat, centerLng, radiusKm) {
+  const safeRadius = Math.max(0.1, radiusKm || 50);
+  const deltaLat = safeRadius / 111.0;
+  const cosLat = Math.cos((centerLat * Math.PI) / 180);
+  const deltaLng = safeRadius / (111.0 * Math.max(0.0001, Math.abs(cosLat)));
+
+  return {
+    minLat: Math.max(-90, centerLat - deltaLat),
+    maxLat: Math.min(90, centerLat + deltaLat),
+    minLng: Math.max(-180, centerLng - deltaLng),
+    maxLng: Math.min(180, centerLng + deltaLng),
+  };
+}
+
 module.exports = {
   haversineDistanceMeters,
   haversineDistanceKm,
   isWithinRadius,
+  getBoundingBox,
 };
 

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -5,6 +7,44 @@ import '../../../core/models/api_flag.dart';
 import '../../../core/providers/location_provider.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/services/teritory_repository.dart';
+
+/// The two backend reads the Explore map needs, as a seam so tests can drive the
+/// map without a live API. Production always uses [LiveExploreDataSource].
+abstract class ExploreDataSource {
+  Future<List<ApiFlag>> fetchExploreFlags({
+    required double latitude,
+    required double longitude,
+    required double radiusKm,
+  });
+
+  Future<Set<String>> fetchFriendIds();
+}
+
+class LiveExploreDataSource implements ExploreDataSource {
+  const LiveExploreDataSource();
+
+  @override
+  Future<List<ApiFlag>> fetchExploreFlags({
+    required double latitude,
+    required double longitude,
+    required double radiusKm,
+  }) {
+    return TeritoryRepository.instance.fetchExploreFlags(
+      latitude: latitude,
+      longitude: longitude,
+      radiusKm: radiusKm,
+    );
+  }
+
+  @override
+  Future<Set<String>> fetchFriendIds() {
+    return TeritoryRepository.instance.fetchFriendIds();
+  }
+}
+
+final exploreDataSourceProvider = Provider<ExploreDataSource>(
+  (ref) => const LiveExploreDataSource(),
+);
 
 /// Everything the Explore map needs for one render pass.
 ///
@@ -26,61 +66,80 @@ class ExploreFlagsData {
   List<ApiFlag> major() => flags.where((f) => f.isMajorFlag).toList();
 }
 
+/// Haversine distance in metres. Plenty accurate for "is this a different
+/// neighbourhood, worth another 100 km query?".
+double distanceMeters(LatLng a, LatLng b) {
+  const earthRadius = 6371000.0;
+  final dLat = (b.latitude - a.latitude) * math.pi / 180;
+  final dLng = (b.longitude - a.longitude) * math.pi / 180;
+  final lat1 = a.latitude * math.pi / 180;
+  final lat2 = b.latitude * math.pi / 180;
+  final h =
+      math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(lat1) * math.cos(lat2) * math.sin(dLng / 2) * math.sin(dLng / 2);
+  return 2 * earthRadius * math.asin(math.min(1.0, math.sqrt(h)));
+}
+
 class ExploreFlagsNotifier extends AsyncNotifier<ExploreFlagsData> {
   static const double radiusKm = 100;
 
-  /// Centre and payload of the last completed query, so a re-emitted location
-  /// that is effectively the same place does not trigger another request.
+  /// How far the traveller must move before the 100 km query is worth repeating:
+  /// GPS drift and a walk to the next street must not re-fire it.
+  static const double requeryMeters = 2000;
+
+  /// Centre of the newest query and its future — in flight or already resolved.
+  /// A position re-emitted from the same neighbourhood reuses it, so a burst of
+  /// fixes while a query is running cannot fire a second request.
   LatLng? _lastCenter;
-  ExploreFlagsData? _lastData;
+  Future<ExploreFlagsData>? _lastLoad;
 
   /// The cached or fresh device position when we have one, else the labelled
   /// Kochi fallback — the query centre is never a silent hardcoded guess.
   ///
-  /// Watches the whole value rather than `.future`: the location provider emits
-  /// a cached position (or the fallback) first, so the first query runs without
-  /// waiting on GPS, and a second one runs when the real fix arrives.
+  /// Watches the whole value rather than `.future`, so it reacts to the position
+  /// stream: the first query runs without waiting on GPS, and it re-runs only
+  /// when the traveller has moved [requeryMeters] away from the last query.
   @override
   Future<ExploreFlagsData> build() {
     final location =
-        ref.watch(mapLocationProvider).valueOrNull ?? MapLocation.resolving;
+        ref.watch(mapLocationProvider).valueOrNull ?? MapLocation.fallback;
     final center = location.coordinates;
 
-    final previous = _lastData;
-    final lastCenter = _lastCenter;
-    if (previous != null && lastCenter != null && _sameCenter(lastCenter, center)) {
-      return Future.value(previous);
+    final queried = _lastCenter;
+    final pending = _lastLoad;
+    if (queried != null &&
+        pending != null &&
+        distanceMeters(queried, center) < requeryMeters) {
+      // Same neighbourhood: reuse the running/finished query instead of
+      // spending a request on every 50 m fix.
+      return pending;
     }
 
     _lastCenter = center;
-    return _load(center);
+    final load = _load(center);
+    _lastLoad = load;
+    return load;
   }
 
-  static bool _sameCenter(LatLng a, LatLng b) =>
-      (a.latitude - b.latitude).abs() < 0.0001 &&
-      (a.longitude - b.longitude).abs() < 0.0001;
-
   Future<ExploreFlagsData> _load(LatLng center) async {
-    final repository = TeritoryRepository.instance;
+    final dataSource = ref.read(exploreDataSourceProvider);
 
     // Friend ids are an enhancement, not a requirement: if that call fails the
     // map still renders live flags, and the Friends filter simply stays empty.
-    final friendIdsFuture = repository.fetchFriendIds().catchError(
+    final friendIdsFuture = dataSource.fetchFriendIds().catchError(
       (_) => <String>{},
     );
 
     // Both requests are in flight; awaiting the flags first keeps their
     // ApiException intact instead of wrapping it in ParallelWaitError.
-    final flags = await repository.fetchExploreFlags(
+    final flags = await dataSource.fetchExploreFlags(
       latitude: center.latitude,
       longitude: center.longitude,
       radiusKm: radiusKm,
     );
     final friendIds = await friendIdsFuture;
 
-    final data = ExploreFlagsData(flags: flags, friendIds: friendIds);
-    _lastData = data;
-    return data;
+    return ExploreFlagsData(flags: flags, friendIds: friendIds);
   }
 
   /// Reloads without dropping the pins already on screen: the previous data is
@@ -91,9 +150,11 @@ class ExploreFlagsNotifier extends AsyncNotifier<ExploreFlagsData> {
     // Re-read the fix so a recentre after granting permission queries from the
     // traveller's actual position.
     final location =
-        ref.read(mapLocationProvider).valueOrNull ?? MapLocation.resolving;
-    final next = await AsyncValue.guard(() => _load(location.coordinates));
-    state = next.copyWithPrevious(state);
+        ref.read(mapLocationProvider).valueOrNull ?? MapLocation.fallback;
+    _lastCenter = location.coordinates;
+    final load = _load(location.coordinates);
+    _lastLoad = load;
+    state = (await AsyncValue.guard(() => load)).copyWithPrevious(state);
   }
 }
 
@@ -107,10 +168,15 @@ final exploreFlagsProvider =
 /// not pay for an extra request nobody asked for.
 final subSpotsProvider = FutureProvider.autoDispose<List<ApiFlag>>((ref) {
   final location =
-      ref.watch(mapLocationProvider).valueOrNull ?? MapLocation.resolving;
+      ref.watch(mapLocationProvider).valueOrNull ?? MapLocation.fallback;
+  // Snapped to a ~1 km grid: the 5 km shelf follows the traveller without
+  // re-firing on every position update while they walk.
+  final latitude = (location.coordinates.latitude * 100).roundToDouble() / 100;
+  final longitude =
+      (location.coordinates.longitude * 100).roundToDouble() / 100;
   return TeritoryRepository.instance.fetchSubTerritories(
-    latitude: location.coordinates.latitude,
-    longitude: location.coordinates.longitude,
+    latitude: latitude,
+    longitude: longitude,
   );
 });
 
