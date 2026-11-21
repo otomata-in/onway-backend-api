@@ -2,8 +2,9 @@
 
 This folder contains operational documentation for the backend services hosted within this repository:
 
-1. **Teritory Travel & Expedition Platform Backend** (`teritory-api`, standalone Node.js Express service running on Render & Neon `teritory_db`).
-2. **OnWay Hyperlocal Marketplace Backend** (`onway-api`, running on Render & Neon `neondb`).
+1. **[Master Cloud Deployments Guide (OnWay + Teritory on Render)](RENDER_DEPLOYMENTS_MASTER.md)** ⭐
+2. **[Teritory Travel & Expedition Platform Backend](teritory_backend_deployment.md)** (`teritory-api`, live on Render at `https://teritory-api.onrender.com` & Neon `teritory_db`).
+3. **[OnWay Hyperlocal Marketplace Backend](backend_deployment.md)** (`onway-api`, live on Render at `https://onway-backend-api.onrender.com` & Neon `neondb`).
 
 ---
 
