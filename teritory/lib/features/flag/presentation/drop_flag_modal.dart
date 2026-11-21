@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
+import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../../rally/presentation/legendary_rally_sheet.dart';
+import '../application/flag_queue_provider.dart';
 
-class DropFlagModal extends StatefulWidget {
+class DropFlagModal extends ConsumerStatefulWidget {
   final LatLng initialCoordinates;
   final String suggestedPlaceName;
 
@@ -35,10 +38,10 @@ class DropFlagModal extends StatefulWidget {
   }
 
   @override
-  State<DropFlagModal> createState() => _DropFlagModalState();
+  ConsumerState<DropFlagModal> createState() => _DropFlagModalState();
 }
 
-class _DropFlagModalState extends State<DropFlagModal> {
+class _DropFlagModalState extends ConsumerState<DropFlagModal> {
   late TextEditingController _placeController;
   late TextEditingController _cityController;
   late TextEditingController _notesController;
@@ -106,6 +109,8 @@ class _DropFlagModalState extends State<DropFlagModal> {
         notes: notes,
       );
     } on ApiException catch (e) {
+      // The server answered and refused. Replaying it from the queue would be
+      // refused for the same reason, so this is reported, not persisted.
       if (!mounted) return;
       setState(() => _isSubmitting = false);
       messenger.showSnackBar(
@@ -116,12 +121,42 @@ class _DropFlagModalState extends State<DropFlagModal> {
       );
       return;
     } catch (_) {
+      // No answer at all — no signal or a timeout. Keep the flag on the device
+      // so the traveler does not have to be standing here again when signal
+      // returns.
+      final queued = await ref
+          .read(flagQueueProvider.notifier)
+          .enqueue(
+            userId: ref.read(currentUserProvider).id,
+            placeName: name,
+            latitude: widget.initialCoordinates.latitude,
+            longitude: widget.initialCoordinates.longitude,
+            city: city,
+            country: 'India',
+            countryCode: 'IN',
+            isMajorFlag: _isMajorFlag,
+            category: _selectedCategory,
+            notes: notes,
+          );
+
       if (!mounted) return;
       setState(() => _isSubmitting = false);
+      Navigator.pop(context);
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Could not reach Teritory. Check your connection.'),
-          backgroundColor: TeritoryColors.expiredRed,
+        SnackBar(
+          backgroundColor: TeritoryColors.majorGoldDark,
+          duration: const Duration(seconds: 6),
+          content: Text(
+            '“${queued.placeName}” is saved on this device and will be staked '
+            'when you are back online.',
+            style: GoogleFonts.plusJakartaSans(color: Colors.white),
+          ),
+          action: SnackBarAction(
+            label: 'Retry now',
+            textColor: Colors.white,
+            onPressed: () =>
+                ref.read(flagQueueProvider.notifier).sync(),
+          ),
         ),
       );
       return;

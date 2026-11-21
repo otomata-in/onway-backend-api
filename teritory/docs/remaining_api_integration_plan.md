@@ -1369,3 +1369,64 @@ update and the first-flag stamp were three independent writes.
   throttled); edge/WAF rules or an `express-rate-limit` middleware remain the fix.
 - `searchUsers` still returns `isPrivate` users with `state`/`district`; privacy
   enforcement is a product decision, not something this pass guessed at.
+
+---
+
+## 26. Phase 8.2 — Offline flag queue (21 Nov 2026)
+
+Staking a flag used to require a live connection: a dead zone produced a red
+"Could not reach Teritory" snackbar and the traveler's spot was lost. The flag
+they were physically standing on is exactly what the app is for, so the write
+now survives without a network.
+
+### 26.1 Behaviour
+- The drop sheet makes one attempt. If the server **answers and refuses**, that
+  message is shown and nothing is queued — replaying it would be refused for the
+  same reason.
+- If there is no answer at all (no signal, DNS failure, timeout), the flag is
+  saved on the device and the sheet closes with “saved on this device … staked
+  when you are back online” plus **Retry now**.
+- Queued flags render as map pins in a distinct pending style (amber outline,
+  cloud-upload icon) and a banner above the location notice reads
+  “N flags saved — waiting to sync” with **Sync now**. Tapping a pending pin opens
+  a sheet with the honest reason, the attempt count, **Retry now** and **Discard**.
+- A pending flag never counts as territory: it is not in `totalFlags`, answers,
+  or rankings until the server accepts it.
+
+### 26.2 Sync rules
+- Triggers: reconnect (`connectivity_plus`), app resume, session restore to
+  `signedIn`, leftover queue on app open, and the manual actions.
+- Oldest first, stopping at the first entry that still cannot be delivered — the
+  stake order is preserved and a dead connection is not hammered once per flag.
+- `409` is **success**: the lost attempt reached the server and the spot is
+  already staked, which is the outcome the traveler asked for. It is removed from
+  the queue silently. Other server refusals stay queued with their message so the
+  traveler can read it and discard if it will never succeed.
+- Entries carry the staker's `userId`; another account signing in on the same
+device never replays them.
+
+### 26.3 Files
+- `core/models/pending_flag.dart` — the queued drop, JSON round-trip, `copyWith`
+  for the failure reason.
+- `core/services/pending_flag_store.dart` — `shared_preferences` persistence
+  (best-effort; a corrupt entry drops only itself, an unwritable file keeps the
+  session's queue in memory). Loaded in `main()` before `runApp`.
+- `features/flag/application/flag_queue_provider.dart` — `FlagQueueNotifier`
+  (`enqueue`, `sync`, `discard`, `forUser`), `flagDropRequestProvider` as the
+  network seam, and `FlagQueueSyncScope` (lifecycle + connectivity + auth
+  triggers, wired around `MaterialApp.router` in `main.dart`).
+- `features/flag/presentation/drop_flag_modal.dart` — now a `ConsumerStatefulWidget`;
+  the network-failure branch queues instead of failing.
+- `features/home/presentation/home_map_screen.dart` — pending markers, banner and
+  the pending-flag sheet.
+- `pubspec.yaml` — `connectivity_plus: ^7.3.1` (only new dependency).
+
+### 26.4 Verification
+- `flutter analyze` → **No issues found**.
+- `test/pending_flag_queue_test.dart` → **8/8**: persistence across a restart,
+  full drain in stake order, 409 → success, offline keeps the flag with its
+  reason and attempt count, stop-at-first-failure ordering, non-duplicate refusals
+  kept with the server message, another account never replays the queue, discard.
+- Not verified: the pending pin/banner rendering and the real
+  connectivity/resume triggers were not exercised on a device or in a widget test;
+  they compile and are wired, but a visual pass on the map is still outstanding.

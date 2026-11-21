@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/models/api_flag.dart';
+import '../../../core/models/pending_flag.dart';
 import '../../../core/models/teritory_models.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/location_provider.dart';
@@ -14,6 +15,7 @@ import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../../../core/widgets/teritory_logo.dart';
 import '../../explore/application/explore_flags_provider.dart';
+import '../../flag/application/flag_queue_provider.dart';
 import '../../flag/presentation/drop_flag_modal.dart';
 import '../../flag/presentation/live_flag_detail_sheet.dart';
 import '../../profile/application/profile_providers.dart';
@@ -155,6 +157,253 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
     await ref.read(exploreFlagsProvider.notifier).refresh();
   }
 
+  /// "N flags saved": the queue is visible on the map, with the one action
+  /// that can clear it. Nothing here claims the flags are staked.
+  Widget _buildPendingFlagsBanner(int count) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.only(left: 10, right: 2, top: 2, bottom: 2),
+          decoration: BoxDecoration(
+            color: _isDarkTheme ? const Color(0xF21E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: TeritoryColors.majorGold.withValues(alpha: 0.6),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.cloud_upload_outlined,
+                size: 13,
+                color: TeritoryColors.majorGold,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                count == 1
+                    ? '1 flag saved — waiting to sync'
+                    : '$count flags saved — waiting to sync',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  color: _isDarkTheme
+                      ? Colors.white
+                      : TeritoryColors.textPrimary,
+                ),
+              ),
+              TextButton(
+                onPressed: _syncPendingFlags,
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 30),
+                ),
+                child: const Text('Sync now', style: TextStyle(fontSize: 11)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Drains the queue and reports what actually happened: the number staked, or
+  /// the honest reason they are still waiting.
+  Future<void> _syncPendingFlags() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final report = await ref.read(flagQueueProvider.notifier).sync();
+    if (!mounted) return;
+
+    if (report.synced > 0) {
+      await ref.read(exploreFlagsProvider.notifier).refresh();
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          backgroundColor: TeritoryColors.primary,
+          content: Text(
+            report.synced == 1
+                ? 'Saved flag staked.'
+                : '${report.synced} saved flags staked.',
+            style: GoogleFonts.plusJakartaSans(color: Colors.white),
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Skipped means a sync is already running (or these flags belong to another
+    // account): the run that is in flight reports for itself.
+    if (report.skipped) return;
+
+    String? reason;
+    for (final flag in ref.read(flagQueueProvider)) {
+      if (flag.lastError != null) {
+        reason = flag.lastError;
+        break;
+      }
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          reason ?? 'Still offline — the saved flags are waiting on this device.',
+          style: GoogleFonts.plusJakartaSans(),
+        ),
+        action: SnackBarAction(label: 'Retry', onPressed: _syncPendingFlags),
+      ),
+    );
+  }
+
+  Future<void> _showPendingFlagSheet(PendingFlag pending) async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(
+              Icons.cloud_off_rounded,
+              color: TeritoryColors.majorGold,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Not staked yet',
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              pending.placeName,
+              style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              pending.lastError ??
+                  'Saved on this device. It will be staked as soon as Teritory '
+                      'can be reached.',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                color: TeritoryColors.textPrimary.withValues(alpha: 0.75),
+              ),
+            ),
+            if (pending.attempts > 0) ...[
+              const SizedBox(height: 6),
+              Text(
+                '${pending.attempts} attempt'
+                '${pending.attempts == 1 ? '' : 's'} so far',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  color: TeritoryColors.textPrimary.withValues(alpha: 0.6),
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'discard'),
+            child: const Text(
+              'Discard',
+              style: TextStyle(color: TeritoryColors.expiredRed),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, 'retry'),
+            child: const Text('Retry now'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || choice == null) return;
+    if (choice == 'discard') {
+      await ref.read(flagQueueProvider.notifier).discard(pending.localId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '“${pending.placeName}” removed from this device.',
+            style: GoogleFonts.plusJakartaSans(),
+          ),
+        ),
+      );
+      return;
+    }
+    await _syncPendingFlags();
+  }
+
+  /// Pin for a flag that exists only on this device. Deliberately unlike a
+  /// staked pin — amber outline and an upload icon — so it never reads as
+  /// territory the traveler already owns.
+  Widget _buildPendingFlagPin(PendingFlag pending) {
+    final pinBg = _isDarkTheme ? const Color(0xF21E293B) : Colors.white;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: pinBg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: TeritoryColors.majorGold,
+              width: 1.4,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.cloud_upload_outlined,
+                size: 13,
+                color: TeritoryColors.majorGold,
+              ),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  pending.placeName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: _isDarkTheme
+                        ? Colors.white
+                        : TeritoryColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Icon(
+          Icons.arrow_drop_down,
+          size: 18,
+          color: TeritoryColors.majorGold,
+        ),
+      ],
+    );
+  }
+
   /// Honest location state under the filters: names the reason the fallback
   /// centre is in use, or says a cached position is being shown while a fresh
   /// fix is on its way. It never says "map centre" when a real position is in use.
@@ -247,6 +496,17 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
         : const AsyncValue<List<ApiFlag>>.data(<ApiFlag>[]);
     final subSpots = subSpotsAsync.valueOrNull ?? const <ApiFlag>[];
     final currentUserId = ref.watch(currentUserProvider).id;
+    // Flags staked locally that the server has not accepted yet. They render as
+    // real pins in a pending style — never as earned territory.
+    final queued = ref.watch(flagQueueProvider);
+    final pendingFlags = currentUserId.isEmpty
+        ? const <PendingFlag>[]
+        : queued.where((f) => f.userId == currentUserId).toList();
+    final visiblePending = switch (_selectedFilter) {
+      'Friends' || 'Sub-Spots' => const <PendingFlag>[],
+      'Major Wonders' => pendingFlags.where((f) => f.isMajorFlag).toList(),
+      _ => pendingFlags,
+    };
     final isTripMode =
         ref.watch(myProfileProvider).valueOrNull?.isTripMode ?? false;
     // Keeping the previous payload during a re-query is what stops the pins
@@ -313,6 +573,22 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
             child: isMine
                 ? _buildUserFlagPin(flag.toFlagItem())
                 : _buildFriendFlagPin(flag.toFriendFlag()),
+          ),
+        ),
+      );
+    }
+
+    // 3. Saved-but-not-yet-staked flags from the offline queue
+    for (final pending in visiblePending) {
+      markers.add(
+        Marker(
+          point: pending.coordinates,
+          width: 150,
+          height: 78,
+          alignment: Alignment.topCenter,
+          child: GestureDetector(
+            onTap: () => _showPendingFlagSheet(pending),
+            child: _buildPendingFlagPin(pending),
           ),
         ),
       );
@@ -560,6 +836,10 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                       ],
                     ),
                   ),
+
+                  // Flags saved while offline: visible until the server has them.
+                  if (pendingFlags.isNotEmpty)
+                    _buildPendingFlagsBanner(pendingFlags.length),
 
                   // Why the map is not on the traveller: never silent.
                   if (mapLocation != null &&
