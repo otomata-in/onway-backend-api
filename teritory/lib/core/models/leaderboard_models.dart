@@ -1,3 +1,5 @@
+import '../config/app_config.dart';
+
 enum LeaderboardScope {
   global,
   country,
@@ -56,6 +58,21 @@ class LeaderboardQuery {
         communityId,
         page,
       );
+}
+
+/// One page from `GET /rankings` plus the server's paging metadata.
+class LeaderboardPage {
+  final List<LeaderboardEntry> entries;
+  final bool hasMore;
+  final int total;
+  final int page;
+
+  const LeaderboardPage({
+    required this.entries,
+    required this.hasMore,
+    required this.total,
+    required this.page,
+  });
 }
 
 /// `GET /rankings/me`: the signed-in traveler's standing and the server's score
@@ -141,7 +158,9 @@ class LeaderboardEntry {
       userId: json['userId'] as String? ?? json['id'] as String? ?? '',
       userName: json['userName'] as String? ?? json['displayName'] as String? ?? 'Traveler',
       userHandle: json['userHandle'] as String? ?? json['handle'] as String? ?? 'traveler',
-      userAvatar: json['userAvatar'] as String? ?? json['avatarUrl'] as String? ?? '',
+      userAvatar: AppConfig.resolveMediaUrl(
+        json['userAvatar'] as String? ?? json['avatarUrl'] as String? ?? '',
+      ),
       country: json['country'] as String? ?? '',
       state: json['state'] as String? ?? '',
       district: json['district'] as String? ?? '',

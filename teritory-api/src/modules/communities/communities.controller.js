@@ -29,6 +29,31 @@ const listCommunities = async (req, res, next) => {
   }
 };
 
+/// Communities the signed-in traveler belongs to. Used by the leaderboard
+/// filter so it can only offer communities the caller may actually see.
+const getMyCommunities = async (req, res, next) => {
+  try {
+    const memberships = await prisma.communityMember.findMany({
+      where: { userId: req.user.id },
+      include: {
+        community: {
+          include: {
+            clan: { select: { id: true, name: true } },
+            _count: { select: { members: true, tripPlans: true } },
+          },
+        },
+      },
+      orderBy: { joinedAt: 'desc' },
+    });
+    return ApiResponse.success(
+      res,
+      memberships.map((membership) => membership.community),
+    );
+  } catch (err) {
+    next(err);
+  }
+};
+
 const createCommunity = async (req, res, next) => {
   try {
     const { name, description = '', coverImageUrl, parentClanId, interestTags = [], isPublic = true } = req.body;
@@ -235,15 +260,30 @@ const getCommunityMessages = async (req, res, next) => {
 const sendCommunityMessage = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { text } = req.body;
+    const { text, imageUrl } = req.body;
+    const trimmedText = typeof text === 'string' ? text.trim() : '';
+    const normalizedImage =
+      typeof imageUrl === 'string' && imageUrl.trim() !== ''
+        ? imageUrl.trim()
+        : null;
 
-    if (!text || text.trim() === '') throw ApiError.badRequest('Message cannot be empty');
+    if (trimmedText === '' && !normalizedImage) {
+      throw ApiError.badRequest('Message must include text or an image');
+    }
+    if (
+      normalizedImage &&
+      !normalizedImage.startsWith('/uploads/') &&
+      !/^https?:\/\//.test(normalizedImage)
+    ) {
+      throw ApiError.badRequest('imageUrl must be an uploaded image or https URL');
+    }
 
     const message = await prisma.communityMessage.create({
       data: {
         communityId: id,
         userId: req.user.id,
-        text: text.trim(),
+        text: trimmedText,
+        imageUrl: normalizedImage,
       },
       include: {
         user: { select: { id: true, displayName: true, avatarUrl: true, handle: true } },
@@ -297,6 +337,7 @@ const getCommunityTripPlans = async (req, res, next) => {
 
 module.exports = {
   listCommunities,
+  getMyCommunities,
   createCommunity,
   getCommunityById,
   joinCommunity,

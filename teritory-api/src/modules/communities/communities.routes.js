@@ -5,6 +5,7 @@ const { authenticate, optionalAuthenticate } = require('../../middleware/authent
 
 router.get('/', optionalAuthenticate, communitiesController.listCommunities);
 router.post('/', authenticate, communitiesController.createCommunity);
+router.get('/mine', authenticate, communitiesController.getMyCommunities);
 router.get('/:id', optionalAuthenticate, communitiesController.getCommunityById);
 router.post('/:id/join', authenticate, communitiesController.joinCommunity);
 router.post('/:id/leave', authenticate, communitiesController.leaveCommunity);

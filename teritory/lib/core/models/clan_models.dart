@@ -1,3 +1,5 @@
+import '../config/app_config.dart';
+
 class Clan {
   final String id;
   final String name;
@@ -47,7 +49,8 @@ class Clan {
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String? ?? '',
-      coverImageUrl: json['coverImageUrl'] as String? ?? '',
+      coverImageUrl:
+          AppConfig.resolveMediaUrl(json['coverImageUrl'] as String? ?? ''),
       region: json['region'] as String? ?? '',
       interestTag: json['interestTag'] as String? ?? '',
       memberCount: memCount,

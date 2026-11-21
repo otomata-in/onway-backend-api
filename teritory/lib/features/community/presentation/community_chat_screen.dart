@@ -76,7 +76,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       final url = await TeritoryRepository.instance.uploadImage(picked.path);
       await ref
           .read(communityMessagesProvider(widget.communityId).notifier)
-          .sendMessage('[Photo] $url');
+          .sendMessage('', imageUrl: url);
     } catch (e) {
       _toast('Failed to upload image: $e');
     } finally {
@@ -287,13 +287,15 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
                       ),
                     ),
                   ),
-                if (msg.text.startsWith('[Photo] ')) ...[
+                if (msg.imageUrl != null ||
+                    msg.text.startsWith('[Photo] ')) ...[
                   Builder(
                     builder: (context) {
-                      final rawUrl = msg.text.substring(8).trim();
-                      final fullUrl = rawUrl.startsWith('http')
-                          ? rawUrl
-                          : '${AppConfig.baseUrl}$rawUrl';
+                      // Older rows stored the image as `[Photo] <url>`; keep
+                      // rendering them after the structured column landed.
+                      final rawUrl = msg.imageUrl ??
+                          msg.text.substring(8).trim();
+                      final fullUrl = AppConfig.resolveMediaUrl(rawUrl);
                       return ClipRRect(
                         borderRadius: BorderRadius.circular(12),
                         child: CachedNetworkImage(

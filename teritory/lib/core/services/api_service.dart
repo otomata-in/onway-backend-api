@@ -305,6 +305,40 @@ class TeritoryApiService {
     return _send('GET', endpoint, queryParams: queryParams);
   }
 
+  /// GET without unwrapping the `data` envelope, so paginated callers can read
+  /// `meta.hasMore` instead of silently seeing only the first page.
+  Future<Map<String, dynamic>> getEnvelope(
+    String endpoint, {
+    Map<String, dynamic>? queryParams,
+  }) async {
+    var res = await _dispatch('GET', endpoint, queryParams: queryParams);
+    if (res.statusCode == 401 &&
+        !endpoint.startsWith('/auth/') &&
+        _refreshToken != null) {
+      if (await _refreshAccessToken()) {
+        res = await _dispatch('GET', endpoint, queryParams: queryParams);
+      }
+    }
+
+    dynamic body;
+    try {
+      body = jsonDecode(utf8.decode(res.bodyBytes));
+    } catch (_) {
+      body = res.body;
+    }
+
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      if (body is Map<String, dynamic>) return body;
+      return {'data': body};
+    }
+
+    var message = 'Network request failed (${res.statusCode})';
+    if (body is Map<String, dynamic> && body['message'] != null) {
+      message = body['message'].toString();
+    }
+    throw ApiException(message, statusCode: res.statusCode, details: body);
+  }
+
   Future<dynamic> post(String endpoint, {dynamic body}) {
     return _send('POST', endpoint, body: body);
   }

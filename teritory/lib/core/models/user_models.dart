@@ -1,3 +1,5 @@
+import '../config/app_config.dart';
+
 class User {
   final String id;
   final String email;
@@ -28,7 +30,7 @@ class User {
       phone: json['phone'] as String? ?? '',
       displayName: json['displayName'] as String? ?? 'Traveler',
       handle: json['handle'] as String? ?? 'traveler',
-      avatarUrl: json['avatarUrl'] as String? ?? '',
+      avatarUrl: AppConfig.resolveMediaUrl(json['avatarUrl'] as String? ?? ''),
       bio: json['bio'] as String? ?? '',
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)

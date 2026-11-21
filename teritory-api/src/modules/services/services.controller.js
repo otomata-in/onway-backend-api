@@ -109,20 +109,19 @@ const recordInquiry = async (req, res, next) => {
 
     const provider = await prisma.serviceProvider.findUnique({
       where: { id },
-      select: { id: true, name: true },
+      select: { id: true },
     });
     if (!provider) {
       throw ApiError.notFound('Service provider not found');
     }
 
-    const inquiry = {
-      id: `inq_${Date.now()}`,
-      serviceProviderId: id,
-      providerName: provider.name,
-      userId: req.user.id,
-      type,
-      createdAt: new Date().toISOString(),
-    };
+    const inquiry = await prisma.serviceInquiry.create({
+      data: {
+        serviceProviderId: id,
+        userId: req.user.id,
+        type,
+      },
+    });
 
     return ApiResponse.success(res, inquiry, 'Inquiry recorded', 201);
   } catch (err) {

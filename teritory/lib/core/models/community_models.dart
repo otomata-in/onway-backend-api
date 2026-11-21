@@ -1,3 +1,5 @@
+import '../config/app_config.dart';
+
 class Community {
   final String id;
   final String name;
@@ -45,7 +47,8 @@ class Community {
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String? ?? '',
-      coverImageUrl: json['coverImageUrl'] as String? ?? '',
+      coverImageUrl:
+          AppConfig.resolveMediaUrl(json['coverImageUrl'] as String? ?? ''),
       parentClanId: json['parentClanId'] as String? ?? (json['clan'] is Map ? json['clan']['id'] as String? ?? '' : ''),
       parentClanName: pClanName,
       memberCount: memCount,
@@ -109,9 +112,11 @@ class CommunityMember {
       userName: json['userName'] as String? ??
           userMap?['displayName'] as String? ??
           'Traveler',
-      userAvatar: json['userAvatar'] as String? ??
-          userMap?['avatarUrl'] as String? ??
-          '',
+      userAvatar: AppConfig.resolveMediaUrl(
+        json['userAvatar'] as String? ??
+            userMap?['avatarUrl'] as String? ??
+            '',
+      ),
       role: CommunityRole.values.firstWhere(
         (e) => e.name == roleStr,
         orElse: () => CommunityRole.member,
@@ -140,6 +145,7 @@ class CommunityMessage {
   final String userName;
   final String userAvatar;
   final String text;
+  final String? imageUrl;
   final DateTime createdAt;
 
   const CommunityMessage({
@@ -149,6 +155,7 @@ class CommunityMessage {
     required this.userName,
     required this.userAvatar,
     required this.text,
+    this.imageUrl,
     required this.createdAt,
   });
 
@@ -164,8 +171,11 @@ class CommunityMessage {
       communityId: json['communityId'] as String? ?? '',
       userId: json['userId'] as String? ?? '',
       userName: uName.isNotEmpty ? uName : 'Traveler',
-      userAvatar: uAvatar,
+      userAvatar: AppConfig.resolveMediaUrl(uAvatar),
       text: json['text'] as String? ?? '',
+      imageUrl: (json['imageUrl'] as String?)?.trim().isNotEmpty == true
+          ? AppConfig.resolveMediaUrl(json['imageUrl'] as String)
+          : null,
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
           : DateTime.now(),
@@ -179,6 +189,7 @@ class CommunityMessage {
         'userName': userName,
         'userAvatar': userAvatar,
         'text': text,
+        'imageUrl': imageUrl,
         'createdAt': createdAt.toIso8601String(),
       };
 }
@@ -232,9 +243,11 @@ class CommunityActivity {
       userName: json['userName'] as String? ??
           userMap?['displayName'] as String? ??
           'Traveler',
-      userAvatar: json['userAvatar'] as String? ??
-          userMap?['avatarUrl'] as String? ??
-          '',
+      userAvatar: AppConfig.resolveMediaUrl(
+        json['userAvatar'] as String? ??
+            userMap?['avatarUrl'] as String? ??
+            '',
+      ),
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.now(),
     );

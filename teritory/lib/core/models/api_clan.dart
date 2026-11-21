@@ -1,3 +1,4 @@
+import '../config/app_config.dart';
 import 'clan_models.dart';
 import 'community_models.dart';
 
@@ -31,7 +32,8 @@ class ApiClanMember {
       name: userMap?['displayName'] as String? ??
           userMap?['handle'] as String? ??
           'Traveler',
-      avatarUrl: userMap?['avatarUrl'] as String? ?? '',
+      avatarUrl:
+          AppConfig.resolveMediaUrl(userMap?['avatarUrl'] as String? ?? ''),
       role: ClanRole.values.firstWhere(
         (r) => r.name.toUpperCase() == rawRole,
         orElse: () => ClanRole.member,

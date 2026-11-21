@@ -37,6 +37,8 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
   bool _saving = false;
   String? _communityId;
   String? _communityName;
+  List<LatLng> _roadGeometry = const [];
+  String? _loadedWaypointsSignature;
 
   /// Typical road day. Kept explicit so the ETA is a stated assumption rather
   /// than a number pulled out of the air.
@@ -64,6 +66,36 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
     }
     if (_destination != null) points.add(_destination!.coordinates);
     return points;
+  }
+
+  /// Road-following geometry once OSRM answers; straight stops until then.
+  List<LatLng> get _displayRoutePoints =>
+      _roadGeometry.length >= 2 ? _roadGeometry : _routePoints;
+
+  void _loadRoadGeometry() {
+    final stops = _routePoints;
+    if (stops.length < 2) return;
+
+    final signature = stops
+        .map((point) => '${point.latitude},${point.longitude}')
+        .join(';');
+    if (signature == _loadedWaypointsSignature) return;
+    _loadedWaypointsSignature = signature;
+
+    // A new stop list must not briefly draw the previous route.
+    _roadGeometry = const [];
+    final coords = stops
+        .map((point) => [point.latitude, point.longitude])
+        .toList();
+
+    TeritoryRepository.instance.fetchDirections(coords).then((result) {
+      if (!mounted) return;
+      if (result.coordinates.isEmpty || result.fallback) return;
+      setState(() {
+        _roadGeometry =
+            result.coordinates.map((c) => LatLng(c[0], c[1])).toList();
+      });
+    }).catchError((_) {});
   }
 
   double get _distanceKm {
@@ -262,6 +294,7 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _loadRoadGeometry();
     return Scaffold(
       backgroundColor: TeritoryColors.background,
       appBar: AppBar(
@@ -359,11 +392,11 @@ class _TripPlannerScreenState extends ConsumerState<TripPlannerScreen> {
                             'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                         userAgentPackageName: 'com.onway.teritory',
                       ),
-                      if (_routePoints.length >= 2)
+                      if (_displayRoutePoints.length >= 2)
                         PolylineLayer(
                           polylines: [
                             Polyline(
-                              points: _routePoints,
+                              points: _displayRoutePoints,
                               strokeWidth: 4,
                               color: TeritoryColors.tripRoute,
                               pattern: const StrokePattern.solid(),

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/models/api_user.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
@@ -247,7 +248,9 @@ class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
                               )
                             : _avatarUrl.text.trim().isNotEmpty
                                 ? CachedNetworkImage(
-                                    imageUrl: _avatarUrl.text.trim(),
+                                    imageUrl: AppConfig.resolveMediaUrl(
+                                      _avatarUrl.text.trim(),
+                                    ),
                                     fit: BoxFit.cover,
                                     placeholder: (context, url) => const Center(
                                       child: SizedBox(

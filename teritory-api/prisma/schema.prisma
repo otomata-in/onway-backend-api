@@ -88,6 +88,12 @@ enum RallyStatus {
   EXPIRED
 }
 
+enum ServiceInquiryType {
+  CALL
+  WEBSITE
+  NAVIGATE
+}
+
 enum LeaderboardScope {
   GLOBAL
   COUNTRY
@@ -182,6 +188,7 @@ model User {
   ralliesCreated       LegendaryRally[]     @relation("RallyHost")
   rallyParticipations  RallyParticipant[]
   notifications        Notification[]
+  serviceInquiries     ServiceInquiry[]
 
   @@index([handle])
   @@index([country, state, district])
@@ -377,6 +384,7 @@ model CommunityMessage {
   communityId String
   userId      String
   text        String
+  imageUrl    String?
   createdAt   DateTime @default(now())
 
   community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
@@ -592,11 +600,27 @@ model ServiceProvider {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  listings ServiceListing[]
+  listings  ServiceListing[]
+  inquiries ServiceInquiry[]
 
   @@index([latitude, longitude])
   @@index([category])
   @@map("service_providers")
+}
+
+model ServiceInquiry {
+  id                String             @id @default(uuid())
+  serviceProviderId String
+  userId            String
+  type              ServiceInquiryType
+  createdAt         DateTime           @default(now())
+
+  serviceProvider ServiceProvider @relation(fields: [serviceProviderId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([serviceProviderId, createdAt])
+  @@index([userId, createdAt])
+  @@map("service_inquiries")
 }
 
 model ServiceListing {

@@ -1,5 +1,6 @@
 import 'package:latlong2/latlong.dart';
 
+import '../config/app_config.dart';
 import 'teritory_models.dart';
 
 /// A flag exactly as returned by `teritory-api` (`/v1/flags`, `/v1/flags/explore`,
@@ -95,7 +96,7 @@ class ApiFlag {
       isMajorFlag: json['isMajorFlag'] as bool? ?? false,
       category: json['category'] as String? ?? 'General',
       notes: json['notes'] as String? ?? '',
-      photoUrl: json['photoUrl'] as String? ?? '',
+      photoUrl: AppConfig.resolveMediaUrl(json['photoUrl'] as String? ?? ''),
       kudos: (json['kudos'] as num?)?.toInt() ?? 0,
       distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 0.0,
       hiddenGemCount: (json['hiddenGemCount'] as num?)?.toInt() ?? 0,
@@ -104,7 +105,7 @@ class ApiFlag {
           : DateTime.now(),
       authorName: authorName.isEmpty ? 'Traveler' : authorName,
       authorHandle: authorHandle,
-      authorAvatar: authorAvatar,
+      authorAvatar: AppConfig.resolveMediaUrl(authorAvatar),
     );
   }
 }
@@ -160,7 +161,7 @@ class ApiFlagComment {
       id: json['id'] as String? ?? '',
       userId: json['userId'] as String? ?? '',
       userName: userName.isEmpty ? 'Traveler' : userName,
-      userAvatar: userAvatar,
+      userAvatar: AppConfig.resolveMediaUrl(userAvatar),
       text: json['text'] as String? ?? '',
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
@@ -349,7 +350,7 @@ class ApiWonder {
       continent: json['continent'] as String? ?? '',
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
-      photoUrl: json['photoUrl'] as String? ?? '',
+      photoUrl: AppConfig.resolveMediaUrl(json['photoUrl'] as String? ?? ''),
       latestFlagId: json['latestFlagId'] as String? ?? '',
       claimCount: (json['claimCount'] as num?)?.toInt() ?? 0,
       claimedByMe: json['claimedByMe'] as bool? ?? false,

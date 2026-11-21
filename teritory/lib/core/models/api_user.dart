@@ -3,6 +3,8 @@
 /// and friend surfaces can only render what the backend confirms.
 library;
 
+import '../config/app_config.dart';
+
 class ApiPassportStamp {
   final String id;
   final String title;
@@ -102,8 +104,9 @@ class ApiUser {
       id: json['id'] as String? ?? '',
       displayName: json['displayName'] as String? ?? 'Traveler',
       handle: json['handle'] as String? ?? 'traveler',
-      avatarUrl: json['avatarUrl'] as String? ?? '',
-      coverImageUrl: json['coverImageUrl'] as String? ?? '',
+      avatarUrl: AppConfig.resolveMediaUrl(json['avatarUrl'] as String? ?? ''),
+      coverImageUrl:
+          AppConfig.resolveMediaUrl(json['coverImageUrl'] as String? ?? ''),
       bio: json['bio'] as String? ?? '',
       phone: json['phone'] as String? ?? '',
       email: json['email'] as String? ?? '',

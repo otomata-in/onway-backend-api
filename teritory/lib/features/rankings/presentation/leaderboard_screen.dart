@@ -27,6 +27,29 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
   String? _clanId;
   String? _communityId;
   bool _breakdownExpanded = false;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    if (_scrollController.position.pixels <
+        _scrollController.position.maxScrollExtent - 240) {
+      return;
+    }
+    if (_missingGeoValue != null) return;
+    ref.read(leaderboardFeedProvider(_query).notifier).loadMore();
+  }
 
   LeaderboardQuery get _query => LeaderboardQuery(
         scope: _scope,
@@ -78,9 +101,9 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
   Future<void> _refresh(LeaderboardQuery query) async {
     ref.invalidate(rankingsFacetsProvider);
     ref.invalidate(myRankProvider);
-    ref.invalidate(rankingsProvider(query));
+    ref.invalidate(leaderboardFeedProvider(query));
     try {
-      await ref.read(rankingsProvider(query).future);
+      await ref.read(leaderboardFeedProvider(query).future);
     } on ApiException {
       // The error state renders the message; refresh just ends here.
     }
@@ -96,11 +119,14 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
     final facetsAsync = ref.watch(rankingsFacetsProvider);
     final query = _query;
     final missingGeo = _missingGeoValue;
-    final entriesAsync = missingGeo == null ? ref.watch(rankingsProvider(query)) : null;
+    final feedAsync = missingGeo == null
+        ? ref.watch(leaderboardFeedProvider(query))
+        : null;
     final myRankAsync = ref.watch(myRankProvider);
     final currentUser = ref.watch(currentUserProvider);
 
-    final entries = entriesAsync?.valueOrNull ?? const <LeaderboardEntry>[];
+    final feed = feedAsync?.valueOrNull;
+    final entries = feed?.entries ?? const <LeaderboardEntry>[];
     LeaderboardEntry? myEntry;
     for (final entry in entries) {
       if (entry.userId == currentUser.id) {
@@ -164,6 +190,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
             color: TeritoryColors.primary,
             onRefresh: () => _refresh(query),
             child: CustomScrollView(
+              controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 SliverToBoxAdapter(
@@ -193,24 +220,27 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                     state: _state,
                     district: _district,
                     clanId: _clanId,
+                    communityId: _communityId,
                     onCountryChanged: (value) =>
                         setState(() => _country = value),
                     onStateChanged: (value) => setState(() => _state = value),
                     onDistrictChanged: (value) =>
                         setState(() => _district = value),
                     onClanChanged: (value) => setState(() => _clanId = value),
+                    onCommunityChanged: (value) =>
+                        setState(() => _communityId = value),
                     onRetryFacets: () =>
                         ref.invalidate(rankingsFacetsProvider),
                   ),
                 ),
 
-                if (entriesAsync == null)
+                if (feedAsync == null)
                   SliverFillRemaining(
                     hasScrollBody: false,
                     child: _MissingFilterState(missing: missingGeo!),
                   )
                 else
-                  ...entriesAsync.when(
+                  ...feedAsync.when(
                     loading: () => [
                       const SliverFillRemaining(
                         hasScrollBody: false,
@@ -228,11 +258,12 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                               ? error.message
                               : 'Could not load the rankings. Check the API and retry.',
                           onRetry: () =>
-                              ref.invalidate(rankingsProvider(query)),
+                              ref.invalidate(leaderboardFeedProvider(query)),
                         ),
                       ),
                     ],
-                    data: (entries) {
+                    data: (feed) {
+                      final entries = feed.entries;
                       if (entries.isEmpty) {
                         return [
                           SliverFillRemaining(
@@ -287,7 +318,18 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                               ),
                             ),
                           ),
-                        const SliverToBoxAdapter(child: SizedBox(height: 120)),
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                            child: _PagingFooter(
+                              feed: feed,
+                              onLoadMore: () => ref
+                                  .read(leaderboardFeedProvider(query).notifier)
+                                  .loadMore(),
+                            ),
+                          ),
+                        ),
                       ];
                     },
                   ),
@@ -324,10 +366,12 @@ class _GeoFilterBar extends ConsumerWidget {
     required this.state,
     required this.district,
     required this.clanId,
+    required this.communityId,
     required this.onCountryChanged,
     required this.onStateChanged,
     required this.onDistrictChanged,
     required this.onClanChanged,
+    required this.onCommunityChanged,
     required this.onRetryFacets,
   });
 
@@ -337,14 +381,82 @@ class _GeoFilterBar extends ConsumerWidget {
   final String? state;
   final String? district;
   final String? clanId;
+  final String? communityId;
   final ValueChanged<String?> onCountryChanged;
   final ValueChanged<String?> onStateChanged;
   final ValueChanged<String?> onDistrictChanged;
   final ValueChanged<String?> onClanChanged;
+  final ValueChanged<String?> onCommunityChanged;
   final VoidCallback onRetryFacets;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (scope == LeaderboardScope.community) {
+      final communitiesAsync = ref.watch(myCommunitiesProvider);
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+        child: communitiesAsync.when(
+          loading: () => const LinearProgressIndicator(minHeight: 2),
+          error: (_, _) => const SizedBox.shrink(),
+          data: (communities) {
+            if (communities.isEmpty) return const SizedBox.shrink();
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: TeritoryColors.border),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.groups_rounded,
+                      size: 16, color: TeritoryColors.communityIndigo),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Community',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: TeritoryColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String?>(
+                        value: communities.any((c) => c.id == communityId)
+                            ? communityId
+                            : null,
+                        isExpanded: true,
+                        hint: Text('All My Communities',
+                            style: GoogleFonts.plusJakartaSans(fontSize: 13)),
+                        items: [
+                          DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('All My Communities',
+                                style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                          ...communities.map((c) => DropdownMenuItem<String?>(
+                                value: c.id,
+                                child: Text(c.name,
+                                    style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 13)),
+                              )),
+                        ],
+                        onChanged: onCommunityChanged,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    }
+
     if (scope == LeaderboardScope.clan) {
       final clansAsync = ref.watch(clansProvider);
       return Padding(
@@ -522,6 +634,59 @@ class _GeoFilterBar extends ConsumerWidget {
 }
 
 // ─── State widgets ──────────────────────────────────────────────────────────
+
+class _PagingFooter extends StatelessWidget {
+  const _PagingFooter({required this.feed, required this.onLoadMore});
+
+  final LeaderboardFeedState feed;
+  final VoidCallback onLoadMore;
+
+  @override
+  Widget build(BuildContext context) {
+    if (feed.loadingMore) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(8),
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: TeritoryColors.primary,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (feed.loadMoreError != null) {
+      return Column(
+        children: [
+          Text(
+            feed.loadMoreError!,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12,
+              color: TeritoryColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          OutlinedButton(onPressed: onLoadMore, child: const Text('Retry')),
+        ],
+      );
+    }
+
+    if (!feed.hasMore) return const SizedBox.shrink();
+
+    return Center(
+      child: OutlinedButton.icon(
+        onPressed: onLoadMore,
+        icon: const Icon(Icons.expand_more_rounded, size: 18),
+        label: Text('Load more (${feed.entries.length} of ${feed.total})'),
+      ),
+    );
+  }
+}
 
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message, required this.onRetry});

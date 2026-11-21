@@ -15,6 +15,14 @@ const errorHandler = (err, req, res, next) => {
     statusCode = 400;
     message = err.message;
     code = 'VALIDATION_ERROR';
+  } else if (err.code === 'LIMIT_FILE_SIZE') {
+    statusCode = 413;
+    message = 'Image is larger than the 5 MB limit';
+    code = 'IMAGE_TOO_LARGE';
+  } else if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+    statusCode = 400;
+    message = 'Unexpected upload field; send the image as "image"';
+    code = 'INVALID_UPLOAD';
   } else if (err.code === 'P2002') {
     // Prisma unique constraint violation
     statusCode = 409;

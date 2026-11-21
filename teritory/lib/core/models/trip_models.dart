@@ -1,3 +1,5 @@
+import '../config/app_config.dart';
+
 enum TripPlanStatus { draft, proposed, voted, active, completed }
 
 enum TripStatus { active, completed, expired }
@@ -266,7 +268,7 @@ class TripParticipant {
       tripId: json['tripId'] as String? ?? '',
       userId: json['userId'] as String,
       userName: uName,
-      userAvatar: uAvatar,
+      userAvatar: AppConfig.resolveMediaUrl(uAvatar),
       status: ParticipantStatus.values.firstWhere(
         (e) =>
             e.name.toLowerCase() == statusStr ||

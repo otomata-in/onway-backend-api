@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/service_models.dart';
 import '../../../core/providers/data_providers.dart';
 import '../../../core/services/api_service.dart';
+import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 
 /// Live trail-services sheet opened from Explore.
@@ -372,6 +375,15 @@ class ServiceProviderSheet extends StatelessWidget {
     );
   }
 
+  /// Analytics must never block the real action, so this is fire-and-forget.
+  void _track(String type) {
+    unawaited(
+      TeritoryRepository.instance
+          .recordServiceInquiry(provider.id, type)
+          .catchError((_) {}),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final accent = isFood ? TeritoryColors.foodOrange : TeritoryColors.gearAmber;
@@ -538,12 +550,14 @@ class ServiceProviderSheet extends StatelessWidget {
                   icon: Icons.call_rounded,
                   label: provider.contactPhone!,
                   uri: Uri.parse('tel:${provider.contactPhone}'),
+                  onOpen: () => _track('CALL'),
                 ),
               if (provider.websiteUrl != null)
                 _ContactRow(
                   icon: Icons.link_rounded,
                   label: provider.websiteUrl!,
                   uri: Uri.parse(provider.websiteUrl!),
+                  onOpen: () => _track('WEBSITE'),
                 ),
             ],
             const SizedBox(height: 10),
@@ -551,6 +565,7 @@ class ServiceProviderSheet extends StatelessWidget {
               latitude: provider.latitude,
               longitude: provider.longitude,
               label: provider.name,
+              onTrack: () => _track('NAVIGATE'),
             ),
             const SizedBox(height: 16),
             Container(
@@ -592,11 +607,13 @@ class _ContactRow extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.uri,
+    this.onOpen,
   });
 
   final IconData icon;
   final String label;
   final Uri uri;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -604,7 +621,10 @@ class _ContactRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: () => launchUrl(uri, mode: LaunchMode.externalApplication),
+        onTap: () {
+          onOpen?.call();
+          launchUrl(uri, mode: LaunchMode.externalApplication);
+        },
         child: Row(
           children: [
             Icon(icon, size: 15, color: TeritoryColors.primary),
@@ -643,11 +663,13 @@ class _NavigateButton extends StatelessWidget {
     required this.latitude,
     required this.longitude,
     required this.label,
+    this.onTrack,
   });
 
   final double latitude;
   final double longitude;
   final String label;
+  final VoidCallback? onTrack;
 
   @override
   Widget build(BuildContext context) {
@@ -671,6 +693,7 @@ class _NavigateButton extends StatelessWidget {
           ),
         ),
         onPressed: () {
+          onTrack?.call();
           final uri = Uri.parse(
             'https://www.google.com/maps/dir/?api=1'
             '&destination=$latitude,$longitude'

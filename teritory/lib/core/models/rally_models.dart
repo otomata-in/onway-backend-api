@@ -1,3 +1,5 @@
+import '../config/app_config.dart';
+
 enum RallyStatus { pending, active, completed, expired }
 
 class LegendaryRally {
@@ -171,7 +173,8 @@ class RallyRosterEntry {
       participantId: json['id'] as String? ?? '',
       userId: json['userId'] as String? ?? user?['id'] as String? ?? '',
       displayName: user?['displayName'] as String? ?? 'Traveler',
-      avatarUrl: user?['avatarUrl'] as String? ?? '',
+      avatarUrl:
+          AppConfig.resolveMediaUrl(user?['avatarUrl'] as String? ?? ''),
       hasArrived: json['hasArrived'] as bool? ?? false,
       arrivedAt: json['arrivedAt'] != null
           ? DateTime.tryParse(json['arrivedAt'] as String)

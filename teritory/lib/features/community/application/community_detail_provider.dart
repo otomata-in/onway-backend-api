@@ -59,9 +59,9 @@ class CommunityMessagesNotifier
         .fetchCommunityMessagesLive(communityId);
   }
 
-  Future<void> sendMessage(String text) async {
+  Future<void> sendMessage(String text, {String? imageUrl}) async {
     final message = await TeritoryRepository.instance
-        .sendCommunityMessageLive(arg, text);
+        .sendCommunityMessageLive(arg, text, imageUrl: imageUrl);
     final current = state.valueOrNull ?? const <CommunityMessage>[];
     if (!current.any((existing) => existing.id == message.id)) {
       state = AsyncData([...current, message]);

@@ -106,7 +106,33 @@ class TeritoryRepository {
     int limit = 100,
     int page = 1,
   }) async {
-    final res = await _api.get(
+    final result = await fetchLeaderboardPage(
+      scope: scope,
+      period: period,
+      country: country,
+      state: state,
+      district: district,
+      clanId: clanId,
+      communityId: communityId,
+      limit: limit,
+      page: page,
+    );
+    return result.entries;
+  }
+
+  /// One page of rankings plus the server's `meta` paging flags.
+  Future<LeaderboardPage> fetchLeaderboardPage({
+    LeaderboardScope scope = LeaderboardScope.global,
+    LeaderboardPeriod period = LeaderboardPeriod.alltime,
+    String? country,
+    String? state,
+    String? district,
+    String? clanId,
+    String? communityId,
+    int limit = 50,
+    int page = 1,
+  }) async {
+    final envelope = await _api.getEnvelope(
       '/rankings',
       queryParams: {
         'scope': scope.name.toUpperCase(),
@@ -121,12 +147,33 @@ class TeritoryRepository {
         'page': page,
       },
     );
+    final res = envelope['data'];
     if (res is! List) {
       throw ApiException('Unexpected response while loading rankings');
     }
+    final meta = envelope['meta'] is Map
+        ? (envelope['meta'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    return LeaderboardPage(
+      entries: res
+          .whereType<Map<String, dynamic>>()
+          .map(LeaderboardEntry.fromJson)
+          .toList(),
+      hasMore: meta['hasMore'] == true,
+      total: (meta['total'] as num?)?.toInt() ?? res.length,
+      page: (meta['page'] as num?)?.toInt() ?? page,
+    );
+  }
+
+  /// Communities the signed-in traveler belongs to, for scoped filters.
+  Future<List<Community>> fetchMyCommunities() async {
+    final res = await _api.get('/communities/mine');
+    if (res is! List) {
+      throw ApiException('Unexpected response while loading your communities');
+    }
     return res
         .whereType<Map<String, dynamic>>()
-        .map(LeaderboardEntry.fromJson)
+        .map(Community.fromJson)
         .toList();
   }
 
@@ -469,6 +516,8 @@ class TeritoryRepository {
         OfflineCacheService.instance.cacheSavedFlags(list);
         return list.map(ApiFlag.fromJson).toList();
       }
+    } on ApiException {
+      rethrow;
     } catch (_) {
       final cached = await OfflineCacheService.instance.getCachedSavedFlags();
       if (cached != null) {
@@ -671,11 +720,15 @@ class TeritoryRepository {
 
   Future<CommunityMessage> sendCommunityMessageLive(
     String communityId,
-    String text,
-  ) async {
+    String text, {
+    String? imageUrl,
+  }) async {
     final res = await _api.post(
       '/communities/$communityId/messages',
-      body: {'text': text},
+      body: {
+        'text': text,
+        if (imageUrl != null && imageUrl.isNotEmpty) 'imageUrl': imageUrl,
+      },
     );
     if (res is! Map<String, dynamic>) {
       throw ApiException('Unexpected response while sending your message');
@@ -819,12 +872,7 @@ class TeritoryRepository {
 
   // ─── TRIPS (live-only, no mock fallback) ───────────────────────────
 
-  Future<TripsHubSnapshot> fetchTripsHub() async {
-    final res = await _api.get('/trips/hub');
-    if (res is! Map<String, dynamic>) {
-      throw ApiException('Unexpected response while loading your trips');
-    }
-
+  TripsHubSnapshot _tripsHubFromJson(Map<String, dynamic> res) {
     List<TripPlan> plans(Object? raw) => (raw as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
         .map(TripPlan.fromJson)
@@ -836,6 +884,25 @@ class TeritoryRepository {
       proposedPlans: plans(res['proposedPlans']),
       savedPlans: plans(res['savedPlans']),
     );
+  }
+
+  /// Live trips hub, persisted so the active expedition stays viewable when the
+  /// traveler loses signal. Server refusals are surfaced, never masked by cache.
+  Future<TripsHubSnapshot> fetchTripsHub() async {
+    try {
+      final res = await _api.get('/trips/hub');
+      if (res is! Map<String, dynamic>) {
+        throw ApiException('Unexpected response while loading your trips');
+      }
+      await OfflineCacheService.instance.cacheTripsHub(res);
+      return _tripsHubFromJson(res);
+    } on ApiException {
+      rethrow;
+    } catch (_) {
+      final cached = await OfflineCacheService.instance.getCachedTripsHub();
+      if (cached != null) return _tripsHubFromJson(cached);
+      rethrow;
+    }
   }
 
   Future<List<TripHistoryEntry>> fetchTripHistory() async {
@@ -890,11 +957,23 @@ class TeritoryRepository {
     String tripId, {
     String? userId,
   }) async {
-    final res = await _api.get('/trips/$tripId');
-    if (res is! Map<String, dynamic>) {
-      throw ApiException('Unexpected response while loading this trip');
+    try {
+      final res = await _api.get('/trips/$tripId');
+      if (res is! Map<String, dynamic>) {
+        throw ApiException('Unexpected response while loading this trip');
+      }
+      await OfflineCacheService.instance.cacheActiveTrip(tripId, res);
+      return ActiveTripDetail.fromJson(res, userId: userId);
+    } on ApiException {
+      rethrow;
+    } catch (_) {
+      final cached =
+          await OfflineCacheService.instance.getCachedActiveTrip(tripId);
+      if (cached != null) {
+        return ActiveTripDetail.fromJson(cached, userId: userId);
+      }
+      rethrow;
     }
-    return ActiveTripDetail.fromJson(res, userId: userId);
   }
 
   /// Joins an in-progress expedition (`POST /trips/:tripId/join`).
@@ -940,6 +1019,8 @@ class TeritoryRepository {
         OfflineCacheService.instance.cacheSavedPlans(list);
         return list.map(TripPlan.fromJson).toList();
       }
+    } on ApiException {
+      rethrow;
     } catch (_) {
       final cached = await OfflineCacheService.instance.getCachedSavedPlans();
       if (cached != null) {
@@ -1022,6 +1103,18 @@ class TeritoryRepository {
       return res['invitedCount'] as int;
     }
     throw ApiException('Unexpected response while sending invitations');
+  }
+
+  // ─── SERVICE PROVIDERS ───────────────────────────────────────────────
+
+  /// Records a contact intent (call / website / navigate) for a service
+  /// provider. Best-effort: callers must never block opening the dialer or a
+  /// map on this request.
+  Future<void> recordServiceInquiry(String providerId, String type) async {
+    await _api.post(
+      '/services/$providerId/inquiry',
+      body: {'type': type},
+    );
   }
 
   // ─── DIRECTIONS ──────────────────────────────────────────────────────
