@@ -1,5 +1,6 @@
 const prisma = require('../../config/prisma');
 const ApiResponse = require('../../utils/ApiResponse');
+const ApiError = require('../../utils/ApiError');
 const { haversineDistanceMeters, getBoundingBox } = require('../../utils/geo');
 
 const getGearServices = async (req, res, next) => {
@@ -93,26 +94,33 @@ const getNearbyFood = async (req, res, next) => {
   }
 };
 
+const INQUIRY_TYPES = ['CALL', 'WEBSITE', 'NAVIGATE'];
+
 const recordInquiry = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { type } = req.body; // 'call', 'website', or 'navigate'
-    const userId = req.user.id;
+    const type = String(req.body?.type || '').toUpperCase();
+
+    if (!INQUIRY_TYPES.includes(type)) {
+      throw ApiError.badRequest(
+        `type must be one of ${INQUIRY_TYPES.join(', ')}`,
+      );
+    }
 
     const provider = await prisma.serviceProvider.findUnique({
       where: { id },
+      select: { id: true, name: true },
     });
-
     if (!provider) {
-      return ApiResponse.error(res, 'Service provider not found', 404);
+      throw ApiError.notFound('Service provider not found');
     }
 
     const inquiry = {
       id: `inq_${Date.now()}`,
       serviceProviderId: id,
       providerName: provider.name,
-      userId,
-      type: type || 'general',
+      userId: req.user.id,
+      type,
       createdAt: new Date().toISOString(),
     };
 
