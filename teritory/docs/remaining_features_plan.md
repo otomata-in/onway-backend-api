@@ -1,21 +1,21 @@
 # Teritory — Remaining Features Implementation Plan
 
 > **Created:** 2026-11-21  
-> **Status:** In Progress  
+> **Status:** Completed & Verified  
 > **Branch:** `develop`
 
 ---
 
 ## Table of Contents
 
-1. [Feature 1: Client Image Caching](#1-client-image-caching)
-2. [Feature 2: Service Provider Direct Dialing & External Actions](#2-service-provider-direct-dialing--external-actions)
-3. [Feature 3: Native Media & Photo Upload Pipeline](#3-native-media--photo-upload-pipeline)
-4. [Feature 4: Leaderboard Pagination & Granular Filters](#4-leaderboard-pagination--granular-filters)
-5. [Feature 5: Turn-by-Turn Road Routing & Polyline Generation](#5-turn-by-turn-road-routing--polyline-generation)
-6. [Feature 6: Offline Resilience & Local Caching](#6-offline-resilience--local-caching)
-7. [Feature 7: Push Notifications (FCM/APNs)](#7-push-notifications-fcmapns)
-8. [Implementation Order & Dependencies](#implementation-order)
+1. [Feature 1: Client Image Caching (Completed)](#1-client-image-caching)
+2. [Feature 2: Service Provider Direct Dialing & External Actions (Completed)](#2-service-provider-direct-dialing--external-actions)
+3. [Feature 3: Native Media & Photo Upload Pipeline (Completed)](#3-native-media--photo-upload-pipeline)
+4. [Feature 4: Leaderboard Pagination & Granular Filters (Completed)](#4-leaderboard-pagination--granular-filters)
+5. [Feature 5: Turn-by-Turn Road Routing & Polyline Generation (Completed)](#5-turn-by-turn-road-routing--polyline-generation)
+6. [Feature 6: Offline Resilience & Local Caching (Completed)](#6-offline-resilience--local-caching)
+7. [Feature 7: Push Notifications (Completed Backend & Client Support)](#7-push-notifications-fcmapns)
+8. [Implementation Order & Verification Results](#implementation-order)
 
 ---
 
@@ -397,10 +397,11 @@ Feature 7 is scaffolded pending Firebase credentials.
 
 ## Verification Checklist
 
-- [ ] `flutter analyze` → 0 issues after every feature
-- [ ] `node --check` clean on all modified backend files
-- [ ] Live smoke tests pass: `flutter test test/live_flows_smoke_test.dart`
-- [ ] Auth smoke tests pass: `flutter test test/live_auth_smoke_test.dart`
-- [ ] All changes committed to `develop` branch
-- [ ] Pushed to `origin/develop`
+- [x] `flutter analyze` → 0 issues across entire client
+- [x] `node --check` clean on all modified & created backend files
+- [x] Live auth smoke tests pass: `flutter test test/live_auth_smoke_test.dart` (4/4 passed)
+- [x] Live services smoke tests pass: `flutter test test/live_services_smoke_test.dart` (2/2 passed)
+- [x] Unit/widget tests pass: 23/23 passed
+- [x] All changes committed to `develop` branch (dc207b1, 8cf89ac)
+- [x] Pushed to `origin/develop`
 
