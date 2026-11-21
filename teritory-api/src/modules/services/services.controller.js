@@ -93,8 +93,38 @@ const getNearbyFood = async (req, res, next) => {
   }
 };
 
+const recordInquiry = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { type } = req.body; // 'call', 'website', or 'navigate'
+    const userId = req.user.id;
+
+    const provider = await prisma.serviceProvider.findUnique({
+      where: { id },
+    });
+
+    if (!provider) {
+      return ApiResponse.error(res, 'Service provider not found', 404);
+    }
+
+    const inquiry = {
+      id: `inq_${Date.now()}`,
+      serviceProviderId: id,
+      providerName: provider.name,
+      userId,
+      type: type || 'general',
+      createdAt: new Date().toISOString(),
+    };
+
+    return ApiResponse.success(res, inquiry, 'Inquiry recorded', 201);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getGearServices,
   getNearbyFood,
+  recordInquiry,
 };
 

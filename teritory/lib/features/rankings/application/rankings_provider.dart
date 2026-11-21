@@ -47,6 +47,9 @@ final rankingsProvider = FutureProvider.autoDispose
     country: query.country,
     state: query.state,
     district: query.district,
+    clanId: query.clanId,
+    communityId: query.communityId,
+    page: query.page,
   );
 });
 

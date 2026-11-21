@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/api_service.dart';
@@ -47,6 +50,9 @@ class _DropFlagModalState extends ConsumerState<DropFlagModal> {
   late TextEditingController _notesController;
   bool _isMajorFlag = false;
   bool _isSubmitting = false;
+  bool _uploadingPhoto = false;
+  File? _photoFile;
+  String? _photoUrl;
   String _selectedCategory = 'Scenic Viewpoint';
 
   final List<String> _categories = [
@@ -73,6 +79,74 @@ class _DropFlagModalState extends ConsumerState<DropFlagModal> {
     _cityController.dispose();
     _notesController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickPhoto(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+
+      final file = File(picked.path);
+      setState(() {
+        _photoFile = file;
+        _uploadingPhoto = true;
+      });
+
+      final url = await TeritoryRepository.instance.uploadImage(file.path);
+      if (!mounted) return;
+      setState(() {
+        _photoUrl = url;
+        _uploadingPhoto = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _uploadingPhoto = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to upload photo: $e')),
+      );
+    }
+  }
+
+  void _showPhotoPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded, color: TeritoryColors.primary),
+              title: Text('Take a photo of this spot',
+                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickPhoto(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded, color: TeritoryColors.primary),
+              title: Text('Choose from gallery',
+                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickPhoto(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _submitFlag() async {
@@ -107,6 +181,7 @@ class _DropFlagModalState extends ConsumerState<DropFlagModal> {
         isMajorFlag: _isMajorFlag,
         category: _selectedCategory,
         notes: notes,
+        photoUrl: _photoUrl,
       );
     } on ApiException catch (e) {
       // The server answered and refused. Replaying it from the queue would be
@@ -137,6 +212,7 @@ class _DropFlagModalState extends ConsumerState<DropFlagModal> {
             isMajorFlag: _isMajorFlag,
             category: _selectedCategory,
             notes: notes,
+            photoUrl: _photoUrl,
           );
 
       if (!mounted) return;
@@ -456,6 +532,97 @@ class _DropFlagModalState extends ConsumerState<DropFlagModal> {
                 ),
               ),
             ),
+            const SizedBox(height: 14),
+
+            // Spot Photo Section
+            Text(
+              'Spot Photo',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: TeritoryColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            if (_photoFile != null)
+              Container(
+                height: 140,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  image: DecorationImage(
+                    image: FileImage(_photoFile!),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    if (_uploadingPhoto)
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black45,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Center(
+                          child: CircularProgressIndicator(color: Colors.white),
+                        ),
+                      ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _photoFile = null;
+                            _photoUrl = null;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.close_rounded,
+                              size: 16, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              InkWell(
+                onTap: _showPhotoPicker,
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: TeritoryColors.surfaceContainer,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: TeritoryColors.border,
+                      style: BorderStyle.solid,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.add_a_photo_rounded,
+                          size: 20, color: TeritoryColors.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Add Spot Photo (Camera or Gallery)',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: TeritoryColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             const SizedBox(height: 20),
 
             // Submit Button

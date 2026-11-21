@@ -16,9 +16,9 @@ void main() {
 
   final repo = TeritoryRepository.instance;
 
-  // Seed providers sit around Palakkad / Munnar.
-  const lat = 10.2820;
-  const lng = 76.5650;
+  // Seed providers sit around Kazhakkoottam.
+  const lat = 8.5686;
+  const lng = 76.8731;
 
   setUpAll(() async {
     await repo.loginWithOtp('+919876543210', '12345');

@@ -18,6 +18,9 @@ class LeaderboardQuery {
   final String? country;
   final String? state;
   final String? district;
+  final String? clanId;
+  final String? communityId;
+  final int page;
 
   const LeaderboardQuery({
     this.scope = LeaderboardScope.global,
@@ -25,6 +28,9 @@ class LeaderboardQuery {
     this.country,
     this.state,
     this.district,
+    this.clanId,
+    this.communityId,
+    this.page = 1,
   });
 
   @override
@@ -34,10 +40,22 @@ class LeaderboardQuery {
       other.period == period &&
       other.country == country &&
       other.state == state &&
-      other.district == district;
+      other.district == district &&
+      other.clanId == clanId &&
+      other.communityId == communityId &&
+      other.page == page;
 
   @override
-  int get hashCode => Object.hash(scope, period, country, state, district);
+  int get hashCode => Object.hash(
+        scope,
+        period,
+        country,
+        state,
+        district,
+        clanId,
+        communityId,
+        page,
+      );
 }
 
 /// `GET /rankings/me`: the signed-in traveler's standing and the server's score

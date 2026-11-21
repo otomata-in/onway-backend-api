@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -223,10 +224,22 @@ class _ClanDetailScreenState extends ConsumerState<ClanDetailScreen> {
                         ),
                       )
                     else
-                      Image.network(
-                        clan.coverImageUrl,
+                      CachedNetworkImage(
+                        imageUrl: clan.coverImageUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
+                        placeholder: (context, url) => Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                TeritoryColors.clanPurple,
+                                TeritoryColors.communityIndigo,
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
+                        ),
+                        errorWidget: (context, url, error) => Container(
                           decoration: const BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
@@ -805,10 +818,10 @@ class _CommunityCard extends StatelessWidget {
                         color: Colors.white,
                         size: 28,
                       )
-                    : Image.network(
-                        community.coverImageUrl,
+                    : CachedNetworkImage(
+                        imageUrl: community.coverImageUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => const Icon(
+                        errorWidget: (context, url, error) => const Icon(
                           Icons.groups_rounded,
                           color: Colors.white,
                           size: 28,

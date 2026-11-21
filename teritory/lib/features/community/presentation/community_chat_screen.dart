@@ -1,10 +1,14 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/models/community_models.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/api_service.dart';
+import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../application/community_detail_provider.dart';
 
@@ -51,6 +55,30 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       _toast(e.message);
     } catch (_) {
       _toast('Could not send your message. Check your connection.');
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _pickAndSendPhoto() async {
+    if (_sending) return;
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+
+      setState(() => _sending = true);
+      final url = await TeritoryRepository.instance.uploadImage(picked.path);
+      await ref
+          .read(communityMessagesProvider(widget.communityId).notifier)
+          .sendMessage('[Photo] $url');
+    } catch (e) {
+      _toast('Failed to upload image: $e');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -158,6 +186,12 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
               ),
               child: Row(
                 children: [
+                  IconButton(
+                    onPressed: _sending ? null : _pickAndSendPhoto,
+                    icon: const Icon(Icons.photo_camera_rounded),
+                    color: TeritoryColors.communityIndigo,
+                    tooltip: 'Send photo',
+                  ),
                   Expanded(
                     child: TextField(
                       controller: _controller,
@@ -253,14 +287,51 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
                       ),
                     ),
                   ),
-                Text(
-                  msg.text,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 13,
-                    color: isSelf ? Colors.white : TeritoryColors.textPrimary,
-                    height: 1.4,
+                if (msg.text.startsWith('[Photo] ')) ...[
+                  Builder(
+                    builder: (context) {
+                      final rawUrl = msg.text.substring(8).trim();
+                      final fullUrl = rawUrl.startsWith('http')
+                          ? rawUrl
+                          : '${AppConfig.baseUrl}$rawUrl';
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: CachedNetworkImage(
+                          imageUrl: fullUrl,
+                          width: 200,
+                          height: 150,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            width: 200,
+                            height: 150,
+                            color: Colors.black12,
+                            child: const Center(
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            width: 200,
+                            height: 100,
+                            color: Colors.black12,
+                            child: const Icon(Icons.broken_image_rounded),
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                ),
+                ] else
+                  Text(
+                    msg.text,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13,
+                      color: isSelf ? Colors.white : TeritoryColors.textPrimary,
+                      height: 1.4,
+                    ),
+                  ),
                 const SizedBox(height: 4),
                 Text(
                   _timeAgo(msg.createdAt),

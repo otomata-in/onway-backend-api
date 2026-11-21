@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/models/api_trip.dart';
+import '../../../core/models/trip_models.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/socket_service.dart';
 import '../../../core/services/teritory_repository.dart';
@@ -30,6 +31,26 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
   bool _validating = false;
   bool _completing = false;
   bool _joining = false;
+  List<LatLng> _roadGeometry = const [];
+  String? _loadedWaypointsSignature;
+
+  void _loadRoadGeometry(List<TripWaypoint> waypoints) {
+    if (waypoints.length < 2) return;
+    final sig = waypoints.map((w) => '${w.latitude},${w.longitude}').join(';');
+    if (sig == _loadedWaypointsSignature) return;
+    _loadedWaypointsSignature = sig;
+
+    final coords = waypoints.map((w) => [w.latitude, w.longitude]).toList();
+    TeritoryRepository.instance.fetchDirections(coords).then((res) {
+      if (!mounted) return;
+      if (res.coordinates.isNotEmpty && !res.fallback) {
+        setState(() {
+          _roadGeometry =
+              res.coordinates.map((c) => LatLng(c[0], c[1])).toList();
+        });
+      }
+    }).catchError((_) {});
+  }
 
   @override
   void initState() {
@@ -240,9 +261,12 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
 
     final trip = detail.trip;
     final waypoints = detail.waypoints;
+    _loadRoadGeometry(waypoints);
     final waypointPoints = waypoints
         .map((w) => LatLng(w.latitude, w.longitude))
         .toList();
+    final routePoints =
+        _roadGeometry.isNotEmpty ? _roadGeometry : waypointPoints;
     final validatedCount = detail.validatedWaypointIds.length;
     final totalCount = waypoints.length;
     final nextWaypoint = detail.nextWaypoint;
@@ -299,12 +323,12 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                   child: tileWidget,
                 ),
               ),
-              if (waypointPoints.length >= 2)
+              if (routePoints.length >= 2)
                 PolylineLayer(
                   polylines: [
                     Polyline(
-                      points: waypointPoints,
-                      strokeWidth: 4.0,
+                      points: routePoints,
+                      strokeWidth: 4.5,
                       color: TeritoryColors.tripRoute,
                     ),
                   ],

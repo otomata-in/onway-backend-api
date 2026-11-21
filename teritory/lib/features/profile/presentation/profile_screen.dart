@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1130,12 +1131,24 @@ class _FlagListCard extends StatelessWidget {
                       child: const Icon(Icons.image,
                           color: TeritoryColors.textMuted),
                     )
-                  : Image.network(
-                      flag.photoUrl,
+                  : CachedNetworkImage(
+                      imageUrl: flag.photoUrl,
                       width: 72,
                       height: 72,
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stack) => Container(
+                      placeholder: (context, url) => Container(
+                        width: 72,
+                        height: 72,
+                        color: TeritoryColors.surfaceContainer,
+                        child: const Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => Container(
                         width: 72,
                         height: 72,
                         color: TeritoryColors.surfaceContainer,

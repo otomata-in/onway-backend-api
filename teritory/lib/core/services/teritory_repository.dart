@@ -12,6 +12,7 @@ import '../models/service_models.dart';
 import '../models/leaderboard_models.dart';
 import '../models/notification_models.dart';
 import 'api_service.dart';
+import 'offline_cache_service.dart';
 
 class TeritoryRepository {
   static final TeritoryRepository _instance = TeritoryRepository._internal();
@@ -84,6 +85,11 @@ class TeritoryRepository {
     throw ApiException('Unexpected response while updating trip mode');
   }
 
+  /// Registers or refreshes the device's Push Notification (FCM) token.
+  Future<void> updateFcmToken(String fcmToken) async {
+    await _api.patch('/users/me', body: {'fcmToken': fcmToken});
+  }
+
   // ─── RANKINGS ────────────────────────────────────────────────────────
 
   /// Live-only rankings. The server requires the geo value for geo scopes and
@@ -95,7 +101,10 @@ class TeritoryRepository {
     String? country,
     String? state,
     String? district,
+    String? clanId,
+    String? communityId,
     int limit = 100,
+    int page = 1,
   }) async {
     final res = await _api.get(
       '/rankings',
@@ -105,7 +114,11 @@ class TeritoryRepository {
         if (country != null && country.isNotEmpty) 'country': country,
         if (state != null && state.isNotEmpty) 'state': state,
         if (district != null && district.isNotEmpty) 'district': district,
+        if (clanId != null && clanId.isNotEmpty) 'clanId': clanId,
+        if (communityId != null && communityId.isNotEmpty)
+          'communityId': communityId,
         'limit': limit,
+        'page': page,
       },
     );
     if (res is! List) {
@@ -338,6 +351,18 @@ class TeritoryRepository {
     return Community.fromJson(res);
   }
 
+  // ─── UPLOAD ──────────────────────────────────────────────────────────
+
+  /// Uploads an image file and returns the server-relative URL
+  /// (e.g. `/uploads/abc123.jpg`).
+  Future<String> uploadImage(String filePath) async {
+    final res = await _api.uploadFile('/upload', filePath: filePath);
+    if (res is Map<String, dynamic> && res['url'] is String) {
+      return res['url'] as String;
+    }
+    throw ApiException('Unexpected response from upload endpoint');
+  }
+
   /// Creates a flag. Failures propagate as [ApiException] so the drop-flag
   /// sheet can show the server's own message; there is no success/failure
   /// boolean to misinterpret.
@@ -437,11 +462,21 @@ class TeritoryRepository {
 
   /// Loads flags saved to the traveler's wishlist (`GET /flags/saved`).
   Future<List<ApiFlag>> fetchSavedFlags() async {
-    final res = await _api.get('/flags/saved');
-    if (res is! List) {
-      throw ApiException('Unexpected response while loading saved flags');
+    try {
+      final res = await _api.get('/flags/saved');
+      if (res is List) {
+        final list = res.whereType<Map<String, dynamic>>().toList();
+        OfflineCacheService.instance.cacheSavedFlags(list);
+        return list.map(ApiFlag.fromJson).toList();
+      }
+    } catch (_) {
+      final cached = await OfflineCacheService.instance.getCachedSavedFlags();
+      if (cached != null) {
+        return cached.map(ApiFlag.fromJson).toList();
+      }
+      rethrow;
     }
-    return res.whereType<Map<String, dynamic>>().map(ApiFlag.fromJson).toList();
+    throw ApiException('Unexpected response while loading saved flags');
   }
 
   /// Major wonders registry (`GET /flags/wonders`), derived server-side from
@@ -898,14 +933,21 @@ class TeritoryRepository {
   }
 
   Future<List<TripPlan>> fetchSavedPlans() async {
-    final res = await _api.get('/trips/plans/saved');
-    if (res is! List) {
-      throw ApiException('Unexpected response while loading saved plans');
+    try {
+      final res = await _api.get('/trips/plans/saved');
+      if (res is List) {
+        final list = res.whereType<Map<String, dynamic>>().toList();
+        OfflineCacheService.instance.cacheSavedPlans(list);
+        return list.map(TripPlan.fromJson).toList();
+      }
+    } catch (_) {
+      final cached = await OfflineCacheService.instance.getCachedSavedPlans();
+      if (cached != null) {
+        return cached.map(TripPlan.fromJson).toList();
+      }
+      rethrow;
     }
-    return res
-        .whereType<Map<String, dynamic>>()
-        .map(TripPlan.fromJson)
-        .toList();
+    throw ApiException('Unexpected response while loading saved plans');
   }
 
   /// Creates a plan and lets [ApiException] through, unlike the legacy
@@ -981,4 +1023,52 @@ class TeritoryRepository {
     }
     throw ApiException('Unexpected response while sending invitations');
   }
+
+  // ─── DIRECTIONS ──────────────────────────────────────────────────────
+
+  /// Fetches road-geometry polyline coordinates from the OSRM proxy.
+  /// [waypoints] is a list of `LatLng` pairs; the backend expects
+  /// `lng,lat;lng,lat` format. Returns raw GeoJSON coordinates or empty list
+  /// if the routing service is unreachable.
+  Future<DirectionsResult> fetchDirections(List<List<double>> waypoints) async {
+    if (waypoints.length < 2) {
+      return const DirectionsResult(coordinates: [], distanceM: 0, durationS: 0, fallback: true);
+    }
+    final formatted =
+        waypoints.map((w) => '${w[1]},${w[0]}').join(';'); // lng,lat
+    final res = await _api.get(
+      '/trips/directions',
+      queryParams: {'waypoints': formatted},
+    );
+    if (res is Map<String, dynamic>) {
+      final coords = (res['coordinates'] as List<dynamic>? ?? [])
+          .map((c) => [
+                (c[1] as num).toDouble(), // lat
+                (c[0] as num).toDouble(), // lng
+              ])
+          .toList();
+      return DirectionsResult(
+        coordinates: coords,
+        distanceM: (res['distance_m'] as num?)?.toInt() ?? 0,
+        durationS: (res['duration_s'] as num?)?.toInt() ?? 0,
+        fallback: res['fallback'] as bool? ?? true,
+      );
+    }
+    return const DirectionsResult(coordinates: [], distanceM: 0, durationS: 0, fallback: true);
+  }
+}
+
+/// Result from the OSRM directions proxy.
+class DirectionsResult {
+  final List<List<double>> coordinates; // [[lat, lng], ...]
+  final int distanceM;
+  final int durationS;
+  final bool fallback;
+
+  const DirectionsResult({
+    required this.coordinates,
+    required this.distanceM,
+    required this.durationS,
+    required this.fallback,
+  });
 }

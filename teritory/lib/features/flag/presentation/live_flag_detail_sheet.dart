@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -202,12 +203,18 @@ class _LiveFlagDetailSheetState extends ConsumerState<LiveFlagDetailSheet> {
             if (flag.photoUrl.isNotEmpty)
               ClipRRect(
                 borderRadius: BorderRadius.circular(20),
-                child: Image.network(
-                  flag.photoUrl,
+                child: CachedNetworkImage(
+                  imageUrl: flag.photoUrl,
                   height: 180,
                   width: double.infinity,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                  placeholder: (context, url) => Container(
+                    height: 180,
+                    width: double.infinity,
+                    color: Colors.grey.shade200,
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                  errorWidget: (context, url, error) => const SizedBox.shrink(),
                 ),
               ),
 

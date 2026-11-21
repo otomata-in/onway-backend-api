@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/models/service_models.dart';
 import '../../../core/providers/data_providers.dart';
@@ -536,13 +537,21 @@ class ServiceProviderSheet extends StatelessWidget {
                 _ContactRow(
                   icon: Icons.call_rounded,
                   label: provider.contactPhone!,
+                  uri: Uri.parse('tel:${provider.contactPhone}'),
                 ),
               if (provider.websiteUrl != null)
                 _ContactRow(
                   icon: Icons.link_rounded,
                   label: provider.websiteUrl!,
+                  uri: Uri.parse(provider.websiteUrl!),
                 ),
             ],
+            const SizedBox(height: 10),
+            _NavigateButton(
+              latitude: provider.latitude,
+              longitude: provider.longitude,
+              label: provider.name,
+            ),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
@@ -579,41 +588,97 @@ class ServiceProviderSheet extends StatelessWidget {
 }
 
 class _ContactRow extends StatelessWidget {
-  const _ContactRow({required this.icon, required this.label});
+  const _ContactRow({
+    required this.icon,
+    required this.label,
+    required this.uri,
+  });
 
   final IconData icon;
   final String label;
+  final Uri uri;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 15, color: TeritoryColors.textSecondary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 12.5,
-                color: TeritoryColors.textPrimary,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => launchUrl(uri, mode: LaunchMode.externalApplication),
+        child: Row(
+          children: [
+            Icon(icon, size: 15, color: TeritoryColors.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12.5,
+                  color: TeritoryColors.primary,
+                  decoration: TextDecoration.underline,
+                ),
               ),
             ),
+            IconButton(
+              tooltip: 'Copy',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.copy_rounded,
+                  size: 15, color: TeritoryColors.textMuted),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: label));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Copied $label')),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NavigateButton extends StatelessWidget {
+  const _NavigateButton({
+    required this.latitude,
+    required this.longitude,
+    required this.label,
+  });
+
+  final double latitude;
+  final double longitude;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: TeritoryColors.primary,
+          side: const BorderSide(color: TeritoryColors.primary),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-          IconButton(
-            tooltip: 'Copy',
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.copy_rounded,
-                size: 15, color: TeritoryColors.textMuted),
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: label));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Copied $label')),
-              );
-            },
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+        icon: const Icon(Icons.directions_rounded, size: 18),
+        label: Text(
+          'Navigate to Location',
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
           ),
-        ],
+        ),
+        onPressed: () {
+          final uri = Uri.parse(
+            'https://www.google.com/maps/dir/?api=1'
+            '&destination=$latitude,$longitude'
+            '&destination_place_id='
+            '&travelmode=driving',
+          );
+          launchUrl(uri, mode: LaunchMode.externalApplication);
+        },
       ),
     );
   }

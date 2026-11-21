@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const tripsController = require('./trips.controller');
+const directionsController = require('./directions.controller');
 const { authenticate, optionalAuthenticate } = require('../../middleware/authenticate');
 
+router.get('/directions', optionalAuthenticate, directionsController.getDirections);
 router.get('/hub', authenticate, tripsController.getTripsHub);
 router.get('/plans', optionalAuthenticate, tripsController.listTripPlans);
 router.post('/plans', authenticate, tripsController.createTripPlan);

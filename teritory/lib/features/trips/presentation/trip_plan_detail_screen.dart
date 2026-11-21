@@ -26,6 +26,26 @@ class _TripPlanDetailScreenState extends ConsumerState<TripPlanDetailScreen> {
   bool _saving = false;
   bool _voting = false;
   bool _starting = false;
+  List<LatLng> _roadGeometry = const [];
+  String? _loadedWaypointsSignature;
+
+  void _loadRoadGeometry(List<TripWaypoint> waypoints) {
+    if (waypoints.length < 2) return;
+    final sig = waypoints.map((w) => '${w.latitude},${w.longitude}').join(';');
+    if (sig == _loadedWaypointsSignature) return;
+    _loadedWaypointsSignature = sig;
+
+    final coords = waypoints.map((w) => [w.latitude, w.longitude]).toList();
+    TeritoryRepository.instance.fetchDirections(coords).then((res) {
+      if (!mounted) return;
+      if (res.coordinates.isNotEmpty && !res.fallback) {
+        setState(() {
+          _roadGeometry =
+              res.coordinates.map((c) => LatLng(c[0], c[1])).toList();
+        });
+      }
+    }).catchError((_) {});
+  }
 
   String _errorMessage(Object? error) => error is ApiException
       ? error.message
@@ -229,9 +249,12 @@ class _TripPlanDetailScreenState extends ConsumerState<TripPlanDetailScreen> {
         ? '$days days $hrs hrs'
         : '$durationHours hrs';
 
+    _loadRoadGeometry(plan.waypoints);
     final waypointPoints = plan.waypoints
         .map((w) => LatLng(w.latitude, w.longitude))
         .toList();
+    final routePoints =
+        _roadGeometry.isNotEmpty ? _roadGeometry : waypointPoints;
 
     return Scaffold(
       appBar: AppBar(
@@ -321,12 +344,12 @@ class _TripPlanDetailScreenState extends ConsumerState<TripPlanDetailScreen> {
                                 child: tileWidget,
                               ),
                         ),
-                        if (waypointPoints.length >= 2)
+                        if (routePoints.length >= 2)
                           PolylineLayer(
                             polylines: [
                               Polyline(
-                                points: waypointPoints,
-                                strokeWidth: 3.0,
+                                points: routePoints,
+                                strokeWidth: 3.5,
                                 color: TeritoryColors.tripRoute,
                               ),
                             ],

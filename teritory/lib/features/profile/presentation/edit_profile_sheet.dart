@@ -1,6 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/models/api_user.dart';
 import '../../../core/services/api_service.dart';
@@ -40,6 +42,7 @@ class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
   late bool _isTripMode;
 
   bool _busy = false;
+  bool _uploadingAvatar = false;
   String? _error;
 
   @override
@@ -65,6 +68,69 @@ class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
     _state.dispose();
     _district.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAndUploadAvatar(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+
+      setState(() {
+        _uploadingAvatar = true;
+        _error = null;
+      });
+
+      final url = await TeritoryRepository.instance.uploadImage(picked.path);
+      if (!mounted) return;
+      setState(() {
+        _avatarUrl.text = url;
+        _uploadingAvatar = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _uploadingAvatar = false;
+        _error = 'Failed to upload photo: $e';
+      });
+    }
+  }
+
+  void _showImageSourcePicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: TeritoryColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_rounded, color: TeritoryColors.primary),
+              title: Text('Take a photo', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAndUploadAvatar(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded, color: TeritoryColors.primary),
+              title: Text('Choose from gallery', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAndUploadAvatar(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _save() async {
@@ -157,6 +223,76 @@ class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
               ),
             ),
             const SizedBox(height: 18),
+            Center(
+              child: Stack(
+                children: [
+                  GestureDetector(
+                    onTap: (_busy || _uploadingAvatar) ? null : _showImageSourcePicker,
+                    child: Container(
+                      width: 84,
+                      height: 84,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: TeritoryColors.primary, width: 2),
+                        color: TeritoryColors.surfaceContainer,
+                      ),
+                      child: ClipOval(
+                        child: _uploadingAvatar
+                            ? const Center(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              )
+                            : _avatarUrl.text.trim().isNotEmpty
+                                ? CachedNetworkImage(
+                                    imageUrl: _avatarUrl.text.trim(),
+                                    fit: BoxFit.cover,
+                                    placeholder: (context, url) => const Center(
+                                      child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      ),
+                                    ),
+                                    errorWidget: (context, url, error) => const Icon(
+                                      Icons.person_rounded,
+                                      size: 40,
+                                      color: TeritoryColors.textSecondary,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.person_rounded,
+                                    size: 40,
+                                    color: TeritoryColors.textSecondary,
+                                  ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: GestureDetector(
+                      onTap: (_busy || _uploadingAvatar) ? null : _showImageSourcePicker,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: TeritoryColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.camera_alt_rounded,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             _field(_displayName, 'Display name', 'Arjun Nair'),
             const SizedBox(height: 12),
             _field(_bio, 'Bio', 'Chasing coastlines', maxLines: 3, maxLength: 250),

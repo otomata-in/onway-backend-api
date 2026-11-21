@@ -316,4 +316,42 @@ class TeritoryApiService {
   Future<dynamic> delete(String endpoint) {
     return _send('DELETE', endpoint);
   }
+
+  /// Uploads a file via multipart POST. Returns the parsed JSON response body
+  /// (the `data` envelope is unwrapped like other methods).
+  Future<dynamic> uploadFile(
+    String endpoint, {
+    required String filePath,
+    String fieldName = 'image',
+  }) async {
+    final uri = _buildUri(endpoint);
+    final request = http.MultipartRequest('POST', uri);
+
+    if (_token != null && _token!.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $_token';
+    }
+    request.files.add(await http.MultipartFile.fromPath(fieldName, filePath));
+
+    final streamed = await request.send().timeout(AppConfig.requestTimeout);
+    final res = await http.Response.fromStream(streamed);
+
+    // Handle 401 refresh once, like _send does
+    if (res.statusCode == 401 &&
+        !endpoint.startsWith('/auth/') &&
+        _refreshToken != null) {
+      if (await _refreshAccessToken()) {
+        final retryRequest = http.MultipartRequest('POST', uri);
+        retryRequest.headers['Authorization'] = 'Bearer $_token';
+        retryRequest.files.add(
+          await http.MultipartFile.fromPath(fieldName, filePath),
+        );
+        final retryStreamed =
+            await retryRequest.send().timeout(AppConfig.requestTimeout);
+        final retryRes = await http.Response.fromStream(retryStreamed);
+        return _handleResponse(retryRes);
+      }
+    }
+
+    return _handleResponse(res);
+  }
 }

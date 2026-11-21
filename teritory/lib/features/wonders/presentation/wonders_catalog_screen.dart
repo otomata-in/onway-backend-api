@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -297,12 +298,18 @@ class _WonderCard extends StatelessWidget {
                           color: TeritoryColors.majorGoldDark,
                         ),
                       )
-                    : Image.network(
-                        wonder.photoUrl,
+                    : CachedNetworkImage(
+                        imageUrl: wonder.photoUrl,
                         height: 160,
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
+                        placeholder: (context, url) => Container(
+                          height: 160,
+                          width: double.infinity,
+                          color: TeritoryColors.surfaceContainer,
+                          child: const Center(child: CircularProgressIndicator()),
+                        ),
+                        errorWidget: (context, url, error) => Container(
                           height: 140,
                           width: double.infinity,
                           color: TeritoryColors.surfaceContainer,

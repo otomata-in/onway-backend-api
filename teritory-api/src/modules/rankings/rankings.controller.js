@@ -80,6 +80,8 @@ const getLeaderboard = async (req, res, next) => {
       period = 'ALLTIME',
       page = 1,
       limit = 50,
+      clanId,
+      communityId,
     } = req.query;
 
     const normalizedScope = String(scope).toUpperCase();
@@ -118,11 +120,20 @@ const getLeaderboard = async (req, res, next) => {
       where.id = { in: friendIds };
     } else if (normalizedScope === 'CLAN') {
       if (!currentUserId) throw ApiError.unauthorized('Sign in to see clan rankings');
-      const memberships = await prisma.clanMember.findMany({
-        where: { userId: currentUserId },
-        select: { clanId: true },
-      });
-      const clanIds = memberships.map((m) => m.clanId);
+      let clanIds;
+      if (clanId) {
+        const membership = await prisma.clanMember.findFirst({
+          where: { userId: currentUserId, clanId },
+        });
+        if (!membership) throw ApiError.badRequest('You are not a member of this clan');
+        clanIds = [clanId];
+      } else {
+        const memberships = await prisma.clanMember.findMany({
+          where: { userId: currentUserId },
+          select: { clanId: true },
+        });
+        clanIds = memberships.map((m) => m.clanId);
+      }
       if (clanIds.length === 0) {
         return ApiResponse.paginated(res, [], 0, page, limit);
       }
@@ -133,11 +144,20 @@ const getLeaderboard = async (req, res, next) => {
       where.id = { in: [...new Set(members.map((m) => m.userId))] };
     } else if (normalizedScope === 'COMMUNITY') {
       if (!currentUserId) throw ApiError.unauthorized('Sign in to see community rankings');
-      const memberships = await prisma.communityMember.findMany({
-        where: { userId: currentUserId },
-        select: { communityId: true },
-      });
-      const communityIds = memberships.map((m) => m.communityId);
+      let communityIds;
+      if (communityId) {
+        const membership = await prisma.communityMember.findFirst({
+          where: { userId: currentUserId, communityId },
+        });
+        if (!membership) throw ApiError.badRequest('You are not a member of this community');
+        communityIds = [communityId];
+      } else {
+        const memberships = await prisma.communityMember.findMany({
+          where: { userId: currentUserId },
+          select: { communityId: true },
+        });
+        communityIds = memberships.map((m) => m.communityId);
+      }
       if (communityIds.length === 0) {
         return ApiResponse.paginated(res, [], 0, page, limit);
       }

@@ -20,7 +20,7 @@ const getMyProfile = async (req, res, next) => {
 // Update profile details
 const updateMyProfile = async (req, res, next) => {
   try {
-    const allowed = ['displayName', 'bio', 'avatarUrl', 'coverImageUrl', 'country', 'state', 'district', 'mapStyle', 'isPrivate'];
+    const allowed = ['displayName', 'bio', 'avatarUrl', 'coverImageUrl', 'country', 'state', 'district', 'mapStyle', 'isPrivate', 'fcmToken'];
     const updateData = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) updateData[key] = req.body[key];

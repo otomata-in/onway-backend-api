@@ -6,6 +6,7 @@ import '../../../core/models/leaderboard_models.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../clans/application/clans_provider.dart';
 import '../application/rankings_provider.dart';
 
 // ─── Screen ─────────────────────────────────────────────────────────────────
@@ -23,6 +24,8 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
   String? _country;
   String? _state;
   String? _district;
+  String? _clanId;
+  String? _communityId;
   bool _breakdownExpanded = false;
 
   LeaderboardQuery get _query => LeaderboardQuery(
@@ -31,6 +34,8 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
         country: _scope == LeaderboardScope.country ? _country : null,
         state: _scope == LeaderboardScope.state ? _state : null,
         district: _scope == LeaderboardScope.district ? _district : null,
+        clanId: _scope == LeaderboardScope.clan ? _clanId : null,
+        communityId: _scope == LeaderboardScope.community ? _communityId : null,
       );
 
   String? get _missingGeoValue {
@@ -187,11 +192,13 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                     country: _country,
                     state: _state,
                     district: _district,
+                    clanId: _clanId,
                     onCountryChanged: (value) =>
                         setState(() => _country = value),
                     onStateChanged: (value) => setState(() => _state = value),
                     onDistrictChanged: (value) =>
                         setState(() => _district = value),
+                    onClanChanged: (value) => setState(() => _clanId = value),
                     onRetryFacets: () =>
                         ref.invalidate(rankingsFacetsProvider),
                   ),
@@ -309,16 +316,18 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
 
 // ─── Geo filters ────────────────────────────────────────────────────────────
 
-class _GeoFilterBar extends StatelessWidget {
+class _GeoFilterBar extends ConsumerWidget {
   const _GeoFilterBar({
     required this.scope,
     required this.facetsAsync,
     required this.country,
     required this.state,
     required this.district,
+    required this.clanId,
     required this.onCountryChanged,
     required this.onStateChanged,
     required this.onDistrictChanged,
+    required this.onClanChanged,
     required this.onRetryFacets,
   });
 
@@ -327,13 +336,79 @@ class _GeoFilterBar extends StatelessWidget {
   final String? country;
   final String? state;
   final String? district;
+  final String? clanId;
   final ValueChanged<String?> onCountryChanged;
   final ValueChanged<String?> onStateChanged;
   final ValueChanged<String?> onDistrictChanged;
+  final ValueChanged<String?> onClanChanged;
   final VoidCallback onRetryFacets;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (scope == LeaderboardScope.clan) {
+      final clansAsync = ref.watch(clansProvider);
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+        child: clansAsync.when(
+          loading: () => const LinearProgressIndicator(minHeight: 2),
+          error: (_, _) => const SizedBox.shrink(),
+          data: (data) {
+            final myClans = data.myClans;
+            if (myClans.isEmpty) return const SizedBox.shrink();
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: TeritoryColors.border),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.shield_rounded,
+                      size: 16, color: TeritoryColors.clanPurple),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Clan',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: TeritoryColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String?>(
+                        value: myClans.any((c) => c.id == clanId) ? clanId : null,
+                        isExpanded: true,
+                        hint: Text('All My Clans',
+                            style: GoogleFonts.plusJakartaSans(fontSize: 13)),
+                        items: [
+                          DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('All My Clans',
+                                style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 13, fontWeight: FontWeight.w600)),
+                          ),
+                          ...myClans.map((c) => DropdownMenuItem<String?>(
+                                value: c.id,
+                                child: Text(c.name,
+                                    style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 13)),
+                              )),
+                        ],
+                        onChanged: onClanChanged,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    }
+
     final isGeoScope = scope == LeaderboardScope.country ||
         scope == LeaderboardScope.state ||
         scope == LeaderboardScope.district;
