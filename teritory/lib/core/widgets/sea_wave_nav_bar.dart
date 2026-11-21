@@ -88,7 +88,7 @@ class _SeaWaveNavBarState extends State<SeaWaveNavBar>
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
-    const double barHeight = 68.0;
+    const double barHeight = 72.0;
     const double waveOverflow = 18.0;
     final totalHeight = barHeight + waveOverflow + bottomPadding;
 

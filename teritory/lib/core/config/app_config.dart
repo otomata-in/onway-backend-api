@@ -1,17 +1,16 @@
 class AppConfig {
   AppConfig._();
 
-  /// Teritory Standalone Backend Base URL.
-  /// Works directly on physical device with: `adb reverse tcp:4000 tcp:4000`.
+  /// Teritory Standalone Backend Base URL (Live Render Cloud Deployment).
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:4000/v1',
+    defaultValue: 'https://teritory-api.onrender.com/v1',
   );
 
   /// WebSocket URL for real-time events (chat, trip waypoints, etc.)
   static const String socketUrl = String.fromEnvironment(
     'SOCKET_URL',
-    defaultValue: 'http://localhost:4000',
+    defaultValue: 'https://teritory-api.onrender.com',
   );
 
   /// Origin that serves `/uploads/...`. The API base URL includes the `/v1`

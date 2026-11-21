@@ -227,3 +227,4 @@ git push origin develop
 - If changes are in `teritory-api/`, Render's `teritory-api` service automatically rebuilds and deploys.
 - If changes are in root `src/`, Render's `onway-backend-api` service automatically rebuilds and deploys.
 - If Render auto-deploy is paused, click **Manual Deploy** ➔ **Deploy latest commit** inside the respective service's dashboard.
+

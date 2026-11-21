@@ -34,8 +34,8 @@ class AuthNotifier extends Notifier<AuthStatus> {
       SocketService.instance.connect();
       state = AuthStatus.signedIn;
     } on ApiException catch (e) {
-      if (e.statusCode == 401) {
-        // Access and refresh tokens are both dead: start over at login.
+      if (e.statusCode == 401 || e.statusCode == 404) {
+        // Access and refresh tokens are both dead or user was deleted/re-seeded: start over at login.
         await api.clearTokens();
         state = AuthStatus.signedOut;
         return;

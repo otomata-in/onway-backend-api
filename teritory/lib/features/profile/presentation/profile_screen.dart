@@ -64,39 +64,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            const Icon(Icons.public_rounded,
-                color: TeritoryColors.primary, size: 22),
-            const SizedBox(width: 8),
-            Text(
-              'Traveler Footprint',
-              style: GoogleFonts.plusJakartaSans(
-                fontWeight: FontWeight.w800,
-                fontSize: 18,
-              ),
-            ),
-          ],
+        title: Text(
+          'Traveler Footprint',
+          style: GoogleFonts.plusJakartaSans(
+            fontWeight: FontWeight.w800,
+            fontSize: 17,
+          ),
         ),
         actions: [
           const NotificationBell(),
           IconButton(
             tooltip: 'Saved Expeditions & Wishlist',
+            visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.bookmark_outline_rounded, size: 20),
             onPressed: () => context.push('/trips/saved'),
           ),
           IconButton(
             tooltip: 'Edit profile',
+            visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.edit_outlined, size: 20),
             onPressed: () => _openEditProfile(profileAsync.valueOrNull),
           ),
           IconButton(
             tooltip: 'Friends',
+            visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.people_outline_rounded, size: 20),
             onPressed: () => context.go('/profile/friends'),
           ),
           IconButton(
             tooltip: 'Settings',
+            visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.settings_outlined, size: 20),
             onPressed: () => context.go('/profile/settings'),
           ),
