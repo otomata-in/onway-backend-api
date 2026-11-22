@@ -193,161 +193,165 @@ class _WorldwideFlagMapScreenState extends State<WorldwideFlagMapScreen> {
                 child: Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Row(
-                    children: [
-                      // Back / Exit button
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: _restorePortraitAndExit,
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.94),
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.15),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.arrow_back_ios_new_rounded,
-                              size: 18,
-                              color: TeritoryColors.textPrimary,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-
-                      // Title & Stats Badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.94),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.12),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.public_rounded,
-                              size: 16,
-                              color: TeritoryColors.primary,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '${widget.flags.length} Spots • $continents Continents',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      children: [
+                        // Back / Exit button
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: _restorePortraitAndExit,
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.94),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.15),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.arrow_back_ios_new_rounded,
+                                size: 18,
                                 color: TeritoryColors.textPrimary,
                               ),
                             ),
-                            if (majorCount > 0) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: TeritoryColors.majorGold
-                                      .withValues(alpha: 0.18),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  '⭐ $majorCount Major',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFFB45309),
-                                  ),
-                                ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+
+                        // Title & Stats Badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.94),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.12),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
                               ),
                             ],
-                          ],
-                        ),
-                      ),
-
-                      const Spacer(),
-
-                      // Rotate View Toggle
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: _toggleOrientation,
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.94),
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.15),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.public_rounded,
+                                size: 16,
+                                color: TeritoryColors.primary,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                '${widget.flags.length} Spots • $continents Continents',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: TeritoryColors.textPrimary,
+                                ),
+                              ),
+                              if (majorCount > 0) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: TeritoryColors.majorGold
+                                        .withValues(alpha: 0.18),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '⭐ $majorCount Major',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFFB45309),
+                                    ),
+                                  ),
                                 ),
                               ],
-                            ),
-                            child: Icon(
-                              _isLandscape
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(width: 12),
+
+                        // Rotate View Toggle
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: _toggleOrientation,
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.94),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.15),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                _isLandscape
                                   ? Icons.stay_current_portrait_rounded
                                   : Icons.screen_rotation_rounded,
-                              size: 18,
-                              color: TeritoryColors.textPrimary,
+                                size: 18,
+                                color: TeritoryColors.textPrimary,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
+                        const SizedBox(width: 8),
 
-                      // Theme Pill (Daylight / Oceanic)
-                      Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.94),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.15),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+                        // Theme Pill (Daylight / Oceanic)
+                        Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.94),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.15),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _themeButton(
+                                label: '☀️ Daylight',
+                                isSelected: !_isOceanic,
+                                activeColor: const Color(0xFFF59E0B),
+                                onTap: () =>
+                                    setState(() => _isOceanic = false),
+                              ),
+                              _themeButton(
+                                label: '🌊 Oceanic',
+                                isSelected: _isOceanic,
+                                activeColor: const Color(0xFF38BDF8),
+                                onTap: () =>
+                                    setState(() => _isOceanic = true),
+                              ),
+                            ],
+                          ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _themeButton(
-                              label: '☀️ Daylight',
-                              isSelected: !_isOceanic,
-                              activeColor: const Color(0xFFF59E0B),
-                              onTap: () =>
-                                  setState(() => _isOceanic = false),
-                            ),
-                            _themeButton(
-                              label: '🌊 Oceanic',
-                              isSelected: _isOceanic,
-                              activeColor: const Color(0xFF38BDF8),
-                              onTap: () =>
-                                  setState(() => _isOceanic = true),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
