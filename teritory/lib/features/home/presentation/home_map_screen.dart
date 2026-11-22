@@ -850,40 +850,48 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                         ),
                         const SizedBox(width: 4),
                         const NotificationBell(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _isDarkTheme
-                                ? const Color(0xFF0F172A)
-                                : TeritoryColors.primaryLight,
-                            borderRadius: BorderRadius.circular(12),
-                            border: _isDarkTheme
-                                ? Border.all(
-                                    color: const Color(0xFF334155),
-                                    width: 0.8,
-                                  )
-                                : null,
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.people_alt_rounded,
-                                size: 14,
-                                color: TeritoryColors.primary,
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '$friendsActiveCount Friends Active',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: TeritoryColors.primary,
-                                ),
+                              decoration: BoxDecoration(
+                                color: _isDarkTheme
+                                    ? const Color(0xFF0F172A)
+                                    : TeritoryColors.primaryLight,
+                                borderRadius: BorderRadius.circular(12),
+                                border: _isDarkTheme
+                                    ? Border.all(
+                                        color: const Color(0xFF334155),
+                                        width: 0.8,
+                                      )
+                                    : null,
                               ),
-                            ],
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.people_alt_rounded,
+                                    size: 14,
+                                    color: TeritoryColors.primary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '$friendsActiveCount Friends',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: TeritoryColors.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ],
