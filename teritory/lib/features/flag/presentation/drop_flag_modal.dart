@@ -11,6 +11,23 @@ import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../../rally/presentation/legendary_rally_sheet.dart';
 import '../application/flag_queue_provider.dart';
+import 'epic_flag_staking_ceremony.dart';
+
+class DroppedFlagInfo {
+  final String placeName;
+  final String city;
+  final LatLng coordinates;
+  final bool isMajorFlag;
+  final String category;
+
+  const DroppedFlagInfo({
+    required this.placeName,
+    required this.city,
+    required this.coordinates,
+    required this.isMajorFlag,
+    required this.category,
+  });
+}
 
 class DropFlagModal extends ConsumerStatefulWidget {
   final LatLng initialCoordinates;
@@ -24,12 +41,13 @@ class DropFlagModal extends ConsumerStatefulWidget {
 
   /// Completes when the sheet closes. The caller refreshes afterwards, so a flag
   /// created just as the sheet was dismissed still shows up on the map.
-  static Future<void> show(
+  static Future<DroppedFlagInfo?> show(
     BuildContext context, {
     required LatLng coordinates,
     String suggestedPlaceName = 'Current Location',
-  }) {
-    return showModalBottomSheet(
+    bool showCeremonyOnSuccess = true,
+  }) async {
+    final result = await showModalBottomSheet<DroppedFlagInfo>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -38,6 +56,19 @@ class DropFlagModal extends ConsumerStatefulWidget {
         suggestedPlaceName: suggestedPlaceName,
       ),
     );
+
+    if (result != null && showCeremonyOnSuccess && context.mounted) {
+      await EpicFlagStakingCeremony.show(
+        context,
+        placeName: result.placeName,
+        city: result.city,
+        coordinates: result.coordinates,
+        isMajorFlag: result.isMajorFlag,
+        category: result.category,
+      );
+    }
+
+    return result;
   }
 
   @override
@@ -240,7 +271,15 @@ class _DropFlagModalState extends ConsumerState<DropFlagModal> {
 
     if (!mounted) return;
 
-    Navigator.pop(context);
+    final flagInfo = DroppedFlagInfo(
+      placeName: name,
+      city: city,
+      coordinates: widget.initialCoordinates,
+      isMajorFlag: _isMajorFlag,
+      category: _selectedCategory,
+    );
+
+    Navigator.pop(context, flagInfo);
 
     messenger.showSnackBar(
       SnackBar(

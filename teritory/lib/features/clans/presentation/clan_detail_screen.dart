@@ -10,6 +10,7 @@ import '../../../core/models/community_models.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../profile/presentation/friend_profile_screen.dart';
 import '../../shared/presentation/invite_friends_sheet.dart';
 import '../application/clans_provider.dart';
 
@@ -605,48 +606,51 @@ class _MemberTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final firstName = member.name.split(' ').first;
-    return SizedBox(
-      width: 64,
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: TeritoryColors.clanPurple.withValues(alpha: 0.12),
-            backgroundImage: member.avatarUrl.isNotEmpty
-                ? NetworkImage(member.avatarUrl)
-                : null,
-            child: member.avatarUrl.isNotEmpty
-                ? null
-                : Text(
-                    firstName.isEmpty ? '?' : firstName[0].toUpperCase(),
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: TeritoryColors.clanPurple,
+    return GestureDetector(
+      onTap: () => FriendProfileScreen.open(context, userId: member.userId),
+      child: SizedBox(
+        width: 64,
+        child: Column(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: TeritoryColors.clanPurple.withValues(alpha: 0.12),
+              backgroundImage: member.avatarUrl.isNotEmpty
+                  ? NetworkImage(member.avatarUrl)
+                  : null,
+              child: member.avatarUrl.isNotEmpty
+                  ? null
+                  : Text(
+                      firstName.isEmpty ? '?' : firstName[0].toUpperCase(),
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: TeritoryColors.clanPurple,
+                      ),
                     ),
-                  ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            firstName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: TeritoryColors.textPrimary,
             ),
-          ),
-          Text(
-            member.role == ClanRole.chieftain ? 'Chieftain' : 'Member',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 9,
-              color: TeritoryColors.textMuted,
+            const SizedBox(height: 6),
+            Text(
+              firstName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: TeritoryColors.textPrimary,
+              ),
             ),
-          ),
-        ],
+            Text(
+              member.role == ClanRole.chieftain ? 'Chieftain' : 'Member',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 9,
+                color: TeritoryColors.textMuted,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -691,83 +695,88 @@ class _ChieftainBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: TeritoryColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: TeritoryColors.clanPurple.withValues(alpha: 0.15),
-            child: const Icon(
-              Icons.shield_rounded,
-              color: TeritoryColors.clanPurple,
-              size: 22,
+    return GestureDetector(
+      onTap: clan.chieftainId.isNotEmpty
+          ? () => FriendProfileScreen.open(context, userId: clan.chieftainId)
+          : null,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: TeritoryColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Chieftain',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    color: TeritoryColors.textMuted,
-                    fontWeight: FontWeight.w700,
+          ],
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: TeritoryColors.clanPurple.withValues(alpha: 0.15),
+              child: const Icon(
+                Icons.shield_rounded,
+                color: TeritoryColors.clanPurple,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Chieftain',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      color: TeritoryColors.textMuted,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                Text(
-                  clan.chieftainName.isEmpty ? 'Unknown' : clan.chieftainName,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: TeritoryColors.textPrimary,
+                  Text(
+                    clan.chieftainName.isEmpty ? 'Unknown' : clan.chieftainName,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: TeritoryColors.textPrimary,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: TeritoryColors.clanPurple.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.star_rounded,
-                  size: 14,
-                  color: TeritoryColors.clanPurple,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'Leader',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: TeritoryColors.clanPurple.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.star_rounded,
+                    size: 14,
                     color: TeritoryColors.clanPurple,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 4),
+                  Text(
+                    'Leader',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: TeritoryColors.clanPurple,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

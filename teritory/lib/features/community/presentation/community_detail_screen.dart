@@ -10,6 +10,7 @@ import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../../shared/presentation/invite_friends_sheet.dart';
 import '../../trips/presentation/trip_planner_screen.dart';
+import '../../profile/presentation/friend_profile_screen.dart';
 import '../application/community_detail_provider.dart';
 
 class CommunityDetailScreen extends ConsumerStatefulWidget {
@@ -503,34 +504,43 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
                             ),
                           ],
                           const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              _Avatar(
-                                name: activity.userName,
-                                avatarUrl: activity.userAvatar,
-                                radius: 10,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  activity.userName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: TeritoryColors.textPrimary,
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: activity.userId.isNotEmpty
+                                ? () => FriendProfileScreen.open(
+                                      context,
+                                      userId: activity.userId,
+                                    )
+                                : null,
+                            child: Row(
+                              children: [
+                                _Avatar(
+                                  name: activity.userName,
+                                  avatarUrl: activity.userAvatar,
+                                  radius: 10,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    activity.userName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: TeritoryColors.textPrimary,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              Text(
-                                _timeAgo(activity.createdAt),
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 11,
-                                  color: TeritoryColors.textMuted,
+                                Text(
+                                  _timeAgo(activity.createdAt),
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    color: TeritoryColors.textMuted,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -849,6 +859,12 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
                   final badgeColor = _roleBadgeColor(member.role);
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
+                    onTap: member.userId.isNotEmpty
+                        ? () => FriendProfileScreen.open(
+                              context,
+                              userId: member.userId,
+                            )
+                        : null,
                     leading: _Avatar(
                       name: member.userName,
                       avatarUrl: member.userAvatar,
@@ -1004,7 +1020,16 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         if (!isSelf) ...[
-          _Avatar(name: msg.userName, avatarUrl: msg.userAvatar, radius: 14),
+          GestureDetector(
+            onTap: msg.userId.isNotEmpty
+                ? () => FriendProfileScreen.open(context, userId: msg.userId)
+                : null,
+            child: _Avatar(
+              name: msg.userName,
+              avatarUrl: msg.userAvatar,
+              radius: 14,
+            ),
+          ),
           const SizedBox(width: 8),
         ],
         Flexible(

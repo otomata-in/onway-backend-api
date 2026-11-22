@@ -10,6 +10,7 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../profile/presentation/friend_profile_screen.dart';
 import '../application/community_detail_provider.dart';
 
 class CommunityChatScreen extends ConsumerStatefulWidget {
@@ -254,7 +255,11 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         if (!isSelf) ...{
-          _BubbleAvatar(name: msg.userName, avatarUrl: msg.userAvatar),
+          _BubbleAvatar(
+            userId: msg.userId,
+            name: msg.userName,
+            avatarUrl: msg.userAvatar,
+          ),
           const SizedBox(width: 8),
         },
         Flexible(
@@ -354,28 +359,39 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
 }
 
 class _BubbleAvatar extends StatelessWidget {
+  final String userId;
   final String name;
   final String avatarUrl;
 
-  const _BubbleAvatar({required this.name, required this.avatarUrl});
+  const _BubbleAvatar({
+    required this.userId,
+    required this.name,
+    required this.avatarUrl,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return CircleAvatar(
-      radius: 14,
-      backgroundColor: TeritoryColors.communityIndigo.withValues(alpha: 0.15),
-      backgroundImage: avatarUrl.isEmpty ? null : NetworkImage(avatarUrl),
-      onBackgroundImageError: avatarUrl.isEmpty ? null : (_, _) {},
-      child: avatarUrl.isEmpty
-          ? Text(
-              name.isEmpty ? '?' : name[0].toUpperCase(),
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                color: TeritoryColors.communityIndigo,
-              ),
-            )
+    return GestureDetector(
+      onTap: userId.isNotEmpty
+          ? () => FriendProfileScreen.open(context, userId: userId)
           : null,
+      child: CircleAvatar(
+        radius: 14,
+        backgroundColor:
+            TeritoryColors.communityIndigo.withValues(alpha: 0.15),
+        backgroundImage: avatarUrl.isEmpty ? null : NetworkImage(avatarUrl),
+        onBackgroundImageError: avatarUrl.isEmpty ? null : (_, _) {},
+        child: avatarUrl.isEmpty
+            ? Text(
+                name.isEmpty ? '?' : name[0].toUpperCase(),
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: TeritoryColors.communityIndigo,
+                ),
+              )
+            : null,
+      ),
     );
   }
 }

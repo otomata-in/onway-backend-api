@@ -18,6 +18,7 @@ const rankingsRoutes = require('./modules/rankings/rankings.routes');
 const servicesRoutes = require('./modules/services/services.routes');
 const notificationsRoutes = require('./modules/notifications/notifications.routes');
 const uploadRoutes = require('./modules/upload/upload.routes');
+const searchRoutes = require('./modules/search/search.routes');
 
 const app = express();
 
@@ -69,6 +70,7 @@ app.use('/v1/rankings', rankingsRoutes);
 app.use('/v1/services', servicesRoutes);
 app.use('/v1/notifications', notificationsRoutes);
 app.use('/v1/upload', uploadRoutes);
+app.use('/v1/search', searchRoutes);
 
 // 404 Route Handler
 app.use((req, res) => {

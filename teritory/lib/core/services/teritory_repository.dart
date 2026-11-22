@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import '../models/api_clan.dart';
 import '../models/api_flag.dart';
 import '../models/api_trip.dart';
@@ -11,6 +14,7 @@ import '../models/rally_models.dart';
 import '../models/service_models.dart';
 import '../models/leaderboard_models.dart';
 import '../models/notification_models.dart';
+import '../models/search_models.dart';
 import 'api_service.dart';
 import 'offline_cache_service.dart';
 
@@ -366,6 +370,140 @@ class TeritoryRepository {
         .whereType<Map<String, dynamic>>()
         .map(User.fromJson)
         .toList();
+  }
+
+  /// Omni-Search across flags, travelers, clans, and places.
+  Future<OmniSearchResult> searchOmni({
+    required String query,
+    String type = 'all',
+  }) async {
+    final trimmed = query.trim();
+    List<ApiFlag> flags = [];
+    List<ApiUser> users = [];
+    List<Clan> clans = [];
+    List<SearchLocation> locations = [];
+
+    try {
+      final res = await _api.get(
+        '/search',
+        queryParams: {
+          'q': trimmed,
+          'type': type,
+        },
+      );
+      if (res is Map<String, dynamic>) {
+        if (res['flags'] is List) {
+          flags = (res['flags'] as List)
+              .whereType<Map<String, dynamic>>()
+              .map(ApiFlag.fromJson)
+              .toList();
+        }
+        if (res['users'] is List) {
+          users = (res['users'] as List)
+              .whereType<Map<String, dynamic>>()
+              .map(ApiUser.fromJson)
+              .toList();
+        }
+        if (res['clans'] is List) {
+          clans = (res['clans'] as List)
+              .whereType<Map<String, dynamic>>()
+              .map(Clan.fromJson)
+              .toList();
+        }
+        if (res['locations'] is List) {
+          locations = (res['locations'] as List)
+              .whereType<Map<String, dynamic>>()
+              .map(SearchLocation.fromJson)
+              .toList();
+        }
+      }
+    } catch (_) {
+      // Fallback if unified /search is not yet reached
+      if (trimmed.isNotEmpty) {
+        final flagResults = await searchFlags(trimmed).catchError((_) => <ApiFlag>[]);
+        final clanResults = await fetchClansLive(search: trimmed).catchError((_) => <Clan>[]);
+        flags = flagResults;
+        clans = clanResults;
+      }
+    }
+
+    // Geocoding enrichment for global destinations
+    if (trimmed.length >= 3 && (type == 'all' || type == 'places')) {
+      try {
+        final geocoded = await geocodeLocation(trimmed);
+        if (geocoded != null) {
+          // Avoid duplicate if same city already in locations
+          final exists = locations.any(
+            (l) => l.title.toLowerCase() == geocoded.title.toLowerCase(),
+          );
+          if (!exists) {
+            locations.insert(0, geocoded);
+          }
+        }
+      } catch (_) {}
+    }
+
+    return OmniSearchResult(
+      flags: flags,
+      users: users,
+      clans: clans,
+      locations: locations,
+    );
+  }
+
+  /// Direct flag search by query (`GET /flags/search?q=...`)
+  Future<List<ApiFlag>> searchFlags(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return [];
+    try {
+      final res = await _api.get(
+        '/flags/search',
+        queryParams: {'q': trimmed},
+      );
+      if (res is! List) return [];
+      return res
+          .whereType<Map<String, dynamic>>()
+          .map(ApiFlag.fromJson)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Worldwide OpenStreetMap Nominatim geocoding lookup
+  Future<SearchLocation?> geocodeLocation(String query) async {
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=1',
+      );
+      final response = await http.get(uri, headers: {
+        'User-Agent': 'TeritoryApp/1.0.0 (com.onway.teritory)',
+      }).timeout(const Duration(seconds: 4));
+      if (response.statusCode == 200) {
+        final list = jsonDecode(response.body);
+        if (list is List && list.isNotEmpty) {
+          final first = list.first as Map<String, dynamic>;
+          final lat = double.tryParse('${first['lat']}');
+          final lon = double.tryParse('${first['lon']}');
+          if (lat != null && lon != null) {
+            final name = '${first['display_name']}';
+            final parts = name.split(',');
+            final title = parts.first.trim();
+            final subtitle = parts.length > 1
+                ? parts.sublist(1, math.min(3, parts.length)).join(',').trim()
+                : '';
+            return SearchLocation(
+              title: title,
+              subtitle: subtitle,
+              latitude: lat,
+              longitude: lon,
+              isGeocoded: true,
+            );
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   /// Founds a community. Returns the created row or throws [ApiException]

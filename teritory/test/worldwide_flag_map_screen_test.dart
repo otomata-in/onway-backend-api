@@ -224,5 +224,92 @@ void main() {
 
       expect(result, isFalse);
     });
+
+    testWidgets('exits cleanly and restores portrait when back button tapped',
+        (tester) async {
+      bool popped = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => WorldwideFlagMapScreen(
+                      flags: sampleFlags,
+                      startInLandscape: false,
+                      initialOceanic: false,
+                    ),
+                  ),
+                );
+                popped = true;
+              },
+              child: const Text('Open Map'),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Open screen
+      await tester.tap(find.text('Open Map'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(WorldwideFlagMapScreen), findsOneWidget);
+
+      // Tap back button
+      final backBtn = find.byIcon(Icons.arrow_back_ios_new_rounded);
+      expect(backBtn, findsOneWidget);
+      await tester.tap(backBtn);
+      await tester.pumpAndSettle();
+
+      expect(popped, isTrue);
+      expect(find.byType(WorldwideFlagMapScreen), findsNothing);
+    });
+
+    testWidgets('exits cleanly on system pop navigation', (tester) async {
+      bool popped = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => WorldwideFlagMapScreen(
+                      flags: sampleFlags,
+                      startInLandscape: false,
+                      initialOceanic: false,
+                    ),
+                  ),
+                );
+                popped = true;
+              },
+              child: const Text('Open Map'),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Open screen
+      await tester.tap(find.text('Open Map'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(WorldwideFlagMapScreen), findsOneWidget);
+
+      // Simulate system pop via navigator
+      final dynamic widgetsAppState = tester.state(find.byType(WidgetsApp));
+      // ignore: avoid_dynamic_calls
+      await widgetsAppState.didPopRoute();
+      await tester.pumpAndSettle();
+
+      expect(popped, isTrue);
+      expect(find.byType(WorldwideFlagMapScreen), findsNothing);
+    });
   });
 }

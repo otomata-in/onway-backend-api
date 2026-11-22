@@ -9,6 +9,7 @@ import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../application/profile_providers.dart';
+import 'friend_profile_screen.dart';
 
 /// Live friends list: `GET /users/friends` for the rows and
 /// `GET /users/friends/requests` for the pending badge.
@@ -306,7 +307,7 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen>
                   friend: friend,
                   isRemoving: _removingRelationshipId == friend.relationshipId,
                   onTap: () =>
-                      context.go('/profile/friends/${friend.user.id}'),
+                      FriendProfileScreen.open(context, userId: friend.user.id),
                   onRemove: () => _removeFriend(friend),
                 );
               },

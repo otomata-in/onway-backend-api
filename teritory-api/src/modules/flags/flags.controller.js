@@ -525,10 +525,54 @@ const addKudos = async (req, res, next) => {
   }
 };
 
+// Search flags across placeName, city, country, notes
+const searchFlags = async (req, res, next) => {
+  try {
+    const { q = '', isMajorFlag } = req.query;
+    if (!q.trim()) {
+      return ApiResponse.success(res, []);
+    }
+    const query = q.trim();
+    const where = {
+      OR: [
+        { placeName: { contains: query, mode: 'insensitive' } },
+        { city: { contains: query, mode: 'insensitive' } },
+        { country: { contains: query, mode: 'insensitive' } },
+        { notes: { contains: query, mode: 'insensitive' } },
+      ],
+    };
+    if (isMajorFlag !== undefined) {
+      where.isMajorFlag = isMajorFlag === 'true' || isMajorFlag === true;
+    }
+
+    const flags = await prisma.flag.findMany({
+      where,
+      include: {
+        user: {
+          select: { id: true, displayName: true, handle: true, avatarUrl: true },
+        },
+        _count: {
+          select: { reactions: true, comments: true },
+        },
+      },
+      take: 25,
+      orderBy: [
+        { isMajorFlag: 'desc' },
+        { kudos: 'desc' },
+      ],
+    });
+
+    return ApiResponse.success(res, flags);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getWonders,
   exploreFlags,
   getSubTerritories,
+  searchFlags,
   dropFlag,
   getFlagById,
   toggleReaction,

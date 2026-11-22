@@ -12,6 +12,7 @@ import '../../../core/services/socket_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../../profile/application/profile_providers.dart';
+import '../../profile/presentation/friend_profile_screen.dart';
 import '../application/trips_provider.dart';
 import 'trip_completion_card.dart';
 
@@ -523,30 +524,38 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen>
                         .map(
                           (p) => Padding(
                             padding: const EdgeInsets.only(right: 4),
-                            child: Column(
-                              children: [
-                                _ParticipantAvatar(
-                                  name: p.userName,
-                                  avatarUrl: p.userAvatar,
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  p.userName.split(' ').first,
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                    shadows: [
-                                      Shadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.6,
-                                        ),
-                                        blurRadius: 4,
-                                      ),
-                                    ],
+                            child: GestureDetector(
+                              onTap: p.userId.isNotEmpty
+                                  ? () => FriendProfileScreen.open(
+                                        context,
+                                        userId: p.userId,
+                                      )
+                                  : null,
+                              child: Column(
+                                children: [
+                                  _ParticipantAvatar(
+                                    name: p.userName,
+                                    avatarUrl: p.userAvatar,
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    p.userName.split(' ').first,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                      shadows: [
+                                        Shadow(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.6,
+                                          ),
+                                          blurRadius: 4,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),

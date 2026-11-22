@@ -10,6 +10,7 @@ import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../../explore/application/explore_flags_provider.dart';
+import '../../profile/presentation/friend_profile_screen.dart';
 import '../../trips/application/trips_provider.dart';
 
 /// Live flag detail: reads `GET /v1/flags/:id` and writes reactions, kudos and
@@ -288,61 +289,78 @@ class _LiveFlagDetailSheetState extends ConsumerState<LiveFlagDetailSheet> {
                   ],
                   const SizedBox(height: 12),
 
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: TeritoryColors.surfaceContainer,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: TeritoryColors.border,
-                          backgroundImage: flag.authorAvatar.isNotEmpty
-                              ? NetworkImage(flag.authorAvatar)
-                              : null,
-                          child: flag.authorAvatar.isEmpty
-                              ? const Icon(Icons.person_rounded,
-                                  size: 18, color: Colors.white)
-                              : null,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                flag.isOwnedBy(currentUserId)
-                                    ? '${flag.authorName} (you)'
-                                    : flag.authorName,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: TeritoryColors.textPrimary,
-                                ),
-                              ),
-                              Text(
-                                flag.authorHandle.isEmpty
-                                    ? 'Verified GPS footprint'
-                                    : '@${flag.authorHandle}',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 11,
-                                  color: TeritoryColors.textSecondary,
-                                ),
-                              ),
-                            ],
+                  GestureDetector(
+                    onTap: () {
+                      final nav = Navigator.of(context);
+                      nav.pop();
+                      FriendProfileScreen.open(nav.context, userId: flag.userId);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: TeritoryColors.surfaceContainer,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 18,
+                            backgroundColor: TeritoryColors.border,
+                            backgroundImage: flag.authorAvatar.isNotEmpty
+                                ? NetworkImage(flag.authorAvatar)
+                                : null,
+                            child: flag.authorAvatar.isEmpty
+                                ? const Icon(Icons.person_rounded,
+                                    size: 18, color: Colors.white)
+                                : null,
                           ),
-                        ),
-                        Icon(
-                          Icons.flag_rounded,
-                          size: 16,
-                          color: flag.isMajorFlag
-                              ? TeritoryColors.majorGoldDark
-                              : TeritoryColors.primary,
-                        ),
-                      ],
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      flag.isOwnedBy(currentUserId)
+                                          ? '${flag.authorName} (you)'
+                                          : flag.authorName,
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: TeritoryColors.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Icon(
+                                      Icons.arrow_forward_ios_rounded,
+                                      size: 10,
+                                      color: TeritoryColors.textMuted,
+                                    ),
+                                  ],
+                                ),
+                                Text(
+                                  flag.authorHandle.isEmpty
+                                      ? 'Verified GPS footprint'
+                                      : '@${flag.authorHandle}',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    color: TeritoryColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.flag_rounded,
+                            size: 16,
+                            color: flag.isMajorFlag
+                                ? TeritoryColors.majorGoldDark
+                                : TeritoryColors.primary,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 

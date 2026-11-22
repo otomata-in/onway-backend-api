@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/models/api_user.dart';
@@ -8,6 +7,7 @@ import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../application/profile_providers.dart';
+import 'friend_profile_screen.dart';
 
 /// Live friend requests: `GET /users/friends/requests` for both directions,
 /// `POST …/:id/respond` to accept/decline and `DELETE …/:id` to cancel a sent
@@ -288,52 +288,61 @@ class _RequestCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () => context.go('/profile/friends/${user.id}'),
-            child: CircleAvatar(
-              radius: 24,
-              backgroundColor: TeritoryColors.surfaceContainer,
-              backgroundImage:
-                  user.avatarUrl.isNotEmpty ? NetworkImage(user.avatarUrl) : null,
-              child: user.avatarUrl.isEmpty
-                  ? const Icon(Icons.person_rounded,
-                      color: TeritoryColors.textMuted)
-                  : null,
-            ),
-          ),
-          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  user.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: TeritoryColors.textPrimary,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => FriendProfileScreen.open(context, userId: user.id),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: TeritoryColors.surfaceContainer,
+                    backgroundImage: user.avatarUrl.isNotEmpty
+                        ? NetworkImage(user.avatarUrl)
+                        : null,
+                    child: user.avatarUrl.isEmpty
+                        ? const Icon(Icons.person_rounded,
+                            color: TeritoryColors.textMuted)
+                        : null,
                   ),
-                ),
-                Text(
-                  '@${user.handle}',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    color: TeritoryColors.textSecondary,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: TeritoryColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          '@${user.handle}',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            color: TeritoryColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${user.totalFlags} flags • ${user.state.isNotEmpty ? user.state : user.country}',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            color: TeritoryColors.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '${user.totalFlags} flags • ${user.state.isNotEmpty ? user.state : user.country}',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    color: TeritoryColors.textMuted,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
+          const SizedBox(width: 8),
           if (isBusy)
             const SizedBox(
               width: 22,

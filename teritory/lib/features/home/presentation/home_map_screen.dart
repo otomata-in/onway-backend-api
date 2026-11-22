@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../core/models/api_flag.dart';
 import '../../../core/models/pending_flag.dart';
 import '../../../core/models/teritory_models.dart';
@@ -15,6 +16,7 @@ import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../../../core/widgets/teritory_logo.dart';
 import '../../explore/application/explore_flags_provider.dart';
+import '../../explore/presentation/expedition_omni_search_sheet.dart';
 import '../../flag/application/flag_queue_provider.dart';
 import '../../flag/presentation/drop_flag_modal.dart';
 import '../../flag/presentation/live_flag_detail_sheet.dart';
@@ -61,6 +63,7 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
   }
 
   void _recenterToUser() {
+    ref.read(customExploreTargetProvider.notifier).state = null;
     final location = _location;
     if (location != null && location.isDeviceLocation) {
       _mapController.move(location.coordinates, 13.0);
@@ -155,6 +158,95 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
     // Refresh unconditionally: a flag may have been created even if the sheet was
     // dismissed before it could report success.
     await ref.read(exploreFlagsProvider.notifier).refresh();
+  }
+
+  /// Opens the expedition omni-search sheet and navigates to the selected destination
+  Future<void> _openOmniSearch() async {
+    final selectedTarget = await ExpeditionOmniSearchSheet.show(context);
+    if (!mounted || selectedTarget == null) return;
+    try {
+      _mapController.move(selectedTarget.coordinates, 13.5);
+    } catch (_) {}
+    if (selectedTarget.focusedFlag != null) {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      if (!mounted) return;
+      LiveFlagDetailSheet.show(context, flag: selectedTarget.focusedFlag!);
+    }
+  }
+
+  /// Banner displaying the active searched place or flag destination
+  Widget _buildCustomTargetNotice(ExploreTarget target) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: _isDarkTheme ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _isDarkTheme
+              ? const Color(0xFF3B82F6).withValues(alpha: 0.4)
+              : const Color(0xFFBFDBFE),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.near_me_rounded,
+            size: 15,
+            color: TeritoryColors.primary,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Viewing: ${target.label}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: _isDarkTheme ? Colors.white : TeritoryColors.primary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: () {
+              ref.read(customExploreTargetProvider.notifier).state = null;
+              _recenterToUser();
+            },
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Reset to GPS',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: TeritoryColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  const Icon(
+                    Icons.close_rounded,
+                    size: 13,
+                    color: TeritoryColors.primary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /// "N flags saved": the queue is visible on the map, with the one action
@@ -469,12 +561,25 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
   @override
   Widget build(BuildContext context) {
     _isDarkTheme = ref.watch(mapThemeProvider);
+    final customTarget = ref.watch(customExploreTargetProvider);
     final mapLocation = ref.watch(mapLocationProvider).valueOrNull;
-    final center = mapLocation?.coordinates ?? MapLocation.fallback.coordinates;
+    final center = customTarget?.coordinates ??
+        (mapLocation?.coordinates ?? MapLocation.fallback.coordinates);
+
+    // Listen to custom explore target set via search to animate camera
+    ref.listen<ExploreTarget?>(customExploreTargetProvider, (previous, next) {
+      if (next != null) {
+        try {
+          _mapController.move(next.coordinates, 13.5);
+        } catch (_) {}
+      }
+    });
 
     // The first real fix recentres the map once, so opening the app in a new
     // city does not leave the traveller looking at Kochi.
     ref.listen(mapLocationProvider, (previous, next) {
+      // Do not override a user's active search target with automatic GPS fix
+      if (ref.read(customExploreTargetProvider) != null) return;
       final location = next.valueOrNull;
       if (location == null) return;
       final prev = previous?.valueOrNull;
@@ -520,7 +625,8 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
       flags: [
         for (final flag in raw.flags)
           if (distanceMeters(center, flag.coordinates) <=
-              ExploreFlagsNotifier.radiusKm * 1000)
+                  ExploreFlagsNotifier.radiusKm * 1000 ||
+              flag.id == customTarget?.focusedFlag?.id)
             flag,
       ],
       friendIds: raw.friendIds,
@@ -535,10 +641,6 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
       'Sub-Spots' => subSpots,
       _ => live.flags,
     };
-    final otherFlags = visible
-        .where((f) => !f.isOwnedBy(currentUserId))
-        .toList();
-    final friendFlags = otherFlags.map((f) => f.toFriendFlag()).toList();
     // Distinct travelers, not flags: one friend with three pins is one person.
     final friendsActiveCount = live
         .friends(currentUserId)
@@ -709,6 +811,25 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                           isDark: _isDarkTheme,
                         ),
                         const Spacer(),
+                        // Omni-Search button: Search places, flags, clans, explorers
+                        IconButton(
+                          onPressed: _openOmniSearch,
+                          tooltip: 'Search places, flags, clans, explorers',
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 32,
+                            height: 32,
+                          ),
+                          icon: Icon(
+                            Icons.search_rounded,
+                            size: 22,
+                            color: _isDarkTheme
+                                ? Colors.white
+                                : TeritoryColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
                         // Major wonders registry (`GET /flags/wonders`)
                         IconButton(
                           onPressed: () => context.push('/wonders'),
@@ -817,6 +938,89 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                   ],
                   const SizedBox(height: 10),
 
+                  // Prominent Expedition Omni-Search Bar Button
+                  GestureDetector(
+                    onTap: _openOmniSearch,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _isDarkTheme
+                            ? const Color(0xF21E293B)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _isDarkTheme
+                              ? const Color(0xFF334155)
+                              : const Color(0xFFE2E8F0),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.travel_explore_rounded,
+                            size: 19,
+                            color: TeritoryColors.primary,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Search places, wonders, clans, explorers...',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: _isDarkTheme
+                                    ? const Color(0xFF94A3B8)
+                                    : TeritoryColors.textMuted,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: TeritoryColors.primary.withValues(
+                                alpha: 0.12,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.search_rounded,
+                                  size: 13,
+                                  color: TeritoryColors.primary,
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  'SEARCH',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    color: TeritoryColors.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
                   // Filter Chips
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
@@ -836,6 +1040,12 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                       ],
                     ),
                   ),
+
+                  // When looking at a searched destination: banner with Reset to GPS
+                  if (customTarget != null) ...[
+                    const SizedBox(height: 8),
+                    _buildCustomTargetNotice(customTarget),
+                  ],
 
                   // Flags saved while offline: visible until the server has them.
                   if (pendingFlags.isNotEmpty)
@@ -990,103 +1200,16 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
             ),
           ),
 
-          // ── Bottom Friends Footprint Radar Carousel ──
+          // ── Bottom Location Flags Carousel ──
           if (_selectedFilter != 'Sub-Spots')
             Positioned(
               left: 0,
               right: 0,
               bottom: 176,
-              child: SizedBox(
-                height: 64,
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: friendFlags.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 10),
-                  itemBuilder: (ctx, index) {
-                    final f = friendFlags[index];
-                    final apiFlag = otherFlags[index];
-                    return GestureDetector(
-                      onTap: () {
-                        _mapController.move(f.coordinates, 14.5);
-                        LiveFlagDetailSheet.show(context, flag: apiFlag);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.fromLTRB(8, 6, 14, 6),
-                        decoration: BoxDecoration(
-                          color: _isDarkTheme
-                              ? const Color(0xF21E293B)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(30),
-                          border: Border.all(
-                            color: f.isMajorFlag
-                                ? TeritoryColors.majorGold
-                                : (_isDarkTheme
-                                      ? const Color(0xFF334155)
-                                      : Colors.white),
-                            width: 1.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.15),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CircleAvatar(
-                              radius: 18,
-                              backgroundImage: NetworkImage(f.friendAvatar),
-                            ),
-                            const SizedBox(width: 8),
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      f.friendName.split(' ').first,
-                                      style: GoogleFonts.plusJakartaSans(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: _isDarkTheme
-                                            ? Colors.white
-                                            : TeritoryColors.textPrimary,
-                                      ),
-                                    ),
-                                    if (f.isMajorFlag) ...[
-                                      const SizedBox(width: 4),
-                                      const Icon(
-                                        Icons.star_rounded,
-                                        size: 14,
-                                        color: TeritoryColors.majorGold,
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                                Text(
-                                  f.placeName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 11,
-                                    color: _isDarkTheme
-                                        ? const Color(0xFF94A3B8)
-                                        : TeritoryColors.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
+              child: _buildLocationFlagsCarousel(
+                flags: visible,
+                center: center,
+                currentUserId: currentUserId,
               ),
             ),
 
@@ -1170,6 +1293,211 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
               color: TeritoryColors.primary,
             ),
         ],
+      ),
+    );
+  }
+
+  /// Horizontal carousel of flags with respect to the active map location & filter.
+  Widget _buildLocationFlagsCarousel({
+    required List<ApiFlag> flags,
+    required LatLng center,
+    required String? currentUserId,
+  }) {
+    if (flags.isEmpty) {
+      return Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: _isDarkTheme ? const Color(0xF21E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: _isDarkTheme
+                  ? const Color(0xFF334155)
+                  : const Color(0xFFE2E8F0),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.travel_explore_rounded,
+                size: 15,
+                color: _isDarkTheme
+                    ? const Color(0xFF94A3B8)
+                    : TeritoryColors.textSecondary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'No ${_selectedFilter == 'All' ? '' : '$_selectedFilter '}flags found in this territory',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: _isDarkTheme
+                      ? const Color(0xFFCBD5E1)
+                      : TeritoryColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 64,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        scrollDirection: Axis.horizontal,
+        itemCount: flags.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (ctx, index) {
+          final flag = flags[index];
+          final isMine = flag.isOwnedBy(currentUserId);
+          final distKm = (distanceMeters(center, flag.coordinates) / 1000)
+              .toStringAsFixed(1);
+
+          Color borderColor;
+          if (flag.isMajorFlag) {
+            borderColor = TeritoryColors.majorGold;
+          } else if (isMine) {
+            borderColor = TeritoryColors.primary;
+          } else if (_isDarkTheme) {
+            borderColor = const Color(0xFF334155);
+          } else {
+            borderColor = const Color(0xFFE2E8F0);
+          }
+
+          return GestureDetector(
+            onTap: () {
+              _mapController.move(flag.coordinates, 15.0);
+              LiveFlagDetailSheet.show(context, flag: flag);
+            },
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(8, 6, 14, 6),
+              decoration: BoxDecoration(
+                color: _isDarkTheme ? const Color(0xF21E293B) : Colors.white,
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(
+                  color: borderColor,
+                  width: flag.isMajorFlag ? 1.6 : 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: flag.isMajorFlag
+                          ? TeritoryColors.majorGold.withValues(alpha: 0.18)
+                          : (isMine
+                              ? TeritoryColors.primary.withValues(alpha: 0.15)
+                              : TeritoryColors.surfaceContainer),
+                      image: flag.photoUrl.isNotEmpty
+                          ? DecorationImage(
+                              image: NetworkImage(flag.photoUrl),
+                              fit: BoxFit.cover,
+                            )
+                          : (flag.authorAvatar.isNotEmpty
+                              ? DecorationImage(
+                                  image: NetworkImage(flag.authorAvatar),
+                                  fit: BoxFit.cover,
+                                )
+                              : null),
+                    ),
+                    child: (flag.photoUrl.isEmpty && flag.authorAvatar.isEmpty)
+                        ? Icon(
+                            flag.isMajorFlag
+                                ? Icons.military_tech_rounded
+                                : (isMine
+                                    ? Icons.flag_rounded
+                                    : Icons.person_pin_circle_rounded),
+                            size: 18,
+                            color: flag.isMajorFlag
+                                ? TeritoryColors.majorGold
+                                : TeritoryColors.primary,
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 150),
+                            child: Text(
+                              flag.placeName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: _isDarkTheme
+                                    ? Colors.white
+                                    : TeritoryColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          if (flag.isMajorFlag) ...[
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.star_rounded,
+                              size: 14,
+                              color: TeritoryColors.majorGold,
+                            ),
+                          ],
+                        ],
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '$distKm km away',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: TeritoryColors.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '• ${isMine ? 'You' : (flag.authorName.isNotEmpty ? flag.authorName.split(' ').first : flag.category)}',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 10.5,
+                              color: _isDarkTheme
+                                  ? const Color(0xFF94A3B8)
+                                  : TeritoryColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

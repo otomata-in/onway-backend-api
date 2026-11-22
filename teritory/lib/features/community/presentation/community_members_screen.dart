@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/models/community_models.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../profile/presentation/friend_profile_screen.dart';
 import '../../shared/presentation/invite_friends_sheet.dart';
 import '../application/community_detail_provider.dart';
 
@@ -180,54 +181,61 @@ class CommunityMembersScreen extends ConsumerWidget {
                     final member = members[index];
                     final badgeColor = _roleBadgeColor(member.role);
 
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: Row(
-                        children: [
-                          _MemberAvatar(member: member),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  member.userName,
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: TeritoryColors.textPrimary,
+                    return InkWell(
+                      onTap: () => FriendProfileScreen.open(
+                        context,
+                        userId: member.userId,
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Row(
+                          children: [
+                            _MemberAvatar(member: member),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    member.userName,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: TeritoryColors.textPrimary,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Joined ${_formatDate(member.joinedAt)}',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 11,
-                                    color: TeritoryColors.textMuted,
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Joined ${_formatDate(member.joinedAt)}',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 11,
+                                      color: TeritoryColors.textMuted,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: badgeColor.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              _roleLabel(member.role),
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: badgeColor,
+                                ],
                               ),
                             ),
-                          ),
-                        ],
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: badgeColor.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                _roleLabel(member.role),
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: badgeColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },

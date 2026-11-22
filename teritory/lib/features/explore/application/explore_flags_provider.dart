@@ -95,19 +95,20 @@ class ExploreFlagsNotifier extends AsyncNotifier<ExploreFlagsData> {
 
   /// The cached or fresh device position when we have one, else the labelled
   /// Kochi fallback — the query centre is never a silent hardcoded guess.
-  ///
-  /// Watches the whole value rather than `.future`, so it reacts to the position
-  /// stream: the first query runs without waiting on GPS, and it re-runs only
-  /// when the traveller has moved [requeryMeters] away from the last query.
+  /// If a user explicitly searches for a place, [customExploreTargetProvider] overrides
+  /// the centre so flags at that destination are retrieved and displayed.
   @override
   Future<ExploreFlagsData> build() {
+    final customTarget = ref.watch(customExploreTargetProvider);
     final location =
         ref.watch(mapLocationProvider).valueOrNull ?? MapLocation.fallback;
-    final center = location.coordinates;
+    final center = customTarget?.coordinates ?? location.coordinates;
 
+    final isCustom = customTarget != null;
     final queried = _lastCenter;
     final pending = _lastLoad;
-    if (queried != null &&
+    if (!isCustom &&
+        queried != null &&
         pending != null &&
         distanceMeters(queried, center) < requeryMeters) {
       // Same neighbourhood: reuse the running/finished query instead of
@@ -116,12 +117,12 @@ class ExploreFlagsNotifier extends AsyncNotifier<ExploreFlagsData> {
     }
 
     _lastCenter = center;
-    final load = _load(center);
+    final load = _load(center, customTarget?.focusedFlag);
     _lastLoad = load;
     return load;
   }
 
-  Future<ExploreFlagsData> _load(LatLng center) async {
+  Future<ExploreFlagsData> _load(LatLng center, [ApiFlag? focusedFlag]) async {
     final dataSource = ref.read(exploreDataSourceProvider);
 
     // Friend ids are an enhancement, not a requirement: if that call fails the
@@ -132,11 +133,17 @@ class ExploreFlagsNotifier extends AsyncNotifier<ExploreFlagsData> {
 
     // Both requests are in flight; awaiting the flags first keeps their
     // ApiException intact instead of wrapping it in ParallelWaitError.
-    final flags = await dataSource.fetchExploreFlags(
+    var flags = await dataSource.fetchExploreFlags(
       latitude: center.latitude,
       longitude: center.longitude,
       radiusKm: radiusKm,
     );
+
+    // Guarantee the searched flag is included even if it lies outside the default query window
+    if (focusedFlag != null && !flags.any((f) => f.id == focusedFlag.id)) {
+      flags = [focusedFlag, ...flags];
+    }
+
     final friendIds = await friendIdsFuture;
 
     return ExploreFlagsData(flags: flags, friendIds: friendIds);
@@ -147,16 +154,34 @@ class ExploreFlagsNotifier extends AsyncNotifier<ExploreFlagsData> {
   /// map shows stale-but-real flags plus a retry banner instead of going blank.
   Future<void> refresh() async {
     state = const AsyncLoading<ExploreFlagsData>().copyWithPrevious(state);
-    // Re-read the fix so a recentre after granting permission queries from the
-    // traveller's actual position.
+    final customTarget = ref.read(customExploreTargetProvider);
     final location =
         ref.read(mapLocationProvider).valueOrNull ?? MapLocation.fallback;
-    _lastCenter = location.coordinates;
-    final load = _load(location.coordinates);
+    final center = customTarget?.coordinates ?? location.coordinates;
+    _lastCenter = center;
+    final load = _load(center, customTarget?.focusedFlag);
     _lastLoad = load;
     state = (await AsyncValue.guard(() => load)).copyWithPrevious(state);
   }
 }
+
+/// Target destination set when an explorer searches for a place or flag.
+class ExploreTarget {
+  final LatLng coordinates;
+  final String label;
+  final String? subtitle;
+  final ApiFlag? focusedFlag;
+
+  const ExploreTarget({
+    required this.coordinates,
+    required this.label,
+    this.subtitle,
+    this.focusedFlag,
+  });
+}
+
+/// If non-null, the Explore map is focused on this searched destination rather than GPS.
+final customExploreTargetProvider = StateProvider<ExploreTarget?>((ref) => null);
 
 final exploreFlagsProvider =
     AsyncNotifierProvider<ExploreFlagsNotifier, ExploreFlagsData>(
@@ -167,13 +192,14 @@ final exploreFlagsProvider =
 /// Queried only while the Sub-Spots filter is selected, so opening the map does
 /// not pay for an extra request nobody asked for.
 final subSpotsProvider = FutureProvider.autoDispose<List<ApiFlag>>((ref) {
+  final customTarget = ref.watch(customExploreTargetProvider);
   final location =
       ref.watch(mapLocationProvider).valueOrNull ?? MapLocation.fallback;
+  final center = customTarget?.coordinates ?? location.coordinates;
   // Snapped to a ~1 km grid: the 5 km shelf follows the traveller without
   // re-firing on every position update while they walk.
-  final latitude = (location.coordinates.latitude * 100).roundToDouble() / 100;
-  final longitude =
-      (location.coordinates.longitude * 100).roundToDouble() / 100;
+  final latitude = (center.latitude * 100).roundToDouble() / 100;
+  final longitude = (center.longitude * 100).roundToDouble() / 100;
   return TeritoryRepository.instance.fetchSubTerritories(
     latitude: latitude,
     longitude: longitude,

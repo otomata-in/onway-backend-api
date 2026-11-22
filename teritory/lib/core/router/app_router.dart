@@ -88,6 +88,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/wonders',
         builder: (context, state) => const WondersCatalogScreen(),
       ),
+      GoRoute(
+        path: '/user/:userId',
+        builder: (context, state) => FriendProfileScreen(
+          userId: state.pathParameters['userId']!,
+        ),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return _MainScaffold(navigationShell: navigationShell);

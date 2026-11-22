@@ -8,6 +8,7 @@ import '../../../core/models/api_trip.dart';
 import '../../../core/models/trip_models.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../profile/presentation/friend_profile_screen.dart';
 import '../application/trips_provider.dart';
 
 class TripsHubScreen extends ConsumerStatefulWidget {
@@ -901,23 +902,32 @@ class _ParticipantAvatar extends StatelessWidget {
     final initial = participant.userName.isEmpty
         ? '?'
         : participant.userName[0].toUpperCase();
-    return CircleAvatar(
-      radius: 16,
-      backgroundColor: TeritoryColors.surfaceContainer,
-      backgroundImage: participant.userAvatar.isEmpty
-          ? null
-          : NetworkImage(participant.userAvatar),
-      onBackgroundImageError: participant.userAvatar.isEmpty ? null : (_, _) {},
-      child: participant.userAvatar.isEmpty
-          ? Text(
-              initial,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                color: TeritoryColors.textSecondary,
-              ),
-            )
+    return GestureDetector(
+      onTap: participant.userId.isNotEmpty
+          ? () => FriendProfileScreen.open(
+                context,
+                userId: participant.userId,
+              )
           : null,
+      child: CircleAvatar(
+        radius: 16,
+        backgroundColor: TeritoryColors.surfaceContainer,
+        backgroundImage: participant.userAvatar.isEmpty
+            ? null
+            : NetworkImage(participant.userAvatar),
+        onBackgroundImageError:
+            participant.userAvatar.isEmpty ? null : (_, _) {},
+        child: participant.userAvatar.isEmpty
+            ? Text(
+                initial,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: TeritoryColors.textSecondary,
+                ),
+              )
+            : null,
+      ),
     );
   }
 }

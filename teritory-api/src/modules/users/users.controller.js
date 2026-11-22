@@ -98,10 +98,26 @@ const toggleTripMode = async (req, res, next) => {
 const getUserProfile = async (req, res, next) => {
   try {
     const { userId } = req.params;
+    const currentUserId = req.user?.id;
+
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
         passportStamps: true,
+        clanMemberships: {
+          include: {
+            clan: {
+              select: {
+                id: true,
+                name: true,
+                interestTag: true,
+                coverImageUrl: true,
+                region: true,
+                memberCount: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -110,7 +126,138 @@ const getUserProfile = async (req, res, next) => {
     }
 
     const enriched = await enrichUserWithRealStats(user);
-    return ApiResponse.success(res, enriched);
+
+    // Format clans
+    const clans = (user.clanMemberships || []).map((cm) => ({
+      id: cm.clan.id,
+      name: cm.clan.name,
+      tag: cm.clan.interestTag || '',
+      avatarUrl: cm.clan.coverImageUrl || '',
+      category: cm.clan.interestTag || cm.clan.region || 'General',
+      role: cm.role,
+      memberCount: cm.clan.memberCount,
+    }));
+
+    // Relationship & Mutuals with requesting user
+    let relationship = {
+      status: currentUserId === userId ? 'SELF' : 'NONE',
+      relationshipId: null,
+    };
+    let mutualFriends = [];
+    let mutualExploredAreas = {
+      commonCountries: [],
+      commonStates: [],
+      commonContinents: [],
+    };
+
+    if (currentUserId && currentUserId !== userId) {
+      // 1. Direct relationship
+      const directRel = await prisma.friendRelationship.findFirst({
+        where: {
+          OR: [
+            { senderId: currentUserId, receiverId: userId },
+            { senderId: userId, receiverId: currentUserId },
+          ],
+        },
+      });
+
+      if (directRel) {
+        if (directRel.status === 'ACCEPTED') {
+          relationship = {
+            status: 'FRIENDS',
+            relationshipId: directRel.id,
+            category: directRel.category,
+            since: directRel.since,
+          };
+        } else if (directRel.status === 'PENDING') {
+          relationship = {
+            status: directRel.senderId === currentUserId ? 'REQUEST_SENT' : 'REQUEST_RECEIVED',
+            relationshipId: directRel.id,
+            category: directRel.category,
+            since: directRel.since,
+          };
+        }
+      }
+
+      // 2. Mutual Friends
+      const [myFriends, targetFriends] = await Promise.all([
+        prisma.friendRelationship.findMany({
+          where: {
+            status: 'ACCEPTED',
+            OR: [{ senderId: currentUserId }, { receiverId: currentUserId }],
+          },
+          select: { senderId: true, receiverId: true },
+        }),
+        prisma.friendRelationship.findMany({
+          where: {
+            status: 'ACCEPTED',
+            OR: [{ senderId: userId }, { receiverId: userId }],
+          },
+          select: { senderId: true, receiverId: true },
+        }),
+      ]);
+
+      const myFriendIds = new Set(
+        myFriends.map((r) => (r.senderId === currentUserId ? r.receiverId : r.senderId))
+      );
+      const targetFriendIds = new Set(
+        targetFriends.map((r) => (r.senderId === userId ? r.receiverId : r.senderId))
+      );
+
+      const mutualIds = [...myFriendIds].filter((id) => targetFriendIds.has(id));
+
+      if (mutualIds.length > 0) {
+        mutualFriends = await prisma.user.findMany({
+          where: { id: { in: mutualIds } },
+          select: {
+            id: true,
+            displayName: true,
+            handle: true,
+            avatarUrl: true,
+          },
+          take: 10,
+        });
+      }
+
+      // 3. Mutual Explored Areas (common territories)
+      const [myFlags, targetFlags] = await Promise.all([
+        prisma.flag.findMany({
+          where: { userId: currentUserId },
+          select: { country: true, city: true, continent: true },
+        }),
+        prisma.flag.findMany({
+          where: { userId },
+          select: { country: true, city: true, continent: true },
+        }),
+      ]);
+
+      const myCountries = new Set(myFlags.map((f) => f.country?.trim()).filter(Boolean));
+      const targetCountries = new Set(targetFlags.map((f) => f.country?.trim()).filter(Boolean));
+      const commonCountries = [...myCountries].filter((c) => targetCountries.has(c));
+
+      const myCities = new Set(myFlags.map((f) => f.city?.trim()).filter(Boolean));
+      const targetCities = new Set(targetFlags.map((f) => f.city?.trim()).filter(Boolean));
+      const commonCities = [...myCities].filter((c) => targetCities.has(c));
+
+      const myContinents = new Set(myFlags.map((f) => f.continent?.trim()).filter(Boolean));
+      const targetContinents = new Set(targetFlags.map((f) => f.continent?.trim()).filter(Boolean));
+      const commonContinents = [...myContinents].filter((c) => targetContinents.has(c));
+
+      mutualExploredAreas = {
+        commonCountries,
+        commonStates: commonCities,
+        commonCities,
+        commonContinents,
+      };
+    }
+
+    return ApiResponse.success(res, {
+      ...enriched,
+      clans,
+      relationship,
+      mutualFriends,
+      mutualExploredAreas,
+    });
   } catch (err) {
     next(err);
   }
