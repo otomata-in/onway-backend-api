@@ -14,6 +14,7 @@ import '../../flag/presentation/live_flag_detail_sheet.dart';
 import '../../rankings/application/rankings_provider.dart';
 import '../application/profile_providers.dart';
 import 'edit_profile_sheet.dart';
+import 'worldwide_flag_map_screen.dart';
 import '../../notifications/presentation/notification_bell.dart';
 
 /// Live "Traveler Footprint" page: profile, stats and stamps come from
@@ -28,9 +29,94 @@ class ProfileScreen extends ConsumerStatefulWidget {
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   late final MapController _profileMapController;
   String _activeTab = 'All';
-  bool _isOceanicTheme = true;
+  bool _isOceanicTheme = false;
 
   static const String _majorTab = 'Major';
+
+  Future<void> _openFullWorldwideMap(List<ApiFlag> allFlags) async {
+    final bool? rotateToLandscape = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            color: TeritoryColors.primary.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.screen_rotation_rounded,
+            color: TeritoryColors.primary,
+            size: 28,
+          ),
+        ),
+        title: Text(
+          'Landscape World View?',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: TeritoryColors.textPrimary,
+          ),
+        ),
+        content: Text(
+          'Would you like to open the Worldwide Flag Map in Landscape mode for an expansive world view?',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 13,
+            color: TeritoryColors.textSecondary,
+            height: 1.4,
+          ),
+        ),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'No, Keep Portrait',
+              style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.w600,
+                color: TeritoryColors.textSecondary,
+              ),
+            ),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: TeritoryColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            icon: const Icon(Icons.landscape_rounded, size: 16),
+            label: Text(
+              'Yes, Landscape',
+              style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (rotateToLandscape == null || !mounted) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => WorldwideFlagMapScreen(
+          flags: allFlags,
+          startInLandscape: rotateToLandscape,
+          initialOceanic: _isOceanicTheme,
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -195,13 +281,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                 ),
                 const Spacer(),
-                Text(
-                  allFlags.isEmpty
-                      ? 'No flags yet'
-                      : '${allFlags.length} spots • ${continents.length} continents',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    color: TeritoryColors.textSecondary,
+                InkWell(
+                  onTap: () => _openFullWorldwideMap(allFlags),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          allFlags.isEmpty
+                              ? 'No flags yet'
+                              : '${allFlags.length} spots • ${continents.length} continents',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: TeritoryColors.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.open_in_full_rounded,
+                            size: 13, color: TeritoryColors.primary),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -217,6 +320,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               onThemeChanged: (isOceanic) =>
                   setState(() => _isOceanicTheme = isOceanic),
               onPreset: _zoomToRegion,
+              onExpand: () => _openFullWorldwideMap(allFlags),
             ),
           ),
           const SizedBox(height: 20),
@@ -730,6 +834,7 @@ class _FootprintMap extends StatelessWidget {
     required this.isOceanicTheme,
     required this.onThemeChanged,
     required this.onPreset,
+    required this.onExpand,
   });
 
   final MapController mapController;
@@ -737,6 +842,7 @@ class _FootprintMap extends StatelessWidget {
   final bool isOceanicTheme;
   final ValueChanged<bool> onThemeChanged;
   final void Function(LatLng center, double zoom) onPreset;
+  final VoidCallback onExpand;
 
   @override
   Widget build(BuildContext context) {
@@ -826,6 +932,48 @@ class _FootprintMap extends StatelessWidget {
                   style: TextStyle(color: TeritoryColors.textSecondary),
                 ),
               ),
+            Positioned(
+              top: 10,
+              left: 10,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onExpand,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.94),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.open_in_full_rounded,
+                            size: 14, color: TeritoryColors.textPrimary),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Full View',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: TeritoryColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
             Positioned(
               top: 10,
               right: 10,

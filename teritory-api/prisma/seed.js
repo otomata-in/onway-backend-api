@@ -5,9 +5,7 @@ async function main() {
   console.log('🌱 Starting Teritory Database Seed for Kazhakkoottam & Kerala...');
 
   // 1. Clean existing records in reverse dependency order
-  try {
-    await prisma.$executeRawUnsafe('DELETE FROM saved_flags;');
-  } catch (_) {}
+  await prisma.savedFlag.deleteMany({});
 
   await prisma.waypointValidation.deleteMany({});
   await prisma.tripParticipant.deleteMany({});
@@ -55,9 +53,9 @@ async function main() {
       district: 'Thiruvananthapuram',
       lastLatitude: 8.5686,
       lastLongitude: 76.8731,
-      totalFlags: 28,
-      majorFlags: 9,
-      countriesVisited: 3,
+      totalFlags: 12,
+      majorFlags: 7,
+      countriesVisited: 4,
       continentsVisited: 2,
       totalTravelDays: 54,
       completedTripsCount: 4,
@@ -80,13 +78,13 @@ async function main() {
       district: 'Palakkad',
       lastLatitude: 10.7764,
       lastLongitude: 76.6548,
-      totalFlags: 42,
-      majorFlags: 14,
-      countriesVisited: 4,
-      continentsVisited: 2,
-      totalTravelDays: 78,
-      completedTripsCount: 6,
-      legendaryRalliesCount: 3,
+      totalFlags: 4,
+      majorFlags: 2,
+      countriesVisited: 1,
+      continentsVisited: 1,
+      totalTravelDays: 28,
+      completedTripsCount: 2,
+      legendaryRalliesCount: 1,
       mapStyle: 'midnight_oceanic',
       isTripMode: false,
       isVerified: true,
@@ -105,13 +103,13 @@ async function main() {
       district: 'Thiruvananthapuram',
       lastLatitude: 8.7335,
       lastLongitude: 76.7085,
-      totalFlags: 38,
-      majorFlags: 12,
-      countriesVisited: 3,
+      totalFlags: 4,
+      majorFlags: 2,
+      countriesVisited: 1,
       continentsVisited: 1,
-      totalTravelDays: 62,
-      completedTripsCount: 5,
-      legendaryRalliesCount: 2,
+      totalTravelDays: 32,
+      completedTripsCount: 3,
+      legendaryRalliesCount: 1,
       isVerified: true,
     },
     {
@@ -128,13 +126,13 @@ async function main() {
       district: 'Thiruvananthapuram',
       lastLatitude: 8.3988,
       lastLongitude: 76.9785,
-      totalFlags: 51,
-      majorFlags: 19,
-      countriesVisited: 6,
-      continentsVisited: 2,
-      totalTravelDays: 95,
-      completedTripsCount: 8,
-      legendaryRalliesCount: 4,
+      totalFlags: 4,
+      majorFlags: 1,
+      countriesVisited: 1,
+      continentsVisited: 1,
+      totalTravelDays: 35,
+      completedTripsCount: 3,
+      legendaryRalliesCount: 2,
       isVerified: true,
     },
     {
@@ -151,12 +149,12 @@ async function main() {
       district: 'Thiruvananthapuram',
       lastLatitude: 8.5566,
       lastLongitude: 76.8820,
-      totalFlags: 29,
-      majorFlags: 8,
-      countriesVisited: 2,
+      totalFlags: 3,
+      majorFlags: 1,
+      countriesVisited: 1,
       continentsVisited: 1,
-      totalTravelDays: 41,
-      completedTripsCount: 3,
+      totalTravelDays: 20,
+      completedTripsCount: 1,
       legendaryRalliesCount: 1,
       isVerified: true,
     },
@@ -174,13 +172,13 @@ async function main() {
       district: 'Thiruvananthapuram',
       lastLatitude: 8.7598,
       lastLongitude: 77.1165,
-      totalFlags: 34,
-      majorFlags: 11,
-      countriesVisited: 3,
+      totalFlags: 4,
+      majorFlags: 1,
+      countriesVisited: 1,
       continentsVisited: 1,
-      totalTravelDays: 58,
-      completedTripsCount: 4,
-      legendaryRalliesCount: 3,
+      totalTravelDays: 30,
+      completedTripsCount: 2,
+      legendaryRalliesCount: 1,
       isVerified: true,
     },
   ];
@@ -205,13 +203,13 @@ async function main() {
   // 4. Friend Relationships
   await prisma.friendRelationship.createMany({
     data: [
-      // Akhil's friendships
+      // Akhil's friendships (All local friends are ACCEPTED for seamless explore testing)
       { senderId: 'u_akhil', receiverId: 'u2', status: 'ACCEPTED', category: 'TRAVEL_BUDDIES' },
       { senderId: 'u_akhil', receiverId: 'u3', status: 'ACCEPTED', category: 'TRAVEL_BUDDIES' },
+      { senderId: 'u_akhil', receiverId: 'u4', status: 'ACCEPTED', category: 'TRAVEL_BUDDIES' },
       { senderId: 'u_akhil', receiverId: 'u5', status: 'ACCEPTED', category: 'FAVORITES' },
-      { senderId: 'u4', receiverId: 'u_akhil', status: 'PENDING', category: 'TRAVEL_BUDDIES' }, // Incoming request for Akhil
-      { senderId: 'u_akhil', receiverId: 'u1', status: 'PENDING', category: 'TRAVEL_BUDDIES' }, // Outgoing request from Akhil
-      // Existing test friendships for u1
+      { senderId: 'u1', receiverId: 'u_akhil', status: 'PENDING', category: 'TRAVEL_BUDDIES' }, // Incoming request from Arjun for notification testing
+      // Other friendships
       { senderId: 'u1', receiverId: 'u2', status: 'ACCEPTED', category: 'TRAVEL_BUDDIES' },
       { senderId: 'u1', receiverId: 'u3', status: 'ACCEPTED', category: 'TRAVEL_BUDDIES' },
       { senderId: 'u1', receiverId: 'u5', status: 'ACCEPTED', category: 'FAVORITES' },
@@ -229,7 +227,7 @@ async function main() {
       region: 'Thiruvananthapuram',
       interestTag: 'Coastal & Heritage',
       chieftainId: 'u_akhil',
-      memberCount: 156,
+      memberCount: 5,
       communitiesCount: 2,
     },
   });
@@ -243,7 +241,7 @@ async function main() {
       region: 'Kazhakkoottam',
       interestTag: 'Motorcycle & Weekend Escapes',
       chieftainId: 'u5',
-      memberCount: 124,
+      memberCount: 3,
       communitiesCount: 1,
     },
   });
@@ -257,7 +255,7 @@ async function main() {
       region: 'Malabar Coast',
       interestTag: 'Motorcycle Expeditions',
       chieftainId: 'u3',
-      memberCount: 98,
+      memberCount: 2,
       communitiesCount: 1,
     },
   });
@@ -286,7 +284,7 @@ async function main() {
       coverImageUrl: 'https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=800',
       parentClanId: 'c2',
       interestTags: ['kazhakkoottam', 'technopark', 'weekend-rides', 'ponmudi'],
-      memberCount: 88,
+      memberCount: 4,
       activeTripPlansCount: 2,
     },
   });
@@ -299,8 +297,34 @@ async function main() {
       coverImageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800',
       parentClanId: 'c1',
       interestTags: ['coastal', 'trivandrum', 'varkala', 'kovalam'],
-      memberCount: 65,
-      activeTripPlansCount: 2,
+      memberCount: 3,
+      activeTripPlansCount: 1,
+    },
+  });
+
+  const comm3 = await prisma.community.create({
+    data: {
+      id: 'comm3',
+      name: 'Varkala & Ponmudi Trail Seekers',
+      description: 'Cliffs, backwaters, and misty summit hikes across Southern Travancore.',
+      coverImageUrl: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800',
+      parentClanId: 'c1',
+      interestTags: ['hiking', 'varkala', 'ponmudi', 'trails'],
+      memberCount: 3,
+      activeTripPlansCount: 0,
+    },
+  });
+
+  const comm4 = await prisma.community.create({
+    data: {
+      id: 'comm4',
+      name: 'Malabar Rainforest Expeditions',
+      description: 'Ghat pass curves, waterfall trails, and rainforest rides.',
+      coverImageUrl: 'https://images.unsplash.com/photo-1546708973-b339540b5162?w=800',
+      parentClanId: 'c3',
+      interestTags: ['motorcycle', 'rainforest', 'ghats'],
+      memberCount: 2,
+      activeTripPlansCount: 0,
     },
   });
 
@@ -313,6 +337,11 @@ async function main() {
       { communityId: 'comm2', userId: 'u_akhil', role: 'CREATOR' },
       { communityId: 'comm2', userId: 'u2', role: 'MODERATOR' },
       { communityId: 'comm2', userId: 'u3', role: 'MEMBER' },
+      { communityId: 'comm3', userId: 'u_akhil', role: 'CREATOR' },
+      { communityId: 'comm3', userId: 'u2', role: 'MEMBER' },
+      { communityId: 'comm3', userId: 'u4', role: 'MEMBER' },
+      { communityId: 'comm4', userId: 'u3', role: 'CREATOR' },
+      { communityId: 'comm4', userId: 'u1', role: 'MEMBER' },
     ],
   });
 
@@ -631,6 +660,22 @@ async function main() {
       photoUrl: 'https://images.unsplash.com/photo-1544644181-1484b3fdfc62?w=600',
       kudos: 175,
     },
+    {
+      id: 'f_chathannoor',
+      userId: 'u4',
+      placeName: 'Polachira Wetland & Bird Sanctuary',
+      city: 'Chathannoor',
+      country: 'India',
+      countryCode: 'IN',
+      continent: 'Asia',
+      latitude: 8.8550,
+      longitude: 76.7280,
+      isMajorFlag: false,
+      category: 'Viewpoint',
+      notes: 'Vast freshwater biodiversity wetland host to thousands of migratory birds each winter.',
+      photoUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600',
+      kudos: 82,
+    },
 
     // --- Central Kerala Highlights ---
     {
@@ -681,6 +726,154 @@ async function main() {
       photoUrl: 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=600',
       kudos: 130,
     },
+    {
+      id: 'f_munnar',
+      userId: 'u1',
+      placeName: 'Kannan Devan Tea Highlands',
+      city: 'Munnar',
+      country: 'India',
+      countryCode: 'IN',
+      continent: 'Asia',
+      latitude: 10.0889,
+      longitude: 77.0595,
+      isMajorFlag: false,
+      category: 'Viewpoint',
+      notes: 'Rolling emerald green carpet of tea gardens at 1,600m above sea level.',
+      photoUrl: 'https://images.unsplash.com/photo-1544644181-1484b3fdfc62?w=600',
+      kudos: 164,
+    },
+
+    // --- Extra Kerala spots for Priya, Rahul & Vivek ---
+    {
+      id: 'f_varkala_south',
+      userId: 'u2',
+      placeName: 'Varkala South Black Sand Beach',
+      city: 'Varkala',
+      country: 'India',
+      countryCode: 'IN',
+      continent: 'Asia',
+      latitude: 8.7240,
+      longitude: 76.7160,
+      isMajorFlag: false,
+      category: 'Coastal',
+      notes: 'Unique volcanic black sand cove south of the helipad away from crowds.',
+      photoUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600',
+      kudos: 110,
+    },
+    {
+      id: 'f_bonacaud',
+      userId: 'u3',
+      placeName: 'Bonacaud Forest & Tea Estate Bungalow',
+      city: 'Bonacaud',
+      country: 'India',
+      countryCode: 'IN',
+      continent: 'Asia',
+      latitude: 8.6850,
+      longitude: 77.1650,
+      isMajorFlag: false,
+      category: 'Trek',
+      notes: 'Colonial ruins and misty forest foothills at the base of the Agasthyarkoodam peak trail.',
+      photoUrl: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600',
+      kudos: 145,
+    },
+    {
+      id: 'f_neyyar',
+      userId: 'u5',
+      placeName: 'Neyyar Dam & Sivananda Ashram Foothills',
+      city: 'Kattakada',
+      country: 'India',
+      countryCode: 'IN',
+      continent: 'Asia',
+      latitude: 8.5340,
+      longitude: 77.1470,
+      isMajorFlag: false,
+      category: 'Viewpoint',
+      notes: 'Sprawling reservoir, crocodile rehabilitation center and meditation retreats.',
+      photoUrl: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600',
+      kudos: 128,
+    },
+
+    // --- Akhil's Major Wonder Claims & Global Travel Footprint ---
+    {
+      id: 'f_kovalam_claim',
+      userId: 'u_akhil',
+      placeName: 'Kovalam Lighthouse Beach & Cliff Promenade',
+      city: 'Kovalam',
+      country: 'India',
+      countryCode: 'IN',
+      continent: 'Asia',
+      latitude: 8.3990,
+      longitude: 76.9782,
+      isMajorFlag: true,
+      category: 'Coastal',
+      notes: 'Claimed iconic Kovalam lighthouse view during sunrise coastal trek.',
+      photoUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600',
+      kudos: 190,
+    },
+    {
+      id: 'f_jatayu_claim',
+      userId: 'u_akhil',
+      placeName: 'Jatayu Earth Center',
+      city: 'Chadayamangalam',
+      country: 'India',
+      countryCode: 'IN',
+      continent: 'Asia',
+      latitude: 8.8682,
+      longitude: 76.8662,
+      isMajorFlag: true,
+      category: 'Heritage',
+      notes: 'Cable car ride to the summit of the colossal mythical bird sculpture.',
+      photoUrl: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=600',
+      kudos: 245,
+    },
+    {
+      id: 'f_dubai',
+      userId: 'u_akhil',
+      placeName: 'Burj Khalifa & Dubai Fountain Boardwalk',
+      city: 'Dubai',
+      country: 'United Arab Emirates',
+      countryCode: 'AE',
+      continent: 'Asia',
+      latitude: 25.1972,
+      longitude: 55.2744,
+      isMajorFlag: true,
+      category: 'Heritage',
+      notes: 'Towering 828m spire over Downtown Dubai lake and dancing water fountains.',
+      photoUrl: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=600',
+      kudos: 380,
+    },
+    {
+      id: 'f_paris',
+      userId: 'u_akhil',
+      placeName: 'Eiffel Tower & Champ de Mars',
+      city: 'Paris',
+      country: 'France',
+      countryCode: 'FR',
+      continent: 'Europe',
+      latitude: 48.8584,
+      longitude: 2.2945,
+      isMajorFlag: true,
+      category: 'Heritage',
+      notes: 'Iconic 330-meter wrought-iron lattice monument overlooking the Seine River.',
+      photoUrl: 'https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=600',
+      kudos: 420,
+    },
+    {
+      id: 'f_london',
+      userId: 'u_akhil',
+      placeName: 'Tower Bridge & Thames Promenade',
+      city: 'London',
+      country: 'United Kingdom',
+      countryCode: 'GB',
+      continent: 'Europe',
+      latitude: 51.5055,
+      longitude: -0.0754,
+      isMajorFlag: false,
+      category: 'Cultural',
+      notes: 'Victorian Gothic twin towers over the River Thames with high-level glass walkways.',
+      photoUrl: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600',
+      kudos: 215,
+    },
   ];
 
   for (const f of flagsData) {
@@ -714,19 +907,15 @@ async function main() {
   });
 
   // 9. Wishlist / Saved Flags for Akhil
-  try {
-    await prisma.$executeRawUnsafe(`
-      INSERT INTO saved_flags (user_id, flag_id) VALUES
-      ('u_akhil', 'f_padm'),
-      ('u_akhil', 'f_ponmudi'),
-      ('u_akhil', 'f_varkala'),
-      ('u_akhil', 'f_kazh2')
-      ON CONFLICT DO NOTHING;
-    `);
-    console.log('🔖 Populated Wishlist saved flags for Akhil.');
-  } catch (err) {
-    console.warn('Could not populate saved_flags table:', err.message);
-  }
+  await prisma.savedFlag.createMany({
+    data: [
+      { userId: 'u_akhil', flagId: 'f_padm' },
+      { userId: 'u_akhil', flagId: 'f_ponmudi' },
+      { userId: 'u_akhil', flagId: 'f_varkala' },
+      { userId: 'u_akhil', flagId: 'f_kazh2' },
+    ],
+  });
+  console.log('🔖 Populated Wishlist saved flags for Akhil.');
 
   // 10. Trip Plans & Active Expedition
   // Plan 1: Active Trip for Akhil (Kazhakkoottam to Ponmudi Highlands)

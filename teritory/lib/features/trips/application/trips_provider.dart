@@ -5,6 +5,8 @@ import '../../../core/models/api_trip.dart';
 import '../../../core/models/community_models.dart';
 import '../../../core/models/trip_models.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/location_provider.dart';
+import '../../../core/services/location_service.dart';
 import '../../../core/services/teritory_repository.dart';
 
 class TripsHubNotifier extends AsyncNotifier<TripsHubSnapshot> {
@@ -66,16 +68,16 @@ final savedFlagsLiveProvider =
   return TeritoryRepository.instance.fetchSavedFlags();
 });
 
-/// Places the planner can use, taken from live flags. There is no geocoding
-/// service, so a plan's stops are real flagged places rather than typed text
-/// with invented coordinates.
-///
-/// Queried around the same centre the Explore map uses until device location
-/// lands (see `ExploreFlagsNotifier`).
+/// Places the planner can use, taken from live flags around the active
+/// location (or Kazhakkoottam fallback). There is no geocoding service,
+/// so a plan's stops are real flagged places rather than typed text with
+/// invented coordinates.
 final plannerPlacesProvider = FutureProvider.autoDispose<List<ApiFlag>>((ref) {
+  final loc = ref.watch(mapLocationProvider).valueOrNull?.coordinates ??
+      MapLocation.fallback.coordinates;
   return TeritoryRepository.instance.fetchExploreFlags(
-    latitude: 9.9790,
-    longitude: 76.2760,
+    latitude: loc.latitude,
+    longitude: loc.longitude,
     radiusKm: 100,
   );
 });

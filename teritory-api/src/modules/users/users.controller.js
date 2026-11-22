@@ -2,6 +2,49 @@ const prisma = require('../../config/prisma');
 const ApiResponse = require('../../utils/ApiResponse');
 const ApiError = require('../../utils/ApiError');
 
+/**
+ * Enriches user object with real-time relational counts to eliminate drift
+ * between denormalized columns and actual child rows.
+ */
+const enrichUserWithRealStats = async (user) => {
+  if (!user) return user;
+  const [flagsCount, majorFlagsCount, countries, continents, completedTrips] = await Promise.all([
+    prisma.flag.count({ where: { userId: user.id } }),
+    prisma.flag.count({ where: { userId: user.id, isMajorFlag: true } }),
+    prisma.flag.findMany({ where: { userId: user.id }, select: { country: true }, distinct: ['country'] }),
+    prisma.flag.findMany({ where: { userId: user.id }, select: { continent: true }, distinct: ['continent'] }),
+    prisma.tripParticipant.count({ where: { userId: user.id, status: 'COMPLETED' } }),
+  ]);
+
+  const totalFlags = flagsCount;
+  const majorFlags = majorFlagsCount;
+  const countriesVisited = countries.length;
+  const continentsVisited = continents.length;
+  const completedTripsCount = completedTrips;
+
+  if (
+    user.totalFlags !== totalFlags ||
+    user.majorFlags !== majorFlags ||
+    user.countriesVisited !== countriesVisited ||
+    user.continentsVisited !== continentsVisited ||
+    user.completedTripsCount !== completedTripsCount
+  ) {
+    prisma.user.update({
+      where: { id: user.id },
+      data: { totalFlags, majorFlags, countriesVisited, continentsVisited, completedTripsCount },
+    }).catch(() => {});
+  }
+
+  return {
+    ...user,
+    totalFlags,
+    majorFlags,
+    countriesVisited,
+    continentsVisited,
+    completedTripsCount,
+  };
+};
+
 // Get current user profile
 const getMyProfile = async (req, res, next) => {
   try {
@@ -11,7 +54,8 @@ const getMyProfile = async (req, res, next) => {
         passportStamps: true,
       },
     });
-    return ApiResponse.success(res, user);
+    const enriched = await enrichUserWithRealStats(user);
+    return ApiResponse.success(res, enriched);
   } catch (err) {
     next(err);
   }
@@ -65,7 +109,8 @@ const getUserProfile = async (req, res, next) => {
       throw ApiError.notFound('User profile not found');
     }
 
-    return ApiResponse.success(res, user);
+    const enriched = await enrichUserWithRealStats(user);
+    return ApiResponse.success(res, enriched);
   } catch (err) {
     next(err);
   }

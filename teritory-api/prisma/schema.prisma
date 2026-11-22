@@ -182,6 +182,7 @@ model User {
   tripPlansCreated     TripPlan[]           @relation("PlanCreator")
   tripVotes            TripVote[]
   savedTripPlans       SavedTripPlan[]
+  savedFlags           SavedFlag[]
   tripsCreated         Trip[]               @relation("TripLeader")
   tripParticipations   TripParticipant[]
   waypointValidations  WaypointValidation[]
@@ -253,11 +254,27 @@ model Flag {
   user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   reactions FlagReaction[]
   comments  FlagComment[]
+  savedBy   SavedFlag[]
 
   @@index([userId])
   @@index([latitude, longitude])
   @@index([country, city])
   @@map("flags")
+}
+
+model SavedFlag {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  flagId    String   @map("flag_id")
+  createdAt DateTime @default(now()) @map("saved_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flag Flag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, flagId])
+  @@index([userId])
+  @@index([flagId])
+  @@map("saved_flags")
 }
 
 model FlagReaction {

@@ -328,8 +328,12 @@ const getFlagById = async (req, res, next) => {
 
     let isSaved = false;
     if (req.user) {
-      const saved = await prisma.$queryRaw`SELECT 1 FROM saved_flags WHERE user_id = ${req.user.id} AND flag_id = ${id} LIMIT 1`;
-      isSaved = saved.length > 0;
+      const saved = await prisma.savedFlag.findUnique({
+        where: {
+          userId_flagId: { userId: req.user.id, flagId: id },
+        },
+      });
+      isSaved = !!saved;
     }
 
     return ApiResponse.success(res, { ...flag, isSaved });
@@ -350,13 +354,21 @@ const toggleSaveFlag = async (req, res, next) => {
     });
     if (!flag) throw ApiError.notFound('Flag not found');
 
-    const existing = await prisma.$queryRaw`SELECT id FROM saved_flags WHERE user_id = ${userId} AND flag_id = ${flagId} LIMIT 1`;
+    const existing = await prisma.savedFlag.findUnique({
+      where: {
+        userId_flagId: { userId, flagId },
+      },
+    });
 
-    if (existing.length > 0) {
-      await prisma.$executeRaw`DELETE FROM saved_flags WHERE user_id = ${userId} AND flag_id = ${flagId}`;
+    if (existing) {
+      await prisma.savedFlag.delete({
+        where: { id: existing.id },
+      });
       return ApiResponse.success(res, { isSaved: false }, `Removed ${flag.placeName} from your wishlist`);
     } else {
-      await prisma.$executeRaw`INSERT INTO saved_flags (user_id, flag_id) VALUES (${userId}, ${flagId}) ON CONFLICT DO NOTHING`;
+      await prisma.savedFlag.create({
+        data: { userId, flagId },
+      });
       return ApiResponse.success(res, { isSaved: true }, `Saved ${flag.placeName} to your wishlist`);
     }
   } catch (err) {
@@ -368,13 +380,23 @@ const toggleSaveFlag = async (req, res, next) => {
 const getSavedFlags = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const flags = await prisma.$queryRaw`
-      SELECT f.id, f."placeName", f.latitude, f.longitude, f."isMajorFlag", f.category, f.notes, f."photoUrl", f.kudos, f."createdAt", sf.saved_at as "savedAt"
-      FROM flags f
-      JOIN saved_flags sf ON f.id = sf.flag_id
-      WHERE sf.user_id = ${userId}
-      ORDER BY sf.saved_at DESC
-    `;
+    const saved = await prisma.savedFlag.findMany({
+      where: { userId },
+      include: {
+        flag: {
+          include: {
+            user: {
+              select: { id: true, displayName: true, handle: true, avatarUrl: true },
+            },
+            _count: {
+              select: { reactions: true, comments: true },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const flags = saved.map((s) => ({ ...s.flag, savedAt: s.createdAt }));
     return ApiResponse.success(res, flags);
   } catch (err) {
     next(err);
