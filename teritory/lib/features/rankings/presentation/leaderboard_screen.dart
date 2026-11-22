@@ -7,27 +7,28 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../../clans/application/clans_provider.dart';
+import '../../profile/presentation/friend_profile_screen.dart';
 import '../application/rankings_provider.dart';
 
-// ─── Expedition Theme Tokens ──────────────────────────────────────────────────
+// ─── Expedition Theme Tokens (Aligned to Teritory Palette) ───────────────────
 
 class _ExpeditionColors {
-  static const Color background = Color(0xFF060B14);
-  static const Color surfaceDark = Color(0xFF0B1322);
-  static const Color cardBg = Color(0xFF0F1B2F);
-  static const Color cardBgElevated = Color(0xFF14243D);
-  static const Color cardBorder = Color(0xFF1E3250);
+  static const Color background = TeritoryColors.background;
+  static const Color surfaceDark = Color(0xFFF1F5F9);
+  static const Color cardBg = Colors.white;
+  static const Color cardBgElevated = Color(0xFFF8FAFC);
+  static const Color cardBorder = TeritoryColors.border;
 
-  static const Color cyanGlow = Color(0xFF38BDF8);
-  static const Color coralFlame = Color(0xFFFF5330);
-  static const Color wonderGold = Color(0xFFF59E0B);
-  static const Color silverMist = Color(0xFFCBD5E1);
-  static const Color bronzeRidge = Color(0xFFCD7F32);
-  static const Color emeraldTrail = Color(0xFF10B981);
+  static const Color cyanGlow = TeritoryColors.primary;
+  static const Color coralFlame = TeritoryColors.primary;
+  static const Color wonderGold = TeritoryColors.majorGold;
+  static const Color silverMist = Color(0xFF64748B);
+  static const Color bronzeRidge = Color(0xFFB45309);
+  static const Color emeraldTrail = TeritoryColors.emeraldGreen;
 
-  static const Color textPrimary = Color(0xFFF8FAFC);
-  static const Color textSecondary = Color(0xFF94A3B8);
-  static const Color textMuted = Color(0xFF64748B);
+  static const Color textPrimary = TeritoryColors.textPrimary;
+  static const Color textSecondary = TeritoryColors.textSecondary;
+  static const Color textMuted = TeritoryColors.textMuted;
 }
 
 // ─── Custom Topographic & Cartographic Background ─────────────────────────────
@@ -38,12 +39,12 @@ class _ExpeditionCartographyPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final linePaint = Paint()
-      ..color = const Color(0xFF38BDF8).withValues(alpha: 0.035)
+      ..color = const Color(0xFFE2E8F0).withValues(alpha: 0.6)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 
     final accentPaint = Paint()
-      ..color = const Color(0xFFF59E0B).withValues(alpha: 0.03)
+      ..color = TeritoryColors.primary.withValues(alpha: 0.08)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 
@@ -78,7 +79,7 @@ class _ExpeditionCartographyPainter extends CustomPainter {
 
     // Cartographic latitude / longitude tick crosses
     final tickPaint = Paint()
-      ..color = const Color(0xFF94A3B8).withValues(alpha: 0.08)
+      ..color = const Color(0xFF94A3B8).withValues(alpha: 0.18)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 
@@ -263,8 +264,8 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
 
           // Main Scroll Area
           RefreshIndicator(
-            color: _ExpeditionColors.cyanGlow,
-            backgroundColor: _ExpeditionColors.cardBgElevated,
+            color: TeritoryColors.primary,
+            backgroundColor: Colors.white,
             onRefresh: () => _refresh(query),
             child: CustomScrollView(
               controller: _scrollController,
@@ -468,7 +469,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                         SliverToBoxAdapter(
                           child: Padding(
                             padding:
-                                const EdgeInsets.fromLTRB(16, 16, 16, 130),
+                                const EdgeInsets.fromLTRB(16, 16, 16, 170),
                             child: _ExpeditionPagingFooter(
                               feed: feed,
                               onLoadMore: () => ref
@@ -489,7 +490,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
             Positioned(
               left: 14,
               right: 14,
-              bottom: MediaQuery.of(context).padding.bottom + 12,
+              bottom: MediaQuery.of(context).padding.bottom + 80,
               child: _ActiveExplorerFieldHUD(
                 entry: myEntry,
                 myRank: myRank,
@@ -530,15 +531,22 @@ class _ExpeditionHeader extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: _ExpeditionColors.cardBgElevated,
+                color: Colors.white,
                 shape: BoxShape.circle,
-                border: Border.all(color: _ExpeditionColors.cardBorder),
+                border: Border.all(color: TeritoryColors.border),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: const Center(
                 child: Icon(
                   Icons.arrow_back_ios_new_rounded,
                   size: 16,
-                  color: _ExpeditionColors.textPrimary,
+                  color: TeritoryColors.textPrimary,
                 ),
               ),
             ),
@@ -553,8 +561,8 @@ class _ExpeditionHeader extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: _ExpeditionColors.cyanGlow.withValues(alpha: 0.35),
-                  blurRadius: 10,
+                  color: TeritoryColors.primary.withValues(alpha: 0.15),
+                  blurRadius: 8,
                   spreadRadius: 1,
                 ),
               ],
@@ -565,7 +573,7 @@ class _ExpeditionHeader extends StatelessWidget {
                 fit: BoxFit.contain,
                 errorBuilder: (_, _, _) => const Icon(
                   Icons.explore_rounded,
-                  color: _ExpeditionColors.coralFlame,
+                  color: TeritoryColors.primary,
                   size: 28,
                 ),
               ),
@@ -591,29 +599,27 @@ class _ExpeditionHeader extends StatelessWidget {
                           fontSize: 15,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 0.8,
-                          color: _ExpeditionColors.textPrimary,
+                          color: TeritoryColors.textPrimary,
                         ),
                       ),
                       const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 5, vertical: 1.5),
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [
-                              _ExpeditionColors.coralFlame,
-                              Color(0xFFE11D48),
-                            ],
+                          color: TeritoryColors.primaryLight,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: TeritoryColors.primary.withValues(alpha: 0.25),
                           ),
-                          borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           'ROSTER',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 9,
                             fontWeight: FontWeight.w800,
-                            letterSpacing: 0.5,
-                            color: Colors.white,
+                            letterSpacing: 0.6,
+                            color: TeritoryColors.primary,
                           ),
                         ),
                       ),
@@ -627,7 +633,7 @@ class _ExpeditionHeader extends StatelessWidget {
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w600,
-                    color: _ExpeditionColors.textSecondary,
+                    color: TeritoryColors.textSecondary,
                   ),
                 ),
               ],
@@ -640,11 +646,18 @@ class _ExpeditionHeader extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               decoration: BoxDecoration(
-                color: _ExpeditionColors.cardBgElevated,
-                borderRadius: BorderRadius.circular(12),
+                color: TeritoryColors.majorGoldLight,
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: _ExpeditionColors.wonderGold.withValues(alpha: 0.4),
+                  color: TeritoryColors.majorGold.withValues(alpha: 0.35),
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: TeritoryColors.majorGold.withValues(alpha: 0.10),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -652,15 +665,15 @@ class _ExpeditionHeader extends StatelessWidget {
                   const Icon(
                     Icons.auto_stories_rounded,
                     size: 15,
-                    color: _ExpeditionColors.wonderGold,
+                    color: Color(0xFFB45309),
                   ),
                   const SizedBox(width: 5),
                   Text(
                     'Ledger',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: _ExpeditionColors.wonderGold,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFFB45309),
                     ),
                   ),
                 ],
@@ -785,29 +798,35 @@ class _ExpeditionScopePills extends StatelessWidget {
                 gradient: isSelected
                     ? const LinearGradient(
                         colors: [
-                          _ExpeditionColors.coralFlame,
+                          TeritoryColors.primary,
                           Color(0xFFE11D48),
                         ],
                       )
                     : null,
-                color: isSelected ? null : _ExpeditionColors.cardBgElevated,
+                color: isSelected ? null : Colors.white,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: isSelected
-                      ? _ExpeditionColors.coralFlame
-                      : _ExpeditionColors.cardBorder,
+                      ? TeritoryColors.primary
+                      : TeritoryColors.border,
                   width: isSelected ? 1.4 : 1.0,
                 ),
                 boxShadow: isSelected
                     ? [
                         BoxShadow(
-                          color: _ExpeditionColors.coralFlame
-                              .withValues(alpha: 0.3),
-                          blurRadius: 10,
+                          color: TeritoryColors.primary
+                              .withValues(alpha: 0.25),
+                          blurRadius: 8,
                           offset: const Offset(0, 3),
                         ),
                       ]
-                    : null,
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -817,7 +836,7 @@ class _ExpeditionScopePills extends StatelessWidget {
                     size: 15,
                     color: isSelected
                         ? Colors.white
-                        : _ExpeditionColors.cyanGlow,
+                        : TeritoryColors.primary,
                   ),
                   const SizedBox(width: 7),
                   Text(
@@ -828,7 +847,7 @@ class _ExpeditionScopePills extends StatelessWidget {
                           isSelected ? FontWeight.w800 : FontWeight.w600,
                       color: isSelected
                           ? Colors.white
-                          : _ExpeditionColors.textSecondary,
+                          : TeritoryColors.textSecondary,
                     ),
                   ),
                 ],
@@ -869,9 +888,9 @@ class _ExpeditionHorizonFilter extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: _ExpeditionColors.surfaceDark,
+        color: const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _ExpeditionColors.cardBorder),
+        border: Border.all(color: TeritoryColors.border),
       ),
       child: Row(
         children: LeaderboardPeriod.values.map((period) {
@@ -883,21 +902,18 @@ class _ExpeditionHorizonFilter extends StatelessWidget {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
                 decoration: BoxDecoration(
-                  gradient: isSelected
-                      ? const LinearGradient(
-                          colors: [
-                            Color(0xFF0369A1),
-                            Color(0xFF0284C7),
-                          ],
+                  color: isSelected ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  border: isSelected
+                      ? Border.all(
+                          color: TeritoryColors.border.withValues(alpha: 0.6),
                         )
                       : null,
-                  borderRadius: BorderRadius.circular(10),
                   boxShadow: isSelected
                       ? [
                           BoxShadow(
-                            color: _ExpeditionColors.cyanGlow
-                                .withValues(alpha: 0.25),
-                            blurRadius: 8,
+                            color: Colors.black.withValues(alpha: 0.06),
+                            blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),
                         ]
@@ -912,8 +928,8 @@ class _ExpeditionHorizonFilter extends StatelessWidget {
                         _icons[period],
                         size: 13,
                         color: isSelected
-                            ? Colors.white
-                            : _ExpeditionColors.textMuted,
+                            ? TeritoryColors.primary
+                            : TeritoryColors.textMuted,
                       ),
                       const SizedBox(width: 5),
                       Text(
@@ -923,8 +939,8 @@ class _ExpeditionHorizonFilter extends StatelessWidget {
                           fontWeight:
                               isSelected ? FontWeight.w800 : FontWeight.w600,
                           color: isSelected
-                              ? Colors.white
-                              : _ExpeditionColors.textSecondary,
+                            ? TeritoryColors.primary
+                            : TeritoryColors.textSecondary,
                         ),
                       ),
                     ],
@@ -1334,156 +1350,155 @@ class _ApexVoyagerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF1E2838),
-            Color(0xFF0F1B2F),
-            Color(0xFF0B1424),
+    return GestureDetector(
+      onTap: () => FriendProfileScreen.open(context, userId: entry.userId),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: TeritoryColors.majorGold.withValues(alpha: 0.5),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: TeritoryColors.majorGold.withValues(alpha: 0.14),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
           ],
         ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: _ExpeditionColors.wonderGold.withValues(alpha: 0.6),
-          width: 1.4,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: _ExpeditionColors.wonderGold.withValues(alpha: 0.18),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // Background celestial watermark
-          Positioned(
-            right: -20,
-            bottom: -20,
-            child: Opacity(
-              opacity: 0.05,
-              child: Icon(
-                Icons.public_rounded,
-                size: 160,
-                color: _ExpeditionColors.wonderGold,
+        child: Stack(
+          children: [
+            // Background celestial watermark
+            Positioned(
+              right: -20,
+              bottom: -20,
+              child: Opacity(
+                opacity: 0.05,
+                child: Icon(
+                  Icons.public_rounded,
+                  size: 160,
+                  color: _ExpeditionColors.wonderGold,
+                ),
               ),
             ),
-          ),
 
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top Tagline Row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [
-                            _ExpeditionColors.wonderGold,
-                            Color(0xFFD97706),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Top Tagline Row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              _ExpeditionColors.wonderGold,
+                              Color(0xFFD97706),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.workspace_premium_rounded,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'APEX TRAILBLAZER #1',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.8,
+                                color: Colors.white,
+                              ),
+                            ),
                           ],
                         ),
-                        borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                      Row(
                         children: [
                           const Icon(
-                            Icons.workspace_premium_rounded,
+                            Icons.radar_rounded,
                             size: 14,
-                            color: Color(0xFF0B1322),
+                            color: _ExpeditionColors.cyanGlow,
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            'APEX TRAILBLAZER #1',
+                            'GLOBAL SOVEREIGN',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.8,
-                              color: const Color(0xFF0B1322),
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.7,
+                              color: _ExpeditionColors.cyanGlow,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.radar_rounded,
-                          size: 14,
-                          color: _ExpeditionColors.cyanGlow,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'GLOBAL SOVEREIGN',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.7,
-                            color: _ExpeditionColors.cyanGlow,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
 
-                // Explorer Avatar & Profile Row
-                Row(
-                  children: [
-                    // Avatar with double concentric compass rings
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Container(
-                          width: 68,
-                          height: 68,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: _ExpeditionColors.wonderGold
-                                  .withValues(alpha: 0.5),
-                              width: 1.5,
-                            ),
-                          ),
-                        ),
-                        _ExpeditionAvatar(
-                          url: entry.userAvatar,
-                          name: entry.userName,
-                          radius: 28,
-                          borderColor: _ExpeditionColors.wonderGold,
-                          borderWidth: 2.5,
-                          shadowColor: _ExpeditionColors.wonderGold,
-                        ),
-                        Positioned(
-                          top: 0,
-                          right: 0,
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: const BoxDecoration(
-                              color: _ExpeditionColors.wonderGold,
+                  // Explorer Avatar & Profile Row
+                  Row(
+                    children: [
+                      // Avatar with double concentric compass rings
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Container(
+                            width: 68,
+                            height: 68,
+                            decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.star_rounded,
-                              size: 13,
-                              color: Color(0xFF0B1322),
+                              border: Border.all(
+                                color: _ExpeditionColors.wonderGold
+                                    .withValues(alpha: 0.5),
+                                width: 1.5,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                          _ExpeditionAvatar(
+                            url: entry.userAvatar,
+                            name: entry.userName,
+                            radius: 28,
+                            borderColor: _ExpeditionColors.wonderGold,
+                            borderWidth: 2.5,
+                            shadowColor: _ExpeditionColors.wonderGold,
+                          ),
+                          Positioned(
+                            top: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: const BoxDecoration(
+                                color: _ExpeditionColors.wonderGold,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.star_rounded,
+                                size: 13,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     const SizedBox(width: 14),
 
                     // Explorer Identity & Merit
@@ -1621,8 +1636,9 @@ class _ApexVoyagerCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildMiniTelemetry({
     required IconData icon,
@@ -1692,39 +1708,52 @@ class _VanguardOfficerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: _ExpeditionColors.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: accentColor.withValues(alpha: 0.4),
-          width: 1.2,
+    return GestureDetector(
+      onTap: () => FriendProfileScreen.open(context, userId: entry.userId),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: accentColor.withValues(alpha: 0.35),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Badge
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '#0$rankNumber',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    color: accentColor,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Badge
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                  decoration: BoxDecoration(
+                    color: rankNumber == 2
+                        ? const Color(0xFFF1F5F9)
+                        : const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '#0$rankNumber',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      color: rankNumber == 2
+                          ? const Color(0xFF475569)
+                          : const Color(0xFFB45309),
+                    ),
                   ),
                 ),
-              ),
               Expanded(
                 child: Text(
                   title,
@@ -1835,8 +1864,9 @@ class _VanguardOfficerCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // ─── Explorer Field Log Tile (Ranks 4+) ───────────────────────────────────────
@@ -1861,17 +1891,26 @@ class _ExplorerFieldLogTile extends StatelessWidget {
     final title = _deriveExplorerTitle(entry);
     final isTop10 = entry.rank <= 10;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+    return GestureDetector(
+      onTap: () => FriendProfileScreen.open(context, userId: entry.userId),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: _ExpeditionColors.cardBg,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isTop10
-              ? _ExpeditionColors.cyanGlow.withValues(alpha: 0.3)
-              : _ExpeditionColors.cardBorder,
+              ? TeritoryColors.primary.withValues(alpha: 0.35)
+              : TeritoryColors.border,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -1881,13 +1920,13 @@ class _ExplorerFieldLogTile extends StatelessWidget {
             height: 38,
             decoration: BoxDecoration(
               color: isTop10
-                  ? _ExpeditionColors.cyanGlow.withValues(alpha: 0.12)
-                  : _ExpeditionColors.cardBgElevated,
+                  ? TeritoryColors.primaryLight
+                  : const Color(0xFFF1F5F9),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: isTop10
-                    ? _ExpeditionColors.cyanGlow.withValues(alpha: 0.35)
-                    : _ExpeditionColors.cardBorder,
+                    ? TeritoryColors.primary.withValues(alpha: 0.3)
+                    : TeritoryColors.border,
               ),
             ),
             child: Center(
@@ -1897,8 +1936,8 @@ class _ExplorerFieldLogTile extends StatelessWidget {
                   fontSize: 13,
                   fontWeight: FontWeight.w900,
                   color: isTop10
-                      ? _ExpeditionColors.cyanGlow
-                      : _ExpeditionColors.textPrimary,
+                      ? TeritoryColors.primary
+                      : TeritoryColors.textPrimary,
                 ),
               ),
             ),
@@ -1911,8 +1950,8 @@ class _ExplorerFieldLogTile extends StatelessWidget {
             name: entry.userName,
             radius: 20,
             borderColor: isTop10
-                ? _ExpeditionColors.cyanGlow.withValues(alpha: 0.5)
-                : _ExpeditionColors.cardBorder,
+                ? TeritoryColors.primary.withValues(alpha: 0.4)
+                : TeritoryColors.border,
           ),
           const SizedBox(width: 12),
 
@@ -1931,7 +1970,7 @@ class _ExplorerFieldLogTile extends StatelessWidget {
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w800,
-                          color: _ExpeditionColors.textPrimary,
+                          color: TeritoryColors.textPrimary,
                         ),
                       ),
                     ),
@@ -1940,7 +1979,7 @@ class _ExplorerFieldLogTile extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 5, vertical: 1.5),
                       decoration: BoxDecoration(
-                        color: _ExpeditionColors.cardBgElevated,
+                        color: const Color(0xFFFEF3C7),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -1948,7 +1987,7 @@ class _ExplorerFieldLogTile extends StatelessWidget {
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 9.5,
                           fontWeight: FontWeight.w700,
-                          color: _ExpeditionColors.wonderGold,
+                          color: const Color(0xFFB45309),
                         ),
                       ),
                     ),
@@ -2034,8 +2073,9 @@ class _ExplorerFieldLogTile extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _ExpeditionBadge extends StatelessWidget {
@@ -2111,21 +2151,21 @@ class _ActiveExplorerFieldHUD extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: _ExpeditionColors.surfaceDark,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: _ExpeditionColors.cyanGlow.withValues(alpha: 0.4),
+          color: TeritoryColors.primary.withValues(alpha: 0.35),
           width: 1.4,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.5),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 18,
             offset: const Offset(0, 6),
           ),
           BoxShadow(
-            color: _ExpeditionColors.cyanGlow.withValues(alpha: 0.15),
-            blurRadius: 12,
+            color: TeritoryColors.primary.withValues(alpha: 0.08),
+            blurRadius: 10,
             offset: const Offset(0, 0),
           ),
         ],
@@ -2351,11 +2391,18 @@ class _ExpeditionLedgerSection extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: _ExpeditionColors.cardBg,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: _ExpeditionColors.wonderGold.withValues(alpha: 0.35),
+          color: TeritoryColors.border,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -2370,17 +2417,16 @@ class _ExpeditionLedgerSection extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color:
-                          _ExpeditionColors.wonderGold.withValues(alpha: 0.12),
+                      color: TeritoryColors.majorGoldLight,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: _ExpeditionColors.wonderGold
+                        color: TeritoryColors.majorGold
                             .withValues(alpha: 0.3),
                       ),
                     ),
                     child: const Icon(
                       Icons.auto_stories_rounded,
-                      color: _ExpeditionColors.wonderGold,
+                      color: Color(0xFFB45309),
                       size: 20,
                     ),
                   ),
@@ -2508,16 +2554,10 @@ class _ExpeditionLedgerSection extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [
-                            Color(0xFF0F223D),
-                            Color(0xFF142E52),
-                          ],
-                        ),
+                        color: TeritoryColors.primaryLight,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: _ExpeditionColors.cyanGlow
-                              .withValues(alpha: 0.4),
+                          color: TeritoryColors.primary.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Row(
@@ -2528,7 +2568,7 @@ class _ExpeditionLedgerSection extends StatelessWidget {
                               const Icon(
                                 Icons.workspace_premium_rounded,
                                 size: 18,
-                                color: _ExpeditionColors.wonderGold,
+                                color: TeritoryColors.primary,
                               ),
                               const SizedBox(width: 8),
                               Text(
@@ -2537,7 +2577,7 @@ class _ExpeditionLedgerSection extends StatelessWidget {
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 0.6,
-                                  color: Colors.white,
+                                  color: TeritoryColors.primaryDark,
                                 ),
                               ),
                             ],
@@ -2547,7 +2587,7 @@ class _ExpeditionLedgerSection extends StatelessWidget {
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 17,
                               fontWeight: FontWeight.w900,
-                              color: _ExpeditionColors.wonderGold,
+                              color: TeritoryColors.primary,
                             ),
                           ),
                         ],
