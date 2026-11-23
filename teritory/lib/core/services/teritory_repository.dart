@@ -6,6 +6,7 @@ import '../models/api_clan.dart';
 import '../models/api_flag.dart';
 import '../models/api_trip.dart';
 import '../models/api_user.dart';
+import '../models/flag_style.dart';
 import '../models/user_models.dart';
 import '../models/clan_models.dart';
 import '../models/community_models.dart';
@@ -563,6 +564,7 @@ class TeritoryRepository {
     String category = 'General',
     String notes = '',
     String? photoUrl,
+    FlagStyle? flagStyle,
   }) async {
     await _api.post(
       '/flags',
@@ -578,8 +580,17 @@ class TeritoryRepository {
         'category': category,
         'notes': notes,
         'photoUrl': photoUrl,
+        // Omitted when the flag should use the traveller's signature; the
+        // server resolves signature then product default and always stores a
+        // concrete snapshot.
+        if (flagStyle != null) 'flagStyle': flagStyle.toJson(),
       },
     );
+  }
+
+  /// Removes a flag staked by the current user.
+  Future<void> deleteFlag(String flagId) async {
+    await _api.delete('/flags/$flagId');
   }
 
   // ─── EXPLORE MAP (live-only, no mock fallback) ───────────────────────
@@ -1001,6 +1012,22 @@ class TeritoryRepository {
       throw ApiException('Unexpected response while saving your profile');
     }
     return ApiUser.fromJson(res);
+  }
+
+  /// Saves the traveller's signature flag (`PATCH /users/me/flag-style`).
+  ///
+  /// Kept separate from [updateMyProfile] so a profile edit and a style edit
+  /// cannot overwrite each other. Errors propagate; the caller keeps the old
+  /// style and shows the server message.
+  Future<FlagStyle> updateMyFlagStyle(FlagStyle style) async {
+    final res = await _api.patch(
+      '/users/me/flag-style',
+      body: {'style': style.toJson()},
+    );
+    if (res is Map<String, dynamic> && res['flagStyle'] is Map) {
+      return FlagStyle.fromJson(res['flagStyle']);
+    }
+    throw ApiException('Unexpected response while saving your flag style');
   }
 
   /// Permanently deletes own traveler account (`DELETE /users/me`).

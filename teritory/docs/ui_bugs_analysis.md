@@ -228,3 +228,18 @@ In `teritory-api`:
 ---
 *Report generated for Teritory Mobile & Backend.*
 
+---
+
+## 5. Implementation & Verification Status Log
+
+| Bug ID | Page / Component | Fix Summary | Status |
+| :--- | :--- | :--- | :--- |
+| **UI-MAP-01** | `worldwide_flag_map_screen.dart` | Fixed `PopScope(canPop: _isExiting)` deadlock + expanded back button touch target to 44x44 dp outside `FittedBox`. | **VERIFIED & TESTED** |
+| **UI-MAP-02** | `friend_profile_screen.dart` | Harmonized default map style to **☀️ Daylight** (null tileBuilder) with toggleable Oceanic option, matching Traveler Profile. | **VERIFIED & TESTED** |
+| **UI-HOME-01** | `home_map_screen.dart` | Set "Flag My Teritory Here" clearance to `padding.bottom + 92px` and flag carousel to `padding.bottom + 160px`. | **VERIFIED & DEPLOYED** |
+| **UI-RANK-01** | `leaderboard_screen.dart` | Raised `_ActiveExplorerFieldHUD` to `padding.bottom + 104px` and extended list scroll padding to `padding.bottom + 180px`. | **VERIFIED & DEPLOYED** |
+| **UI-CLAN-01** | `clan_browser_screen.dart` | Elevated "Create Clan" FAB to `padding.bottom + 96px` and list separator padding to `padding.bottom + 140px`. | **VERIFIED & DEPLOYED** |
+| **UI-FLAG-01** | `drop_flag_modal.dart` | Added GPS coordinate regional heuristic (`Thiruvananthapuram, Kerala` default for Kazhakkoottam testbed). | **VERIFIED & DEPLOYED** |
+| **UI-FLAG-02** | `live_flag_detail_sheet.dart` | Added `padding: EdgeInsets.only(bottom: viewInsets.bottom)` so comment box raises above keyboard. | **VERIFIED & DEPLOYED** |
+
+

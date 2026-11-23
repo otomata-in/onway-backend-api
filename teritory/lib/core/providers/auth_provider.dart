@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user_models.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
 import 'data_providers.dart';
+import 'flag_style_provider.dart';
 import '../services/teritory_repository.dart';
 
 /// Session state that the router uses as its gate.
@@ -15,6 +18,14 @@ final authStatusProvider = NotifierProvider<AuthNotifier, AuthStatus>(
 class AuthNotifier extends Notifier<AuthStatus> {
   @override
   AuthStatus build() {
+    // Listen for session invalidation (expired / revoked refresh tokens)
+    final sub = TeritoryApiService.onUnauthorized.listen((_) {
+      SocketService.instance.disconnect();
+      ref.invalidate(currentUserNotifierProvider);
+      state = AuthStatus.signedOut;
+    });
+    ref.onDispose(sub.cancel);
+
     // Restore the stored token pair without blocking the first frame; the
     // router shows the splash route until this settles.
     Future.microtask(_restoreSession);
@@ -31,6 +42,7 @@ class AuthNotifier extends Notifier<AuthStatus> {
     try {
       final user = await TeritoryRepository.instance.fetchMyProfileOrThrow();
       ref.read(currentUserNotifierProvider.notifier).updateUser(user);
+      unawaited(ref.read(flagStyleProvider.notifier).syncFromProfile(user.flagStyle));
       SocketService.instance.connect();
       state = AuthStatus.signedIn;
     } on ApiException catch (e) {
@@ -55,6 +67,7 @@ class AuthNotifier extends Notifier<AuthStatus> {
   Future<void> signIn({required String phone, required String otp}) async {
     final user = await TeritoryRepository.instance.loginWithOtp(phone, otp);
     ref.read(currentUserNotifierProvider.notifier).updateUser(user);
+    unawaited(ref.read(flagStyleProvider.notifier).syncFromProfile(user.flagStyle));
     SocketService.instance.connect();
     state = AuthStatus.signedIn;
   }

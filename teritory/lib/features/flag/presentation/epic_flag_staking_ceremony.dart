@@ -5,7 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 
+import '../../../core/models/flag_style.dart';
+import '../../../core/theme/flag_style_catalog.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../../core/widgets/flag/flag_cloth_painter.dart';
 
 /// Full-screen signature cinematic animation that plays when an explorer
 /// stakes a flag into the earth. Features:
@@ -23,6 +26,10 @@ class EpicFlagStakingCeremony extends StatefulWidget {
   final bool isMajorFlag;
   final String category;
 
+  /// The flag's snapshot style. The reveal flies the traveller's real flag,
+  /// with the same cloth, emblem and motion every other surface uses.
+  final FlagStyle style;
+
   const EpicFlagStakingCeremony({
     super.key,
     required this.placeName,
@@ -30,6 +37,7 @@ class EpicFlagStakingCeremony extends StatefulWidget {
     required this.coordinates,
     required this.isMajorFlag,
     required this.category,
+    this.style = FlagStyle.fallback,
   });
 
   /// Displays the signature flag staking ceremony over the active route.
@@ -40,6 +48,7 @@ class EpicFlagStakingCeremony extends StatefulWidget {
     required LatLng coordinates,
     required bool isMajorFlag,
     required String category,
+    FlagStyle style = FlagStyle.fallback,
   }) {
     return Navigator.of(context, rootNavigator: true).push<void>(
       PageRouteBuilder(
@@ -54,6 +63,7 @@ class EpicFlagStakingCeremony extends StatefulWidget {
             coordinates: coordinates,
             isMajorFlag: isMajorFlag,
             category: category,
+            style: style,
           ),
         ),
       ),
@@ -159,9 +169,9 @@ class _EpicFlagStakingCeremonyState extends State<EpicFlagStakingCeremony>
 
   void _spawnImpactParticles({required int count, required bool isSecondary}) {
     final random = math.Random();
-    final primaryColor = widget.isMajorFlag
-        ? TeritoryColors.majorGold
-        : TeritoryColors.primary;
+    final palette = FlagStyleCatalog.themeFor(widget.style.theme);
+    final primaryColor =
+        widget.isMajorFlag ? TeritoryColors.majorGold : palette.accent;
 
     for (int i = 0; i < count; i++) {
       final angle = (random.nextDouble() * math.pi) + math.pi; // upwards arc
@@ -171,7 +181,9 @@ class _EpicFlagStakingCeremonyState extends State<EpicFlagStakingCeremony>
 
       final color = i % 3 == 0
           ? Colors.white
-          : (i % 2 == 0 ? primaryColor : TeritoryColors.majorGoldLight);
+          : (i % 2 == 0
+              ? primaryColor
+              : Color.lerp(palette.primary, Colors.white, 0.45)!);
 
       _particles.add(
         _Particle(
@@ -216,6 +228,9 @@ class _EpicFlagStakingCeremonyState extends State<EpicFlagStakingCeremony>
     final t = _ceremonyController.value;
     final shake = _calculateScreenShake();
     final size = MediaQuery.of(context).size;
+    final theme = FlagStyleCatalog.themeFor(widget.style.theme);
+    final accent = theme.accent;
+    final onAccent = FlagStyleCatalog.foregroundOn(accent);
 
     // Telemetry and badge visibility (phases in from t = 0.65)
     final badgeOpacity = ((t - 0.65) / 0.25).clamp(0.0, 1.0);
@@ -233,7 +248,8 @@ class _EpicFlagStakingCeremonyState extends State<EpicFlagStakingCeremony>
                   center: const Alignment(0, 0.1),
                   radius: 1.2,
                   colors: [
-                    const Color(0xFF0F172A).withValues(alpha: 0.92),
+                    Color.lerp(theme.primary, const Color(0xFF0F172A), 0.55)!
+                        .withValues(alpha: 0.92),
                     const Color(0xFF030712).withValues(alpha: 0.98),
                   ],
                 ),
@@ -247,6 +263,7 @@ class _EpicFlagStakingCeremonyState extends State<EpicFlagStakingCeremony>
               painter: _GodRaysPainter(
                 progress: t,
                 isMajor: widget.isMajorFlag,
+                accent: accent,
               ),
             ),
           ),
@@ -268,6 +285,7 @@ class _EpicFlagStakingCeremonyState extends State<EpicFlagStakingCeremony>
                         city: widget.city,
                         category: widget.category,
                         isMajor: widget.isMajorFlag,
+                        style: widget.style,
                       ),
                     ),
                   ),
@@ -293,14 +311,14 @@ class _EpicFlagStakingCeremonyState extends State<EpicFlagStakingCeremony>
                       border: Border.all(
                         color: widget.isMajorFlag
                             ? TeritoryColors.majorGold
-                            : TeritoryColors.primary,
+                            : accent,
                         width: 1.5,
                       ),
                       boxShadow: [
                         BoxShadow(
                           color: (widget.isMajorFlag
                                   ? TeritoryColors.majorGold
-                                  : TeritoryColors.primary)
+                                  : accent)
                               .withValues(alpha: 0.4),
                           blurRadius: 16,
                         ),
@@ -314,7 +332,7 @@ class _EpicFlagStakingCeremonyState extends State<EpicFlagStakingCeremony>
                           size: 16,
                           color: widget.isMajorFlag
                               ? TeritoryColors.majorGold
-                              : TeritoryColors.primary,
+                              : accent,
                         ),
                         const SizedBox(width: 8),
                         Text(
@@ -353,7 +371,7 @@ class _EpicFlagStakingCeremonyState extends State<EpicFlagStakingCeremony>
                         border: Border.all(
                           color: widget.isMajorFlag
                               ? TeritoryColors.majorGold
-                              : const Color(0xFF334155),
+                              : accent.withValues(alpha: 0.55),
                           width: widget.isMajorFlag ? 1.8 : 1.0,
                         ),
                         boxShadow: [
@@ -383,8 +401,7 @@ class _EpicFlagStakingCeremonyState extends State<EpicFlagStakingCeremony>
                               color: widget.isMajorFlag
                                   ? TeritoryColors.majorGold
                                       .withValues(alpha: 0.2)
-                                  : TeritoryColors.primaryLight
-                                      .withValues(alpha: 0.15),
+                                  : accent.withValues(alpha: 0.16),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Row(
@@ -397,7 +414,7 @@ class _EpicFlagStakingCeremonyState extends State<EpicFlagStakingCeremony>
                                   size: 18,
                                   color: widget.isMajorFlag
                                       ? TeritoryColors.majorGold
-                                      : TeritoryColors.primary,
+                                      : accent,
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
@@ -443,6 +460,19 @@ class _EpicFlagStakingCeremonyState extends State<EpicFlagStakingCeremony>
                           ),
                           const SizedBox(height: 4),
                           Text(
+                            '${theme.label} · '
+                            '${FlagStyleCatalog.emblemFor(widget.style.emblem).label} · '
+                            '${FlagStyleCatalog.motionFor(widget.style.motion).label}',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: accent,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
                             'GPS: ${widget.coordinates.latitude.toStringAsFixed(4)}° N, ${widget.coordinates.longitude.toStringAsFixed(4)}° E',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 11,
@@ -467,7 +497,9 @@ class _EpicFlagStakingCeremonyState extends State<EpicFlagStakingCeremony>
                             style: ElevatedButton.styleFrom(
                               backgroundColor: widget.isMajorFlag
                                   ? TeritoryColors.majorGold
-                                  : TeritoryColors.primary,
+                                  : accent,
+                              foregroundColor:
+                                  widget.isMajorFlag ? Colors.white : onAccent,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
                               ),
@@ -477,9 +509,11 @@ class _EpicFlagStakingCeremonyState extends State<EpicFlagStakingCeremony>
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.travel_explore_rounded,
-                                  color: Colors.white,
+                                  color: widget.isMajorFlag
+                                      ? Colors.white
+                                      : onAccent,
                                   size: 20,
                                 ),
                                 const SizedBox(width: 8),
@@ -488,7 +522,9 @@ class _EpicFlagStakingCeremonyState extends State<EpicFlagStakingCeremony>
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w900,
-                                    color: Colors.white,
+                                    color: widget.isMajorFlag
+                                        ? Colors.white
+                                        : onAccent,
                                     letterSpacing: 1.0,
                                   ),
                                 ),
@@ -517,6 +553,7 @@ class _FlagStakingPainter extends CustomPainter {
   final String city;
   final String category;
   final bool isMajor;
+  final FlagStyle style;
 
   _FlagStakingPainter({
     required this.progress,
@@ -526,6 +563,7 @@ class _FlagStakingPainter extends CustomPainter {
     required this.city,
     required this.category,
     required this.isMajor,
+    required this.style,
   });
 
   @override
@@ -582,6 +620,7 @@ class _FlagStakingPainter extends CustomPainter {
 
   void _drawGroundEffects(Canvas canvas, Offset impactPoint, Size size) {
     final tSinceImpact = (progress - 0.32) / 0.68;
+    final accent = FlagStyleCatalog.themeFor(style.theme).accent;
 
     // A. Expanding ground shockwave rings (flattened perspective ellipses)
     final shockwavePaint = Paint()
@@ -596,10 +635,7 @@ class _FlagStakingPainter extends CustomPainter {
       final radiusY = radiusX * 0.32; // Perspective tilt
       final alpha = (1.0 - ringProgress) * 0.85;
 
-      shockwavePaint.color = (isMajor
-              ? TeritoryColors.majorGold
-              : TeritoryColors.primary)
-          .withValues(alpha: alpha);
+      shockwavePaint.color = accent.withValues(alpha: alpha);
 
       canvas.drawOval(
         Rect.fromCenter(center: impactPoint, width: radiusX * 2, height: radiusY * 2),
@@ -613,8 +649,7 @@ class _FlagStakingPainter extends CustomPainter {
       final sealPaint = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.8
-        ..color = (isMajor ? TeritoryColors.majorGold : const Color(0xFF38BDF8))
-            .withValues(alpha: sealAlpha * 0.65);
+        ..color = accent.withValues(alpha: sealAlpha * 0.65);
 
       final sealRadiusX = 85.0;
       final sealRadiusY = sealRadiusX * 0.34;
@@ -641,8 +676,7 @@ class _FlagStakingPainter extends CustomPainter {
 
     // C. Ground impact crack fissure lines
     final crackPaint = Paint()
-      ..color = (isMajor ? TeritoryColors.majorGold : const Color(0xFFFF5330))
-          .withValues(alpha: (1.0 - tSinceImpact * 0.5).clamp(0.0, 0.9))
+      ..color = accent.withValues(alpha: (1.0 - tSinceImpact * 0.5).clamp(0.0, 0.9))
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke;
 
@@ -711,10 +745,17 @@ class _FlagStakingPainter extends CustomPainter {
     final spikePaint = Paint()..color = const Color(0xFFE2E8F0);
     canvas.drawPath(spikePath, spikePaint);
 
-    // 3. Spearhead / Golden Finial at top
+    // 3. Spearhead / finial in the flag's own metal
+    final metal = isMajor
+        ? TeritoryColors.majorGold
+        : FlagStyleCatalog.themeFor(style.theme).finial;
     final finialPaint = Paint()
-      ..shader = const RadialGradient(
-        colors: [Colors.white, TeritoryColors.majorGold, Color(0xFFB45309)],
+      ..shader = RadialGradient(
+        colors: [
+          Colors.white,
+          metal,
+          Color.lerp(metal, Colors.black, 0.45)!,
+        ],
       ).createShader(Rect.fromCircle(center: Offset(x, topY - 8), radius: 14));
 
     // Orb finial
@@ -736,139 +777,41 @@ class _FlagStakingPainter extends CustomPainter {
     double poleTipY,
     Size size,
   ) {
-    // Unfurling expansion progress (0.46 -> 0.85)
-    final unfurlProgress = Curves.elasticOut.transform(
-      ((progress - 0.46) / 0.39).clamp(0.0, 1.0),
+    // The cloth snaps open after the shove, with a little elastic overshoot.
+    final unfurl = Curves.elasticOut
+        .transform(((progress - 0.46) / 0.39).clamp(0.0, 1.0))
+        .clamp(0.0, 1.0);
+    if (unfurl < 0.02) return;
+
+    final flagWidth = size.width * 0.46;
+    final flagHeight = size.height * 0.15;
+
+    // With no pole, the shared painter lays cloth out inside small margins.
+    // Invert those margins so the cloth lands exactly on the ceremony staff.
+    final canvasWidth = flagWidth / 0.94;
+    final canvasHeight = flagHeight / 0.86;
+
+    canvas.save();
+    canvas.translate(
+      poleX - canvasWidth * 0.02,
+      poleTopY + 10 - canvasHeight * 0.06,
     );
-
-    final flagWidth = (size.width * 0.46) * unfurlProgress;
-    if (flagWidth < 4) return;
-
-    final flagHeight = size.height * 0.16;
-    final flagStartY = poleTopY + 12;
-
-    final clothPath = Path();
-
-    // Procedural cloth wind wave vertices
-    const segments = 24;
-    final topPoints = <Offset>[];
-    final bottomPoints = <Offset>[];
-
-    for (int i = 0; i <= segments; i++) {
-      final ratio = i / segments;
-      final px = poleX + (ratio * flagWidth);
-
-      // Sine wave wind turbulence
-      final wave = math.sin((ratio * 2.8 * math.pi) - (clothPhase * 2 * math.pi)) *
-          (6.0 * ratio);
-
-      final topY = flagStartY + wave;
-      final botY = flagStartY + flagHeight + wave * 0.8;
-
-      topPoints.add(Offset(px, topY));
-      bottomPoints.add(Offset(px, botY));
-    }
-
-    clothPath.moveTo(topPoints.first.dx, topPoints.first.dy);
-    for (int i = 1; i < topPoints.length; i++) {
-      clothPath.lineTo(topPoints[i].dx, topPoints[i].dy);
-    }
-    for (int i = bottomPoints.length - 1; i >= 0; i--) {
-      clothPath.lineTo(bottomPoints[i].dx, bottomPoints[i].dy);
-    }
-    clothPath.close();
-
-    // Gradient shading on fabric
-    final clothRect = Rect.fromLTRB(
-      poleX,
-      flagStartY,
-      poleX + flagWidth,
-      flagStartY + flagHeight,
-    );
-
-    final clothPaint = Paint()
-      ..shader = LinearGradient(
-        colors: isMajor
-            ? [
-                const Color(0xFFD97706),
-                const Color(0xFFF59E0B),
-                const Color(0xFFFEF3C7),
-                const Color(0xFFB45309),
-              ]
-            : [
-                const Color(0xFFD63B19),
-                const Color(0xFFFF5330),
-                const Color(0xFFFF7A5C),
-                const Color(0xFFB91C1C),
-              ],
-        stops: const [0.0, 0.4, 0.75, 1.0],
-      ).createShader(clothRect);
-
-    canvas.drawPath(clothPath, clothPaint);
-
-    // Cloth border / golden fringe
-    final borderPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..color = isMajor ? Colors.white : TeritoryColors.majorGold;
-    canvas.drawPath(clothPath, borderPaint);
-
-    // Tassels at flag fly edge
-    if (unfurlProgress > 0.8) {
-      final tip = topPoints.last;
-      final bot = bottomPoints.last;
-      final tasselPaint = Paint()
-        ..color = TeritoryColors.majorGold
-        ..strokeWidth = 2.5;
-
-      canvas.drawLine(tip, Offset(tip.dx + 8, tip.dy + 4), tasselPaint);
-      canvas.drawLine(bot, Offset(bot.dx + 8, bot.dy - 4), tasselPaint);
-    }
-
-    // Flag Crest & Text (only when mostly unfurled)
-    if (unfurlProgress > 0.65) {
-      final crestX = poleX + 22.0;
-      final crestY = flagStartY + flagHeight * 0.42;
-
-      // Sailboat / Compass Emblem
-      final emblemPaint = Paint()..color = Colors.white;
-      canvas.drawCircle(Offset(crestX, crestY), 12, emblemPaint);
-
-      final iconPaint = Paint()
-        ..color = isMajor ? TeritoryColors.majorGoldDark : TeritoryColors.primary
-        ..style = PaintingStyle.fill;
-
-      // Mini sail emblem
-      final sailPath = Path();
-      sailPath.moveTo(crestX - 4, crestY + 5);
-      sailPath.lineTo(crestX + 4, crestY + 5);
-      sailPath.lineTo(crestX + 2, crestY - 6);
-      sailPath.close();
-      canvas.drawPath(sailPath, iconPaint);
-
-      // Text painter on flag cloth
-      final tp = TextPainter(
-        text: TextSpan(
-          text: isMajor ? '★ MAJOR WONDER' : 'TERITORY CLAIMED',
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 9.5,
-            fontWeight: FontWeight.w900,
-            color: Colors.white,
-            letterSpacing: 0.8,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout(maxWidth: flagWidth - 45);
-
-      tp.paint(canvas, Offset(crestX + 16, crestY - 6));
-    }
+    FlagClothPainter(
+      style: style,
+      phase: (clothPhase * style.speed) % 1.0,
+      showPole: false,
+      isMajor: isMajor,
+      unfurl: unfurl,
+    ).paint(canvas, Size(canvasWidth, canvasHeight));
+    canvas.restore();
   }
 
   @override
   bool shouldRepaint(covariant _FlagStakingPainter oldDelegate) {
     return oldDelegate.progress != progress ||
         oldDelegate.clothPhase != clothPhase ||
-        oldDelegate.particles != particles;
+        oldDelegate.particles != particles ||
+        oldDelegate.style != style;
   }
 }
 
@@ -876,8 +819,13 @@ class _FlagStakingPainter extends CustomPainter {
 class _GodRaysPainter extends CustomPainter {
   final double progress;
   final bool isMajor;
+  final Color accent;
 
-  _GodRaysPainter({required this.progress, required this.isMajor});
+  _GodRaysPainter({
+    required this.progress,
+    required this.isMajor,
+    required this.accent,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -889,8 +837,7 @@ class _GodRaysPainter extends CustomPainter {
         center: const Alignment(0, -0.9),
         radius: 1.4,
         colors: [
-          (isMajor ? TeritoryColors.majorGold : const Color(0xFF38BDF8))
-              .withValues(alpha: rayAlpha * 0.22),
+          accent.withValues(alpha: rayAlpha * 0.22),
           Colors.transparent,
         ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));

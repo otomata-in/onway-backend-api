@@ -10,6 +10,7 @@ import '../../../core/models/api_flag.dart';
 import '../../../core/models/api_user.dart';
 import '../../../core/models/clan_models.dart';
 import '../../../core/models/search_models.dart';
+import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
@@ -175,15 +176,38 @@ class _ExpeditionOmniSearchSheetState
   }
 
   Future<void> _joinClan(Clan clan) async {
+    final api = TeritoryApiService.instance;
+    if (!api.isAuthenticated) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please sign in to join a clan.'),
+          backgroundColor: TeritoryColors.primary,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          action: SnackBarAction(
+            label: 'Sign In',
+            textColor: Colors.white,
+            onPressed: () {
+              Navigator.of(context).pop();
+              context.push('/login');
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() => _joiningClanIds.add(clan.id));
     try {
-      await TeritoryRepository.instance.joinClan(clan.id);
-      ref.invalidate(clansProvider);
+      await ref.read(clansProvider.notifier).toggleMembership(clan.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Joined ${clan.name}!'),
           backgroundColor: TeritoryColors.emeraldGreen,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
       // Re-run search or update suggestion state
@@ -194,8 +218,42 @@ class _ExpeditionOmniSearchSheetState
       }
     } on ApiException catch (e) {
       if (!mounted) return;
+      if (e.statusCode == 401) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Your session expired. Please sign in again.'),
+            backgroundColor: TeritoryColors.expiredRed,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            action: SnackBarAction(
+              label: 'Sign In',
+              textColor: Colors.white,
+              onPressed: () {
+                Navigator.of(context).pop();
+                context.push('/login');
+              },
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: TeritoryColors.expiredRed,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        SnackBar(
+          content: const Text('Could not reach Teritory. Check your connection.'),
+          backgroundColor: TeritoryColors.expiredRed,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       );
     } finally {
       if (mounted) {
@@ -859,7 +917,9 @@ class _ExpeditionOmniSearchSheetState
   Widget _buildClanCard(Clan clan, bool isDark) {
     final isJoining = _joiningClanIds.contains(clan.id);
     final myClans = ref.watch(clansProvider).valueOrNull?.myClanIds ?? <String>{};
-    final isJoined = myClans.contains(clan.id);
+    final currentUser = ref.watch(currentUserProvider);
+    final isChieftain = currentUser.id.isNotEmpty && clan.chieftainId == currentUser.id;
+    final isJoined = myClans.contains(clan.id) || isChieftain;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -994,7 +1054,9 @@ class _ExpeditionOmniSearchSheetState
                           ),
                         )
                       : Text(
-                          isJoined ? 'Joined ✓' : 'Join Clan',
+                          isJoined
+                              ? (isChieftain ? 'Chieftain 👑' : 'Joined ✓')
+                              : 'Join Clan',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,

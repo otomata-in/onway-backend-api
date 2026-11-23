@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
+import '../../../core/models/flag_style.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/flag_style_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
@@ -20,12 +22,17 @@ class DroppedFlagInfo {
   final bool isMajorFlag;
   final String category;
 
+  /// The signature snapshot the ceremony should reveal. The server stores the
+  /// same style on the new flag row.
+  final FlagStyle flagStyle;
+
   const DroppedFlagInfo({
     required this.placeName,
     required this.city,
     required this.coordinates,
     required this.isMajorFlag,
     required this.category,
+    required this.flagStyle,
   });
 }
 
@@ -65,6 +72,7 @@ class DropFlagModal extends ConsumerStatefulWidget {
         coordinates: result.coordinates,
         isMajorFlag: result.isMajorFlag,
         category: result.category,
+        style: result.flagStyle,
       );
     }
 
@@ -100,7 +108,15 @@ class _DropFlagModalState extends ConsumerState<DropFlagModal> {
   void initState() {
     super.initState();
     _placeController = TextEditingController(text: widget.suggestedPlaceName);
-    _cityController = TextEditingController(text: 'Kochi, Kerala');
+    final lat = widget.initialCoordinates.latitude;
+    final lng = widget.initialCoordinates.longitude;
+    String defaultCity = 'Thiruvananthapuram, Kerala';
+    if (lat >= 8.2 && lat <= 9.0 && lng >= 76.5 && lng <= 77.5) {
+      defaultCity = 'Thiruvananthapuram, Kerala';
+    } else if (lat >= 9.6 && lat <= 10.3 && lng >= 76.0 && lng <= 76.6) {
+      defaultCity = 'Kochi, Kerala';
+    }
+    _cityController = TextEditingController(text: defaultCity);
     _notesController = TextEditingController();
   }
 
@@ -277,6 +293,7 @@ class _DropFlagModalState extends ConsumerState<DropFlagModal> {
       coordinates: widget.initialCoordinates,
       isMajorFlag: _isMajorFlag,
       category: _selectedCategory,
+      flagStyle: ref.read(flagStyleProvider),
     );
 
     Navigator.pop(context, flagInfo);

@@ -343,7 +343,9 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
         ],
       ),
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 24),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).padding.bottom + 96,
+        ),
         child: FloatingActionButton.extended(
           onPressed: _openCreateClan,
           backgroundColor: TeritoryColors.primary,
@@ -395,7 +397,12 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
       color: TeritoryColors.clanPurple,
       onRefresh: () => ref.read(clansProvider.notifier).refresh(),
       child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          0,
+          16,
+          MediaQuery.of(context).padding.bottom + 140,
+        ),
         itemCount: filteredClans.length,
         separatorBuilder: (_, _) => const SizedBox(height: 14),
         itemBuilder: (context, index) {

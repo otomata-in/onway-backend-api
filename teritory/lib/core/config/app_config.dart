@@ -2,6 +2,7 @@ class AppConfig {
   AppConfig._();
 
   /// Teritory Standalone Backend Base URL (Live Render Cloud Deployment).
+  /// Can be overridden at build/run time via `--dart-define=API_BASE_URL=http://127.0.0.1:4000/v1`.
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'https://teritory-api.onrender.com/v1',

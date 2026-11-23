@@ -468,8 +468,12 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                         // Paging Footer
                         SliverToBoxAdapter(
                           child: Padding(
-                            padding:
-                                const EdgeInsets.fromLTRB(16, 16, 16, 170),
+                            padding: EdgeInsets.fromLTRB(
+                              16,
+                              16,
+                              16,
+                              MediaQuery.of(context).padding.bottom + 180,
+                            ),
                             child: _ExpeditionPagingFooter(
                               feed: feed,
                               onLoadMore: () => ref
@@ -490,7 +494,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
             Positioned(
               left: 14,
               right: 14,
-              bottom: MediaQuery.of(context).padding.bottom + 80,
+              bottom: MediaQuery.of(context).padding.bottom + 104,
               child: _ActiveExplorerFieldHUD(
                 entry: myEntry,
                 myRank: myRank,

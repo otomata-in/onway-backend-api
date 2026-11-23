@@ -129,11 +129,15 @@ class _TripsHubScreenState extends ConsumerState<TripsHubScreen>
         ],
       ),
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 24),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).padding.bottom + 96,
+        ),
         child: FloatingActionButton.extended(
+          heroTag: 'plan_new_trip_fab',
           onPressed: () => context.push('/trips/planner'),
           backgroundColor: TeritoryColors.primary,
           foregroundColor: Colors.white,
+          elevation: 4,
           icon: const Icon(Icons.add_rounded),
           label: Text(
             'Plan New Trip',
@@ -191,7 +195,12 @@ class _ActiveTripsTab extends ConsumerWidget {
       color: TeritoryColors.tripRoute,
       onRefresh: () => ref.read(tripsHubProvider.notifier).refresh(),
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          MediaQuery.of(context).padding.bottom + 120,
+        ),
         children: [_ActiveTripCard(trip: trip)],
       ),
     );
@@ -493,7 +502,12 @@ class _PlansTab extends ConsumerWidget {
       color: TeritoryColors.tripRoute,
       onRefresh: () => ref.read(tripsHubProvider.notifier).refresh(),
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          MediaQuery.of(context).padding.bottom + 120,
+        ),
         itemCount: plans.length,
         itemBuilder: (context, index) {
           final plan = plans[index];
@@ -732,7 +746,12 @@ class _TripHistoryTab extends ConsumerWidget {
           color: TeritoryColors.tripRoute,
           onRefresh: () async => ref.invalidate(tripHistoryLiveProvider),
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              MediaQuery.of(context).padding.bottom + 120,
+            ),
             children: [
               if (completed.isNotEmpty) ...[
                 _SectionHeader(

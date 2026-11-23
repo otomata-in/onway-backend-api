@@ -7,6 +7,7 @@ router.get('/me', authenticate, usersController.getMyProfile);
 router.patch('/me', authenticate, usersController.updateMyProfile);
 router.delete('/me', authenticate, usersController.deleteMyAccount);
 router.patch('/me/trip-mode', authenticate, usersController.toggleTripMode);
+router.patch('/me/flag-style', authenticate, usersController.updateMyFlagStyle);
 
 // Social & Friends
 router.get('/friends', authenticate, usersController.getFriends);

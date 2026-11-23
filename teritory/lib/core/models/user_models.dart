@@ -1,4 +1,5 @@
 import '../config/app_config.dart';
+import 'flag_style.dart';
 
 class User {
   final String id;
@@ -11,6 +12,10 @@ class User {
   final DateTime createdAt;
   final String authProvider;
 
+  /// Signature flag carried by the profile response, so the home map can draw
+  /// the traveller's own pin before any style-specific request settles.
+  final FlagStyle flagStyle;
+
   const User({
     required this.id,
     required this.email,
@@ -21,6 +26,7 @@ class User {
     this.bio = '',
     required this.createdAt,
     this.authProvider = 'email',
+    this.flagStyle = FlagStyle.fallback,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -36,6 +42,9 @@ class User {
           ? DateTime.parse(json['createdAt'] as String)
           : DateTime.now(),
       authProvider: (json['authProvider'] as String? ?? 'phone').toLowerCase(),
+      flagStyle: json['flagStyle'] == null
+          ? FlagStyle.fallback
+          : FlagStyle.fromJson(json['flagStyle']),
     );
   }
 
@@ -49,6 +58,7 @@ class User {
     'bio': bio,
     'createdAt': createdAt.toIso8601String(),
     'authProvider': authProvider,
+    'flagStyle': flagStyle.toJson(),
   };
 }
 

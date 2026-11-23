@@ -8,9 +8,13 @@ import '../../../core/models/api_flag.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
+import '../../../core/theme/flag_style_catalog.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../../core/widgets/flag/teritory_flag.dart';
 import '../../explore/application/explore_flags_provider.dart';
+import '../../profile/application/profile_providers.dart';
 import '../../profile/presentation/friend_profile_screen.dart';
+import '../../rankings/application/rankings_provider.dart';
 import '../../trips/application/trips_provider.dart';
 
 /// Live flag detail: reads `GET /v1/flags/:id` and writes reactions, kudos and
@@ -40,6 +44,7 @@ class _LiveFlagDetailSheetState extends ConsumerState<LiveFlagDetailSheet> {
   bool _sendingComment = false;
   bool _sendingKudos = false;
   bool _savingWishlist = false;
+  bool _deletingFlag = false;
   bool? _isSavedOverride;
   // `POST /flags/:id/kudos` always increments, so the sheet allows one send per
   // open instead of letting taps inflate the count.
@@ -133,6 +138,153 @@ class _LiveFlagDetailSheetState extends ConsumerState<LiveFlagDetailSheet> {
     }
   }
 
+  Future<void> _deleteFlagWithConfirmation(ApiFlag flag) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          backgroundColor: Colors.white,
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: TeritoryColors.expiredRed.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.delete_forever_rounded,
+                  color: TeritoryColors.expiredRed,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Remove Flag?',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: TeritoryColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Are you sure you want to permanently remove your flag for "${flag.placeName}"?',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                  color: TeritoryColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: TeritoryColors.expiredRed.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: TeritoryColors.expiredRed.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: TeritoryColors.expiredRed,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'This will delete this flag, all its explorer reactions, comments, and reduce your global territory stats permanently.',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          color: TeritoryColors.expiredRed,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(false),
+              child: Text(
+                'Keep Flag',
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w700,
+                  color: TeritoryColors.textSecondary,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: TeritoryColors.expiredRed,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+              ),
+              onPressed: () => Navigator.of(dialogCtx).pop(true),
+              child: Text(
+                'Yes, Remove',
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _deletingFlag = true);
+    try {
+      await TeritoryRepository.instance.deleteFlag(flag.id);
+      if (!mounted) return;
+
+      ref.invalidate(exploreFlagsProvider);
+      ref.invalidate(myProfileProvider);
+      ref.invalidate(rankingsProvider);
+      ref.invalidate(savedFlagsLiveProvider);
+
+      Navigator.of(context).pop();
+      _toast('Flag "${flag.placeName}" has been removed.');
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() => _deletingFlag = false);
+        _toast(e.message, error: true);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _deletingFlag = false);
+        _toast('Could not remove flag. Check your connection.', error: true);
+      }
+    }
+  }
+
   void _shareSpot(ApiFlag flag) {
     final location = flag.locationLabel.isNotEmpty
         ? flag.locationLabel
@@ -175,11 +327,13 @@ class _LiveFlagDetailSheetState extends ConsumerState<LiveFlagDetailSheet> {
     final reactionCounts = detail?.reactionCounts ??
         const {'EPIC': 0, 'HIDDEN_GEM': 0, 'GREAT_SHOT': 0};
     final comments = detail?.comments ?? const <ApiFlagComment>[];
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Container(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.88,
       ),
+      padding: EdgeInsets.only(bottom: bottomInset),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -199,6 +353,11 @@ class _LiveFlagDetailSheetState extends ConsumerState<LiveFlagDetailSheet> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: _FlagIdentityBanner(flag: flag),
             ),
 
             if (flag.photoUrl.isNotEmpty)
@@ -266,6 +425,27 @@ class _LiveFlagDetailSheetState extends ConsumerState<LiveFlagDetailSheet> {
                         color: TeritoryColors.textSecondary,
                         onPressed: () => _shareSpot(flag),
                       ),
+                      if (flag.userId == ref.watch(currentUserProvider).id)
+                        IconButton(
+                          tooltip: 'Remove flag',
+                          icon: _deletingFlag
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: TeritoryColors.expiredRed,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.delete_outline_rounded,
+                                  size: 20,
+                                ),
+                          color: TeritoryColors.expiredRed,
+                          onPressed: _deletingFlag
+                              ? null
+                              : () => _deleteFlagWithConfirmation(flag),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -739,6 +919,94 @@ class _InlineError extends StatelessWidget {
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The staked flag's own identity, drawn by the shared painter at its snapshot
+/// style — the same cloth the map pin and profile show, at reading size.
+class _FlagIdentityBanner extends StatelessWidget {
+  const _FlagIdentityBanner({required this.flag});
+
+  final ApiFlag flag;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = flag.flagStyle;
+    final theme = FlagStyleCatalog.themeFor(style.theme);
+    final pattern = FlagStyleCatalog.patternFor(style.pattern);
+    final emblem = FlagStyleCatalog.emblemFor(style.emblem);
+    final motion = FlagStyleCatalog.motionFor(style.motion);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            theme.primary.withValues(alpha: 0.30),
+            const Color(0xFF0B1220),
+          ],
+        ),
+        border: Border.all(color: theme.accent.withValues(alpha: 0.38)),
+      ),
+      child: Row(
+        children: [
+          AnimatedTeritoryFlag(
+            style: style,
+            width: 112,
+            isMajor: flag.isMajorFlag,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "THIS SPOT'S FLAG",
+                  style: TextStyle(
+                    color: theme.accent,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  theme.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${pattern.label} · ${emblem.label}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.72),
+                    fontSize: 11.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${motion.label} · ${style.speed.toStringAsFixed(1)}×',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.45),
+                    fontSize: 10.5,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

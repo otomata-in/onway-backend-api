@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/models/flag_style.dart';
 import '../../../core/models/pending_flag.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/api_service.dart';
@@ -29,6 +30,7 @@ final flagDropRequestProvider = Provider<FlagDropRequest>((ref) {
     category: flag.category,
     notes: flag.notes,
     photoUrl: flag.photoUrl,
+    flagStyle: flag.flagStyle,
   );
 });
 
@@ -76,6 +78,7 @@ class FlagQueueNotifier extends Notifier<List<PendingFlag>> {
     String category = 'General',
     String notes = '',
     String? photoUrl,
+    FlagStyle? flagStyle,
   }) async {
     final flag = PendingFlag(
       localId: _uuid.v4(),
@@ -91,6 +94,7 @@ class FlagQueueNotifier extends Notifier<List<PendingFlag>> {
       category: category,
       notes: notes,
       photoUrl: photoUrl,
+      flagStyle: flagStyle,
       createdAt: DateTime.now(),
     );
     await _save([...state, flag]);

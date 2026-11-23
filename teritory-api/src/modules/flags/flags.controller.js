@@ -237,8 +237,7 @@ const dropFlag = async (req, res, next) => {
     );
     if (duplicate) {
       throw ApiError.conflict(
-        `You already staked this spot${
-          duplicate.placeName ? ` ("${duplicate.placeName}")` : ''
+        `You already staked this spot${duplicate.placeName ? ` ("${duplicate.placeName}")` : ''
         }.`
       );
     }
@@ -280,20 +279,20 @@ const dropFlag = async (req, res, next) => {
       }),
       ...(totalFlags === 1
         ? [
-            prisma.passportStamp.create({
-              data: {
-                userId: req.user.id,
-                title: 'First Flag Dropped',
-                category: 'Milestone',
-                date: new Date().toLocaleDateString('en-US', {
-                  month: 'short',
-                  year: 'numeric',
-                }),
-                badgeColor: '#10B981',
-                icon: 'flag',
-              },
-            }),
-          ]
+          prisma.passportStamp.create({
+            data: {
+              userId: req.user.id,
+              title: 'First Flag Dropped',
+              category: 'Milestone',
+              date: new Date().toLocaleDateString('en-US', {
+                month: 'short',
+                year: 'numeric',
+              }),
+              badgeColor: '#10B981',
+              icon: 'flag',
+            },
+          }),
+        ]
         : []),
     ]);
 
@@ -568,6 +567,42 @@ const searchFlags = async (req, res, next) => {
   }
 };
 
+// Delete flag (Owner only, with relational cascade clean-up)
+const deleteFlag = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const flag = await prisma.flag.findUnique({
+      where: { id },
+      select: { id: true, userId: true, placeName: true, isMajorFlag: true },
+    });
+
+    if (!flag) {
+      throw ApiError.notFound('Flag not found');
+    }
+
+    if (flag.userId !== req.user.id) {
+      throw ApiError.forbidden('You can only remove flags staked by your account');
+    }
+
+    await prisma.$transaction([
+      prisma.flag.delete({
+        where: { id },
+      }),
+      prisma.user.update({
+        where: { id: req.user.id },
+        data: {
+          totalFlags: { decrement: 1 },
+          ...(flag.isMajorFlag ? { majorFlags: { decrement: 1 } } : {}),
+        },
+      }),
+    ]);
+
+    return ApiResponse.success(res, { deleted: true, id }, `Flag "${flag.placeName}" has been removed`);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getWonders,
   exploreFlags,
@@ -575,6 +610,7 @@ module.exports = {
   searchFlags,
   dropFlag,
   getFlagById,
+  deleteFlag,
   toggleReaction,
   addComment,
   addKudos,

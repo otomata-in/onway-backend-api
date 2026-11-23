@@ -1,6 +1,7 @@
 import 'package:latlong2/latlong.dart';
 
 import '../config/app_config.dart';
+import 'flag_style.dart';
 import 'teritory_models.dart';
 
 /// A flag exactly as returned by `teritory-api` (`/v1/flags`, `/v1/flags/explore`,
@@ -22,6 +23,10 @@ class ApiFlag {
   final String photoUrl;
   final int kudos;
   final double distanceKm;
+
+  /// The flag's own snapshot. A legacy row without one falls back to its
+  /// owner's current signature, then to the product default.
+  final FlagStyle flagStyle;
 
   /// Only `GET /flags/sub-territories` returns this (HIDDEN_GEM reactions).
   final int hiddenGemCount;
@@ -48,6 +53,7 @@ class ApiFlag {
     required this.photoUrl,
     required this.kudos,
     required this.distanceKm,
+    this.flagStyle = FlagStyle.fallback,
     this.hiddenGemCount = 0,
     required this.createdAt,
     required this.authorName,
@@ -83,6 +89,8 @@ class ApiFlag {
       }
     }
 
+    final rawStyle = json['flagStyle'] ?? userMap?['flagStyle'];
+
     return ApiFlag(
       id: json['id'] as String? ?? '',
       userId: json['userId'] as String? ?? userMap?['id'] as String? ?? '',
@@ -99,6 +107,9 @@ class ApiFlag {
       photoUrl: AppConfig.resolveMediaUrl(json['photoUrl'] as String? ?? ''),
       kudos: (json['kudos'] as num?)?.toInt() ?? 0,
       distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 0.0,
+      flagStyle: rawStyle == null
+          ? FlagStyle.fallback
+          : FlagStyle.fromJson(rawStyle),
       hiddenGemCount: (json['hiddenGemCount'] as num?)?.toInt() ?? 0,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
@@ -258,6 +269,7 @@ extension ApiFlagPresentation on ApiFlag {
     notes: notes,
     photoUrl: photoUrl,
     kudos: kudos,
+    style: flagStyle,
   );
 
   FriendFlag toFriendFlag() => FriendFlag(
@@ -270,7 +282,7 @@ extension ApiFlagPresentation on ApiFlag {
     latitude: latitude,
     longitude: longitude,
     isMajorFlag: isMajorFlag,
-    flagColor: '#14B8A6',
+    style: flagStyle,
     flaggedTimeAgo: _timeAgoLabel,
     caption: notes,
     photoUrl: photoUrl,
@@ -323,6 +335,9 @@ class ApiWonder {
   final DateTime? lastClaimedAt;
   final List<WonderClaimer> claimers;
 
+  /// Style of the most recent claim, so opening a wonder shows that flag.
+  final FlagStyle flagStyle;
+
   const ApiWonder({
     required this.key,
     required this.placeName,
@@ -338,6 +353,7 @@ class ApiWonder {
     required this.claimedByMe,
     required this.lastClaimedAt,
     required this.claimers,
+    this.flagStyle = FlagStyle.fallback,
   });
 
   factory ApiWonder.fromJson(Map<String, dynamic> json) {
@@ -361,6 +377,9 @@ class ApiWonder {
           .whereType<Map<String, dynamic>>()
           .map(WonderClaimer.fromJson)
           .toList(),
+      flagStyle: json['flagStyle'] == null
+          ? FlagStyle.fallback
+          : FlagStyle.fromJson(json['flagStyle']),
     );
   }
 
@@ -384,6 +403,7 @@ class ApiWonder {
     photoUrl: photoUrl,
     kudos: 0,
     distanceKm: 0,
+    flagStyle: flagStyle,
     createdAt: lastClaimedAt ?? DateTime.now(),
     authorName: claimers.isNotEmpty ? claimers.first.displayName : 'Traveler',
     authorHandle: claimers.isNotEmpty ? claimers.first.handle : '',

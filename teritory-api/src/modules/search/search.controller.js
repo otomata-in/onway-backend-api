@@ -26,9 +26,9 @@ const omniSearch = async (req, res, next) => {
           orderBy: { memberCount: 'desc' },
           include: {
             chieftain: { select: { id: true, displayName: true, avatarUrl: true } },
-            members: currentUserId
-              ? { where: { userId: currentUserId }, select: { id: true } }
-              : false,
+            ...(currentUserId
+              ? { members: { where: { userId: currentUserId }, select: { id: true } } }
+              : {}),
           },
         }),
       ]);
@@ -100,9 +100,9 @@ const omniSearch = async (req, res, next) => {
             },
             include: {
               chieftain: { select: { id: true, displayName: true, avatarUrl: true } },
-              members: currentUserId
-                ? { where: { userId: currentUserId }, select: { id: true } }
-                : false,
+              ...(currentUserId
+                ? { members: { where: { userId: currentUserId }, select: { id: true } } }
+                : {}),
             },
             take: 15,
           })

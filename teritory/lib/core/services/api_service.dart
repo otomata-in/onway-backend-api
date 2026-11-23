@@ -23,6 +23,12 @@ class TeritoryApiService {
 
   TeritoryApiService._internal();
 
+  static final StreamController<void> _unauthorizedController =
+      StreamController<void>.broadcast();
+
+  /// Emits when an authenticated session is revoked, expired, or invalid.
+  static Stream<void> get onUnauthorized => _unauthorizedController.stream;
+
   String? _token;
   String? _refreshToken;
 
@@ -276,6 +282,7 @@ class TeritoryApiService {
 
       if (res.statusCode < 200 || res.statusCode >= 300) {
         await clearTokens();
+        _unauthorizedController.add(null);
         return false;
       }
 
@@ -286,6 +293,7 @@ class TeritoryApiService {
       final accessToken = payload?['accessToken'] as String?;
       if (accessToken == null || accessToken.isEmpty) {
         await clearTokens();
+        _unauthorizedController.add(null);
         return false;
       }
 

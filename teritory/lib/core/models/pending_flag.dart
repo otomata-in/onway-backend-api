@@ -1,5 +1,7 @@
 import 'package:latlong2/latlong.dart';
 
+import 'flag_style.dart';
+
 /// A flag the traveller staked somewhere the request could not reach the
 /// server.
 ///
@@ -25,6 +27,11 @@ class PendingFlag {
   final String category;
   final String notes;
   final String? photoUrl;
+
+  /// The style chosen when the flag was staked offline. Kept so replaying the
+  /// queue does not silently restyle the flag to whatever the signature is by
+  /// the time signal returns.
+  final FlagStyle? flagStyle;
   final DateTime createdAt;
 
   /// Why the last attempt failed, or null before the first attempt.
@@ -45,12 +52,15 @@ class PendingFlag {
     this.category = 'General',
     this.notes = '',
     this.photoUrl,
+    this.flagStyle,
     required this.createdAt,
     this.lastError,
     this.attempts = 0,
   });
 
   LatLng get coordinates => LatLng(latitude, longitude);
+
+  FlagStyle get style => flagStyle ?? FlagStyle.fallback;
 
   PendingFlag copyWith({String? lastError, int? attempts}) {
     return PendingFlag(
@@ -67,6 +77,7 @@ class PendingFlag {
       category: category,
       notes: notes,
       photoUrl: photoUrl,
+      flagStyle: flagStyle,
       createdAt: createdAt,
       lastError: lastError ?? this.lastError,
       attempts: attempts ?? this.attempts,
@@ -87,6 +98,7 @@ class PendingFlag {
     'category': category,
     'notes': notes,
     'photoUrl': photoUrl,
+    'flagStyle': flagStyle?.toJson(),
     'createdAt': createdAt.toIso8601String(),
     'lastError': lastError,
     'attempts': attempts,
@@ -107,6 +119,9 @@ class PendingFlag {
       category: json['category'] as String? ?? 'General',
       notes: json['notes'] as String? ?? '',
       photoUrl: json['photoUrl'] as String?,
+      flagStyle: json['flagStyle'] is Map
+          ? FlagStyle.fromJson(json['flagStyle'])
+          : null,
       createdAt:
           DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.now(),

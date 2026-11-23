@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../core/models/api_flag.dart';
 import '../../../core/models/pending_flag.dart';
-import '../../../core/models/teritory_models.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/location_provider.dart';
 import '../../../core/services/location_service.dart';
@@ -14,6 +13,7 @@ import '../../../core/providers/preferences_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../../core/widgets/flag/teritory_flag.dart';
 import '../../../core/widgets/teritory_logo.dart';
 import '../../explore/application/explore_flags_provider.dart';
 import '../../explore/presentation/expedition_omni_search_sheet.dart';
@@ -152,7 +152,7 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
       coordinates: coordinates,
       suggestedPlaceName: location?.isDeviceLocation == true
           ? 'Current Location'
-          : 'Marine Drive Waterfront, Kochi',
+          : 'Kazhakkoottam, Thiruvananthapuram',
     );
     if (!mounted) return;
     // Refresh unconditionally: a flag may have been created even if the sheet was
@@ -464,12 +464,8 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                Icons.cloud_upload_outlined,
-                size: 13,
-                color: TeritoryColors.majorGold,
-              ),
-              const SizedBox(width: 4),
+              FlagPinFlag(style: pending.style, width: 24),
+              const SizedBox(width: 6),
               Flexible(
                 child: Text(
                   pending.placeName,
@@ -673,8 +669,8 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
           child: GestureDetector(
             onTap: () => LiveFlagDetailSheet.show(context, flag: flag),
             child: isMine
-                ? _buildUserFlagPin(flag.toFlagItem())
-                : _buildFriendFlagPin(flag.toFriendFlag()),
+                ? _buildUserFlagPin(flag)
+                : _buildFriendFlagPin(flag),
           ),
         ),
       );
@@ -743,7 +739,8 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                       )
                     : null,
               ),
-              MarkerLayer(markers: markers),
+              // One wind clock for every pin on the map, never one per pin.
+              FlagMotionHost(child: MarkerLayer(markers: markers)),
             ],
           ),
 
@@ -946,89 +943,6 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                   ],
                   const SizedBox(height: 10),
 
-                  // Prominent Expedition Omni-Search Bar Button
-                  GestureDetector(
-                    onTap: _openOmniSearch,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 9,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _isDarkTheme
-                            ? const Color(0xF21E293B)
-                            : Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: _isDarkTheme
-                              ? const Color(0xFF334155)
-                              : const Color(0xFFE2E8F0),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.travel_explore_rounded,
-                            size: 19,
-                            color: TeritoryColors.primary,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Search places, wonders, clans, explorers...',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: _isDarkTheme
-                                    ? const Color(0xFF94A3B8)
-                                    : TeritoryColors.textMuted,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3.5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: TeritoryColors.primary.withValues(
-                                alpha: 0.12,
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.search_rounded,
-                                  size: 13,
-                                  color: TeritoryColors.primary,
-                                ),
-                                const SizedBox(width: 3),
-                                Text(
-                                  'SEARCH',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: TeritoryColors.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-
                   // Filter Chips
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
@@ -1213,7 +1127,7 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
             Positioned(
               left: 0,
               right: 0,
-              bottom: 176,
+              bottom: MediaQuery.of(context).padding.bottom + 160,
               child: _buildLocationFlagsCarousel(
                 flags: visible,
                 center: center,
@@ -1226,7 +1140,7 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
             Positioned(
               left: 0,
               right: 0,
-              bottom: 176,
+              bottom: MediaQuery.of(context).padding.bottom + 160,
               child: _buildSubSpotsShelf(subSpotsAsync),
             ),
 
@@ -1234,7 +1148,7 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
           Positioned(
             left: 20,
             right: 20,
-            bottom: 108,
+            bottom: MediaQuery.of(context).padding.bottom + 92,
             child: SizedBox(
               height: 56,
               child: ElevatedButton(
@@ -1787,7 +1701,7 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
   }
 
   // Pin for User's own flagged locations
-  Widget _buildUserFlagPin(FlagItem flag) {
+  Widget _buildUserFlagPin(ApiFlag flag) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1809,14 +1723,15 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                flag.isMajorFlag
-                    ? Icons.military_tech_rounded
-                    : Icons.flag_rounded,
-                size: 13,
-                color: Colors.white,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: FlagPinFlag(style: flag.flagStyle, width: 26),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
               Flexible(
                 child: Text(
                   flag.placeName,
@@ -1844,9 +1759,9 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
   }
 
   // Pin for Friend's Flagged locations
-  Widget _buildFriendFlagPin(FriendFlag fFlag) {
+  Widget _buildFriendFlagPin(ApiFlag flag) {
     final pinBg = _isDarkTheme ? const Color(0xF21E293B) : Colors.white;
-    final pinBorder = fFlag.isMajorFlag
+    final pinBorder = flag.isMajorFlag
         ? TeritoryColors.majorGold
         : TeritoryColors.sapphireBlue;
 
@@ -1873,10 +1788,10 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
               CircleAvatar(
                 radius: 12,
                 backgroundColor: TeritoryColors.surfaceContainer,
-                backgroundImage: fFlag.friendAvatar.isNotEmpty
-                    ? NetworkImage(fFlag.friendAvatar)
+                backgroundImage: flag.authorAvatar.isNotEmpty
+                    ? NetworkImage(flag.authorAvatar)
                     : null,
-                child: fFlag.friendAvatar.isEmpty
+                child: flag.authorAvatar.isEmpty
                     ? const Icon(
                         Icons.person_rounded,
                         size: 14,
@@ -1887,7 +1802,7 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
-                  fFlag.friendName.split(' ').first,
+                  flag.authorName.split(' ').first,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
@@ -1899,8 +1814,8 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                   ),
                 ),
               ),
-              const SizedBox(width: 4),
-              Icon(Icons.flag_rounded, size: 13, color: pinBorder),
+              const SizedBox(width: 6),
+              FlagPinFlag(style: flag.flagStyle, width: 24),
               const SizedBox(width: 2),
             ],
           ),

@@ -1,6 +1,7 @@
 const prisma = require('../../config/prisma');
 const ApiResponse = require('../../utils/ApiResponse');
 const ApiError = require('../../utils/ApiError');
+const { normalizeFlagStyle } = require('../flags/flag_style');
 
 /**
  * Enriches user object with real-time relational counts to eliminate drift
@@ -75,6 +76,34 @@ const updateMyProfile = async (req, res, next) => {
       data: updateData,
     });
     return ApiResponse.success(res, updated, 'Profile updated successfully');
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Save the traveller's signature flag.
+//
+// Kept separate from PATCH /users/me so a profile edit and a style edit can
+// never overwrite each other, and so the style has one validator.
+const updateMyFlagStyle = async (req, res, next) => {
+  try {
+    const style = req.body?.style;
+    if (style === undefined || style === null) {
+      throw ApiError.badRequest('A flag style is required');
+    }
+
+    const normalized = normalizeFlagStyle(style);
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { flagStyle: normalized },
+      select: { flagStyle: true },
+    });
+
+    return ApiResponse.success(
+      res,
+      { flagStyle: updated.flagStyle },
+      'Flag style saved'
+    );
   } catch (err) {
     next(err);
   }
@@ -630,6 +659,7 @@ const deleteMyAccount = async (req, res, next) => {
 module.exports = {
   getMyProfile,
   updateMyProfile,
+  updateMyFlagStyle,
   toggleTripMode,
   getUserProfile,
   getFriends,

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/flag_style.dart';
+
 /// Device-local preferences, loaded once before `runApp` so providers can read
 /// them synchronously (no default flash, no async work inside `build`).
 class PreferenceStore {
@@ -11,6 +13,7 @@ class PreferenceStore {
 
   static const String _mapDarkKey = 'teritory_map_dark';
   static const String _notificationsKey = 'teritory_notification_prefs';
+  static const String _flagStyleKey = 'teritory_flag_style';
 
   static const Map<String, bool> defaultNotifications = {
     'friendRequests': true,
@@ -22,11 +25,17 @@ class PreferenceStore {
   bool mapDark = true;
   Map<String, bool> notifications = Map<String, bool>.of(defaultNotifications);
 
+  /// Last signature flag seen from the server. The device keeps it so pins
+  /// draw the right identity immediately on a cold start; the server stays the
+  /// source of truth and replaces it on the next profile load.
+  FlagStyle flagStyle = FlagStyle.fallback;
+
   Future<void> init() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       mapDark = prefs.getBool(_mapDarkKey) ?? mapDark;
       notifications = _decodeNotifications(prefs.getString(_notificationsKey));
+      flagStyle = FlagStyle.fromJson(prefs.getString(_flagStyleKey));
     } catch (_) {
       // Unreadable prefs: keep the defaults rather than block startup.
     }
@@ -54,6 +63,16 @@ class PreferenceStore {
     mapDark = dark;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_mapDarkKey, dark);
+  }
+
+  Future<void> setFlagStyle(FlagStyle style) async {
+    flagStyle = style;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_flagStyleKey, jsonEncode(style.toJson()));
+    } catch (_) {
+      // The in-memory signature is still correct for this session.
+    }
   }
 
   Future<void> setNotification(String key, bool enabled) async {

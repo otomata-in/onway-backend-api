@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../core/models/api_flag.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../../core/widgets/flag/teritory_flag.dart';
 import '../../flag/presentation/live_flag_detail_sheet.dart';
 
 /// Full-screen interactive Worldwide Flag Map with dynamic landscape/portrait
@@ -133,18 +134,22 @@ class _WorldwideFlagMapScreenState extends State<WorldwideFlagMapScreen> {
                   markers: widget.flags.map((flag) {
                     return Marker(
                       point: flag.coordinates,
-                      width: 36,
-                      height: 36,
+                      width: 48,
+                      height: 34,
                       child: GestureDetector(
                         onTap: () =>
                             LiveFlagDetailSheet.show(context, flag: flag),
                         child: Container(
+                          padding: const EdgeInsets.all(3),
                           decoration: BoxDecoration(
-                            color: flag.isMajorFlag
-                                ? TeritoryColors.majorGold
-                                : TeritoryColors.primary,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(9),
+                            border: Border.all(
+                              color: flag.isMajorFlag
+                                  ? TeritoryColors.majorGold
+                                  : TeritoryColors.primary,
+                              width: 1.8,
+                            ),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.3),
@@ -153,12 +158,14 @@ class _WorldwideFlagMapScreenState extends State<WorldwideFlagMapScreen> {
                               ),
                             ],
                           ),
-                          child: Icon(
-                            flag.isMajorFlag
-                                ? Icons.military_tech_rounded
-                                : Icons.flag_rounded,
-                            color: Colors.white,
-                            size: 18,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: TeritoryFlag(
+                              style: flag.flagStyle,
+                              width: 40,
+                              showPole: false,
+                              isMajor: flag.isMajorFlag,
+                            ),
                           ),
                         ),
                       ),

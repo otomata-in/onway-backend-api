@@ -8,8 +8,13 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../core/models/api_flag.dart';
 import '../../../core/models/api_user.dart';
+import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/flag_style_provider.dart';
 import '../../../core/services/api_service.dart';
+import '../../../core/theme/flag_style_catalog.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../../core/widgets/flag/teritory_flag.dart';
+import '../../flag/presentation/flag_studio_screen.dart';
 import '../../flag/presentation/live_flag_detail_sheet.dart';
 import '../../rankings/application/rankings_provider.dart';
 import '../application/profile_providers.dart';
@@ -260,6 +265,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         padding: EdgeInsets.zero,
         children: [
           _ProfileHeader(profile: profile),
+          if (profile.id == ref.watch(currentUserProvider).id)
+            const _SignatureFlagCard(),
           const SizedBox(height: 14),
           _StatsRow(profile: profile),
           const SizedBox(height: 12),
@@ -425,6 +432,113 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         onSelected: (selected) {
           if (selected) setState(() => _activeTab = tabKey);
         },
+      ),
+    );
+  }
+}
+
+/// The traveller's own flag, live from the signature provider, with the way
+/// into the Flag Studio. Saving there refreshes this card immediately.
+class _SignatureFlagCard extends ConsumerWidget {
+  const _SignatureFlagCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final style = ref.watch(flagStyleProvider);
+    final theme = FlagStyleCatalog.themeFor(style.theme);
+    final emblem = FlagStyleCatalog.emblemFor(style.emblem);
+    final pattern = FlagStyleCatalog.patternFor(style.pattern);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              theme.primary.withValues(alpha: 0.26),
+              const Color(0xFF0B1220),
+            ],
+          ),
+          border: Border.all(color: theme.accent.withValues(alpha: 0.32)),
+        ),
+        child: Row(
+          children: [
+            AnimatedTeritoryFlag(style: style, width: 104),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'SIGNATURE FLAG',
+                    style: TextStyle(
+                      color: theme.accent,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    theme.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.plusJakartaSans(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${pattern.label} · ${emblem.label}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 32,
+                    child: FilledButton.icon(
+                      onPressed: () async {
+                        final saved = await FlagStudioScreen.show(context);
+                        if (saved != null && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Signature updated.')),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.brush_rounded, size: 15),
+                      label: const Text(
+                        'Design flag',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: theme.accent,
+                        foregroundColor:
+                            FlagStyleCatalog.foregroundOn(theme.accent),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -892,18 +1006,22 @@ class _FootprintMap extends StatelessWidget {
                   markers: flags.map((flag) {
                     return Marker(
                       point: flag.coordinates,
-                      width: 32,
+                      width: 44,
                       height: 32,
                       child: GestureDetector(
                         onTap: () =>
                             LiveFlagDetailSheet.show(context, flag: flag),
                         child: Container(
+                          padding: const EdgeInsets.all(3),
                           decoration: BoxDecoration(
-                            color: flag.isMajorFlag
-                                ? TeritoryColors.majorGold
-                                : TeritoryColors.primary,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(9),
+                            border: Border.all(
+                              color: flag.isMajorFlag
+                                  ? TeritoryColors.majorGold
+                                  : TeritoryColors.primary,
+                              width: 1.6,
+                            ),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.25),
@@ -911,12 +1029,14 @@ class _FootprintMap extends StatelessWidget {
                               ),
                             ],
                           ),
-                          child: Icon(
-                            flag.isMajorFlag
-                                ? Icons.military_tech_rounded
-                                : Icons.flag_rounded,
-                            color: Colors.white,
-                            size: 16,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: TeritoryFlag(
+                              style: flag.flagStyle,
+                              width: 36,
+                              showPole: false,
+                              isMajor: flag.isMajorFlag,
+                            ),
                           ),
                         ),
                       ),
@@ -1268,13 +1388,21 @@ class _FlagListCard extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: flag.photoUrl.isEmpty
+                                    child: flag.photoUrl.isEmpty
                   ? Container(
                       width: 72,
                       height: 72,
-                      color: TeritoryColors.surfaceContainer,
-                      child: const Icon(Icons.image,
-                          color: TeritoryColors.textMuted),
+                      color: FlagStyleCatalog.themeFor(flag.flagStyle.theme)
+                          .primary
+                          .withValues(alpha: 0.12),
+                      child: Center(
+                        child: TeritoryFlag(
+                          style: flag.flagStyle,
+                          width: 62,
+                          showPole: false,
+                          isMajor: flag.isMajorFlag,
+                        ),
+                      ),
                     )
                   : CachedNetworkImage(
                       imageUrl: flag.photoUrl,
@@ -1296,9 +1424,17 @@ class _FlagListCard extends StatelessWidget {
                       errorWidget: (context, url, error) => Container(
                         width: 72,
                         height: 72,
-                        color: TeritoryColors.surfaceContainer,
-                        child: const Icon(Icons.image,
-                            color: TeritoryColors.textMuted),
+                        color: FlagStyleCatalog.themeFor(flag.flagStyle.theme)
+                            .primary
+                            .withValues(alpha: 0.12),
+                        child: Center(
+                          child: TeritoryFlag(
+                            style: flag.flagStyle,
+                            width: 62,
+                            showPole: false,
+                            isMajor: flag.isMajorFlag,
+                          ),
+                        ),
                       ),
                     ),
             ),

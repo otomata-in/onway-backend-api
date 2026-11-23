@@ -163,6 +163,10 @@ model User {
   isPrivate  Boolean @default(false)
   isTripMode Boolean @default(false)
 
+  // Signature flag identity. Null means the traveller has not chosen one and
+  // the product default applies. Validated by src/modules/flags/flag_style.js.
+  flagStyle Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -248,6 +252,10 @@ model Flag {
   notes       String   @default("")
   photoUrl    String?
   kudos       Int      @default(0)
+
+  // Snapshot of the staker's signature at the moment this flag was planted.
+  // Never rewritten when the signature changes; a flag is historical.
+  flagStyle   Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

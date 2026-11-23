@@ -4,6 +4,7 @@
 library;
 
 import '../config/app_config.dart';
+import 'flag_style.dart';
 
 class ApiPassportStamp {
   final String id;
@@ -182,6 +183,10 @@ class ApiUser {
   final int completedTripsCount;
   final int legendaryRalliesCount;
   final String mapStyle;
+
+  /// The traveller's signature flag. [FlagStyle.fallback] means they have not
+  /// chosen one yet.
+  final FlagStyle flagStyle;
   final bool isPrivate;
   final bool isTripMode;
   final DateTime? createdAt;
@@ -212,6 +217,7 @@ class ApiUser {
     this.completedTripsCount = 0,
     this.legendaryRalliesCount = 0,
     this.mapStyle = '',
+    this.flagStyle = FlagStyle.fallback,
     this.isPrivate = false,
     this.isTripMode = false,
     this.createdAt,
@@ -281,6 +287,9 @@ class ApiUser {
       completedTripsCount: intOf('completedTripsCount'),
       legendaryRalliesCount: intOf('legendaryRalliesCount'),
       mapStyle: json['mapStyle'] as String? ?? '',
+      flagStyle: json['flagStyle'] == null
+          ? FlagStyle.fallback
+          : FlagStyle.fromJson(json['flagStyle']),
       isPrivate: json['isPrivate'] as bool? ?? false,
       isTripMode: json['isTripMode'] as bool? ?? false,
       createdAt: json['createdAt'] != null

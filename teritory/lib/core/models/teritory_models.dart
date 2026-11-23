@@ -1,5 +1,7 @@
 import 'package:latlong2/latlong.dart';
 
+import 'flag_style.dart';
+
 /// Presentation model for a flag pin rendered by the Explore map.
 ///
 /// The data always originates from [ApiFlag]; this shape is what the pin
@@ -20,6 +22,9 @@ class FlagItem {
   final String photoUrl;
   final int kudos;
 
+  /// Snapshot of the owner's flag look at the moment this flag was staked.
+  final FlagStyle style;
+
   const FlagItem({
     required this.id,
     required this.placeName,
@@ -35,6 +40,7 @@ class FlagItem {
     required this.notes,
     required this.photoUrl,
     this.kudos = 0,
+    this.style = FlagStyle.fallback,
   });
 
   LatLng get coordinates => LatLng(latitude, longitude);
@@ -51,7 +57,10 @@ class FriendFlag {
   final double latitude;
   final double longitude;
   final bool isMajorFlag;
-  final String flagColor;
+
+  /// The owner's flag look, so a friend's pin carries their identity rather
+  /// than a hardcoded colour.
+  final FlagStyle style;
   final String flaggedTimeAgo;
   final String caption;
   final String photoUrl;
@@ -67,7 +76,7 @@ class FriendFlag {
     required this.latitude,
     required this.longitude,
     required this.isMajorFlag,
-    required this.flagColor,
+    this.style = FlagStyle.fallback,
     required this.flaggedTimeAgo,
     required this.caption,
     required this.photoUrl,
