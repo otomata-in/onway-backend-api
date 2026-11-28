@@ -12,6 +12,7 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../../core/widgets/flag/teritory_flag.dart';
 import '../../flag/presentation/live_flag_detail_sheet.dart';
 import '../application/profile_providers.dart';
 import 'edit_profile_sheet.dart';
@@ -1569,35 +1570,20 @@ class _FootprintMapState extends State<_FootprintMap> {
                   markers: widget.flags.map((flag) {
                     return Marker(
                       point: flag.coordinates,
-                      width: 30,
-                      height: 30,
+                      width: flag.isMajorFlag ? 42 : 34,
+                      height: flag.isMajorFlag ? 50 : 40,
+                      alignment: Alignment.topCenter,
                       child: GestureDetector(
                         onTap: () => LiveFlagDetailSheet.show(
                           context,
                           flag: flag,
                         ),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: flag.isMajorFlag
-                                ? TeritoryColors.majorGold
-                                : TeritoryColors.primary,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.25),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            flag.isMajorFlag
-                                ? Icons.military_tech_rounded
-                                : Icons.flag_rounded,
-                            color: Colors.white,
-                            size: 15,
-                          ),
+                        child: FlagPinFlag(
+                          style: flag.flagStyle,
+                          width: flag.isMajorFlag ? 38 : 30,
+                          height: flag.isMajorFlag ? 48 : 38,
+                          showPole: true,
+                          isMajor: flag.isMajorFlag,
                         ),
                       ),
                     );

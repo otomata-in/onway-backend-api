@@ -344,7 +344,7 @@ class _ClanBrowserScreenState extends ConsumerState<ClanBrowserScreen> {
       ),
       floatingActionButton: Padding(
         padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).padding.bottom + 96,
+          bottom: MediaQuery.of(context).padding.bottom + 80,
         ),
         child: FloatingActionButton.extended(
           onPressed: _openCreateClan,

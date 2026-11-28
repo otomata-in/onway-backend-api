@@ -588,6 +588,31 @@ class TeritoryRepository {
     );
   }
 
+  /// Updates a flag's post details or visibility (`PATCH /flags/:id`).
+  Future<ApiFlag> updateFlag(
+    String flagId, {
+    String? placeName,
+    String? category,
+    String? notes,
+    String? photoUrl,
+    bool? isHidden,
+  }) async {
+    final res = await _api.patch(
+      '/flags/$flagId',
+      body: {
+        'placeName': ?placeName,
+        'category': ?category,
+        'notes': ?notes,
+        'photoUrl': ?photoUrl,
+        'isHidden': ?isHidden,
+      },
+    );
+    if (res is Map<String, dynamic>) {
+      return ApiFlag.fromJson(res);
+    }
+    throw ApiException('Unexpected response while updating flag');
+  }
+
   /// Removes a flag staked by the current user.
   Future<void> deleteFlag(String flagId) async {
     await _api.delete('/flags/$flagId');
@@ -930,8 +955,17 @@ class TeritoryRepository {
 
   /// One traveler's footprint. `GET /flags?userId=` ignores the radius filters,
   /// so this works without a map centre.
-  Future<List<ApiFlag>> fetchUserFlags(String userId) async {
-    final res = await _api.get('/flags', queryParams: {'userId': userId});
+  Future<List<ApiFlag>> fetchUserFlags(
+    String userId, {
+    bool includeHidden = false,
+  }) async {
+    final res = await _api.get(
+      '/flags',
+      queryParams: {
+        'userId': userId,
+        if (includeHidden) 'includeHidden': 'true',
+      },
+    );
     if (res is! List) {
       throw ApiException('Unexpected response while loading flags');
     }

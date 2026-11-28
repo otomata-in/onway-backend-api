@@ -3,6 +3,7 @@ const ApiResponse = require('../../utils/ApiResponse');
 const ApiError = require('../../utils/ApiError');
 const { haversineDistanceMeters, haversineDistanceKm, getBoundingBox } = require('../../utils/geo');
 const { notify } = require('../notifications/notifications.service');
+const { normalizeFlagStyle } = require('./flag_style');
 
 // Major wonders registry — derived from the major flags travelers have staked.
 // There is no official wonders table: one row per distinct place, with the
@@ -10,7 +11,7 @@ const { notify } = require('../notifications/notifications.service');
 const getWonders = async (req, res, next) => {
   try {
     const flags = await prisma.flag.findMany({
-      where: { isMajorFlag: true },
+      where: { isMajorFlag: true, isHidden: false },
       include: {
         user: {
           select: { id: true, displayName: true, handle: true, avatarUrl: true },
@@ -72,11 +73,19 @@ const getWonders = async (req, res, next) => {
 // Explore nearby flags
 const exploreFlags = async (req, res, next) => {
   try {
-    const { lat, lng, radiusKm = 50, category, userId } = req.query;
+    const { lat, lng, radiusKm = 50, category, userId, includeHidden } = req.query;
     const centerLat = parseFloat(lat);
     const centerLng = parseFloat(lng);
 
     const where = {};
+    const canSeeHidden =
+      (includeHidden === 'true' || includeHidden === true) &&
+      req.user?.id &&
+      userId &&
+      req.user.id === userId;
+    if (!canSeeHidden) {
+      where.isHidden = false;
+    }
     if (category && category !== 'All') {
       where.category = category;
     }
@@ -97,7 +106,7 @@ const exploreFlags = async (req, res, next) => {
       where,
       include: {
         user: {
-          select: { id: true, displayName: true, handle: true, avatarUrl: true },
+          select: { id: true, displayName: true, handle: true, avatarUrl: true, flagStyle: true },
         },
         _count: {
           select: { reactions: true, comments: true },
@@ -143,12 +152,13 @@ const getSubTerritories = async (req, res, next) => {
     const flags = await prisma.flag.findMany({
       where: {
         isMajorFlag: false,
+        isHidden: false,
         latitude: { gte: box.minLat, lte: box.maxLat },
         longitude: { gte: box.minLng, lte: box.maxLng },
       },
       include: {
         reactions: true,
-        user: { select: { id: true, displayName: true, avatarUrl: true } },
+        user: { select: { id: true, displayName: true, avatarUrl: true, flagStyle: true } },
       },
     });
 
@@ -190,6 +200,7 @@ const dropFlag = async (req, res, next) => {
       category = 'General',
       notes = '',
       photoUrl,
+      flagStyle: rawFlagStyle,
     } = req.body;
 
     const name = typeof placeName === 'string' ? placeName.trim() : '';
@@ -245,6 +256,65 @@ const dropFlag = async (req, res, next) => {
     // `Boolean('false')` is true, so parse the flag rather than trusting truthiness.
     const major = isMajorFlag === true || isMajorFlag === 'true';
 
+    // Major Flag rule: a new Major Wonder suggestion is only allowed if it is
+    // at least 5 km away from any existing Major Wonder, OR if this hidden spot
+    // has already accumulated more than 50 flags.
+    if (major) {
+      const majorBox = getBoundingBox(lat, lng, 5.2);
+      const candidateMajors = await prisma.flag.findMany({
+        where: {
+          isMajorFlag: true,
+          latitude: { gte: majorBox.minLat, lte: majorBox.maxLat },
+          longitude: { gte: majorBox.minLng, lte: majorBox.maxLng },
+        },
+        select: { id: true, placeName: true, latitude: true, longitude: true },
+      });
+
+      let nearestMajor = null;
+      let nearestDist = Infinity;
+      for (const m of candidateMajors) {
+        const dist = haversineDistanceMeters(lat, lng, m.latitude, m.longitude);
+        if (dist < 5000 && dist < nearestDist) {
+          nearestDist = dist;
+          nearestMajor = m;
+        }
+      }
+
+      if (nearestMajor) {
+        const spotBox = getBoundingBox(lat, lng, 0.2);
+        const spotCandidates = await prisma.flag.findMany({
+          where: {
+            latitude: { gte: spotBox.minLat, lte: spotBox.maxLat },
+            longitude: { gte: spotBox.minLng, lte: spotBox.maxLng },
+          },
+          select: { latitude: true, longitude: true },
+        });
+        const spotFlagCount = spotCandidates.filter(
+          (f) => haversineDistanceMeters(lat, lng, f.latitude, f.longitude) <= 150
+        ).length;
+
+        if (spotFlagCount <= 50) {
+          const distKm = (nearestDist / 1000).toFixed(1);
+          throw ApiError.conflict(
+            `Major Wonder "${nearestMajor.placeName}" is already ${distKm} km away. New Major Flag suggestions must be at least 5 km from existing Major Wonders (or reach 50+ flags at this spot). You can still stake a standard flag here.`
+          );
+        }
+      }
+    }
+
+    // Validate explicit flagStyle if supplied, otherwise snapshot the user's
+    // saved signature style so every staked flag reflects its creator.
+    let resolvedFlagStyle = null;
+    if (rawFlagStyle !== undefined && rawFlagStyle !== null) {
+      resolvedFlagStyle = normalizeFlagStyle(rawFlagStyle);
+    } else {
+      const owner = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { flagStyle: true },
+      });
+      resolvedFlagStyle = owner?.flagStyle || null;
+    }
+
     // Counts and the first-flag stamp move with the flag itself, in one batched
     // transaction, so a failure cannot leave a flag the profile does not count.
     const existingFlags = await prisma.flag.count({
@@ -271,6 +341,12 @@ const dropFlag = async (req, res, next) => {
           category,
           notes,
           photoUrl,
+          ...(resolvedFlagStyle ? { flagStyle: resolvedFlagStyle } : {}),
+        },
+        include: {
+          user: {
+            select: { id: true, displayName: true, handle: true, avatarUrl: true, flagStyle: true },
+          },
         },
       }),
       prisma.user.update({
@@ -309,7 +385,7 @@ const getFlagById = async (req, res, next) => {
     const flag = await prisma.flag.findUnique({
       where: { id },
       include: {
-        user: { select: { id: true, displayName: true, handle: true, avatarUrl: true } },
+        user: { select: { id: true, displayName: true, handle: true, avatarUrl: true, flagStyle: true } },
         reactions: true,
         comments: {
           include: {
@@ -533,6 +609,7 @@ const searchFlags = async (req, res, next) => {
     }
     const query = q.trim();
     const where = {
+      isHidden: false,
       OR: [
         { placeName: { contains: query, mode: 'insensitive' } },
         { city: { contains: query, mode: 'insensitive' } },
@@ -548,7 +625,7 @@ const searchFlags = async (req, res, next) => {
       where,
       include: {
         user: {
-          select: { id: true, displayName: true, handle: true, avatarUrl: true },
+          select: { id: true, displayName: true, handle: true, avatarUrl: true, flagStyle: true },
         },
         _count: {
           select: { reactions: true, comments: true },
@@ -562,6 +639,64 @@ const searchFlags = async (req, res, next) => {
     });
 
     return ApiResponse.success(res, flags);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Update flag (Owner only: edit placeName, category, notes, photoUrl, or hide/show)
+const updateFlag = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.flag.findUnique({
+      where: { id },
+      select: { id: true, userId: true },
+    });
+
+    if (!existing) {
+      throw ApiError.notFound('Flag not found');
+    }
+    if (existing.userId !== req.user.id) {
+      throw ApiError.forbidden('You can only manage flags staked by your account');
+    }
+
+    const { placeName, category, notes, photoUrl, isHidden } = req.body;
+    const data = {};
+
+    if (placeName !== undefined) {
+      const trimmed = typeof placeName === 'string' ? placeName.trim() : '';
+      if (!trimmed || trimmed.length > 120) {
+        throw ApiError.badRequest('Place name is required (max 120 characters)');
+      }
+      data.placeName = trimmed;
+    }
+    if (category !== undefined && typeof category === 'string' && category.trim()) {
+      data.category = category.trim();
+    }
+    if (notes !== undefined && typeof notes === 'string') {
+      data.notes = notes.trim();
+    }
+    if (photoUrl !== undefined) {
+      data.photoUrl = photoUrl ? String(photoUrl).trim() : null;
+    }
+    if (isHidden !== undefined) {
+      data.isHidden = isHidden === true || isHidden === 'true';
+    }
+
+    const updated = await prisma.flag.update({
+      where: { id },
+      data,
+      include: {
+        user: {
+          select: { id: true, displayName: true, handle: true, avatarUrl: true, flagStyle: true },
+        },
+        _count: {
+          select: { reactions: true, comments: true },
+        },
+      },
+    });
+
+    return ApiResponse.success(res, updated, 'Flag updated successfully');
   } catch (err) {
     next(err);
   }
@@ -610,6 +745,7 @@ module.exports = {
   searchFlags,
   dropFlag,
   getFlagById,
+  updateFlag,
   deleteFlag,
   toggleReaction,
   addComment,

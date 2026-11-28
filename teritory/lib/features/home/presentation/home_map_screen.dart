@@ -1,22 +1,30 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../core/models/api_flag.dart';
+import '../../../core/models/flag_style.dart';
 import '../../../core/models/pending_flag.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/flag_style_provider.dart';
 import '../../../core/providers/location_provider.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/providers/preferences_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
+import '../../../core/theme/flag_style_catalog.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../../../core/widgets/flag/teritory_flag.dart';
 import '../../../core/widgets/teritory_logo.dart';
 import '../../explore/application/explore_flags_provider.dart';
 import '../../explore/presentation/expedition_omni_search_sheet.dart';
+import '../../explore/presentation/spot_constellation_screen.dart';
 import '../../flag/application/flag_queue_provider.dart';
 import '../../flag/presentation/drop_flag_modal.dart';
 import '../../flag/presentation/live_flag_detail_sheet.dart';
@@ -43,7 +51,17 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
   // Mirrors the persisted theme (true = Midnight Oceanic, false = Daylight
   // White); assigned from [mapThemeProvider] at the top of build.
   bool _isDarkTheme = true;
+  double _currentZoom = 12.0;
   late AnimationController _pulseController;
+
+  double get _flagZoomScale {
+    if (_currentZoom >= 13.0) return 1.0;
+    // Exponential shrink as the user zooms out so nearby pins separate cleanly
+    // instead of overlapping at city/state/country zoom levels.
+    return math.pow(0.78, (13.0 - _currentZoom).clamp(0.0, 8.0))
+        .toDouble()
+        .clamp(0.18, 1.0);
+  }
 
   @override
   void initState() {
@@ -441,54 +459,52 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
   /// territory the traveler already owns.
   Widget _buildPendingFlagPin(PendingFlag pending) {
     final pinBg = _isDarkTheme ? const Color(0xF21E293B) : Colors.white;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: pinBg,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: TeritoryColors.majorGold,
-              width: 1.4,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
+    return _buildPlantedFlagPin(
+      style: pending.style,
+      anchorColor: TeritoryColors.majorGold,
+      badge: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: pinBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: TeritoryColors.majorGold,
+            width: 1.4,
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              FlagPinFlag(style: pending.style, width: 24),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  pending.placeName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: _isDarkTheme
-                        ? Colors.white
-                        : TeritoryColors.textPrimary,
-                  ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.2),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.cloud_upload_outlined,
+              size: 13,
+              color: TeritoryColors.majorGold,
+            ),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                pending.placeName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.bold,
+                  color: _isDarkTheme
+                      ? Colors.white
+                      : TeritoryColors.textPrimary,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-        const Icon(
-          Icons.arrow_drop_down,
-          size: 18,
-          color: TeritoryColors.majorGold,
-        ),
-      ],
+      ),
     );
   }
 
@@ -657,23 +673,78 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
       ),
     );
 
-    // 2. Live flag pins (own pins + other travelers' pins)
-    for (final flag in visible) {
-      final isMine = flag.isOwnedBy(currentUserId);
-      markers.add(
-        Marker(
-          point: flag.coordinates,
-          width: isMine ? 130 : 140,
-          height: isMine ? 70 : 75,
-          alignment: Alignment.topCenter,
-          child: GestureDetector(
-            onTap: () => LiveFlagDetailSheet.show(context, flag: flag),
-            child: isMine
-                ? _buildUserFlagPin(flag)
-                : _buildFriendFlagPin(flag),
+    // 2. Live flag pins — group co-located flags (`<= 35m`) to avoid overlap.
+    // Sort lowest-priority first so higher-priority pins (mine / major) paint on top.
+    final groups = _groupOverlappingFlags(visible, currentUserId);
+    final bool fanOutUpClose = _currentZoom >= 14.0;
+
+    for (final group in groups) {
+      final lead = group.first;
+      void openConstellation() => SpotConstellationScreen.open(
+            context,
+            flags: group,
+            friendIds: live.friendIds,
+          );
+
+      if (group.length == 1) {
+        final isMine = lead.isOwnedBy(currentUserId);
+        markers.add(
+          Marker(
+            point: lead.coordinates,
+            width: lead.isMajorFlag ? 148 : 136,
+            height: lead.isMajorFlag ? 86 : 76,
+            alignment: Alignment.topCenter,
+            child: _DeepHoldMarker(
+              onTap: () => LiveFlagDetailSheet.show(context, flag: lead),
+              onDeepHold: openConstellation,
+              child: isMine
+                  ? _buildUserFlagPin(lead)
+                  : _buildFriendFlagPin(lead),
+            ),
           ),
-        ),
-      );
+        );
+      } else if (fanOutUpClose && group.length <= 4) {
+        // Fan out up to 4 co-located flags cleanly when zoomed in close.
+        for (var i = group.length - 1; i >= 0; i--) {
+          final flag = group[i];
+          final isMine = flag.isOwnedBy(currentUserId);
+          final offset = _fanOffset(i, group.length);
+          markers.add(
+            Marker(
+              point: flag.coordinates,
+              width: flag.isMajorFlag ? 148 : 136,
+              height: flag.isMajorFlag ? 86 : 76,
+              alignment: Alignment.topCenter,
+              child: Transform.translate(
+                offset: offset,
+                child: _DeepHoldMarker(
+                  onTap: () => LiveFlagDetailSheet.show(context, flag: flag),
+                  onDeepHold: openConstellation,
+                  child: isMine
+                      ? _buildUserFlagPin(flag)
+                      : _buildFriendFlagPin(flag),
+                ),
+              ),
+            ),
+          );
+        }
+      } else {
+        // Stacked Multi-Explorer Cluster Pin when zoomed out or 5+ explorers.
+        final hasMajor = group.any((f) => f.isMajorFlag);
+        markers.add(
+          Marker(
+            point: lead.coordinates,
+            width: hasMajor ? 184 : 164,
+            height: hasMajor ? 108 : 84,
+            alignment: Alignment.topCenter,
+            child: _DeepHoldMarker(
+              onTap: () => _showSpotExplorersSheet(group, live.friendIds),
+              onDeepHold: openConstellation,
+              child: _buildClusterFlagPin(group, currentUserId),
+            ),
+          ),
+        );
+      }
     }
 
     // 3. Saved-but-not-yet-staked flags from the offline queue
@@ -682,7 +753,7 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
         Marker(
           point: pending.coordinates,
           width: 150,
-          height: 78,
+          height: 86,
           alignment: Alignment.topCenter,
           child: GestureDetector(
             onTap: () => _showPendingFlagSheet(pending),
@@ -706,6 +777,12 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.all,
               ),
+              onPositionChanged: (camera, hasGesture) {
+                final z = camera.zoom;
+                if ((z - _currentZoom).abs() >= 0.04) {
+                  setState(() => _currentZoom = z);
+                }
+              },
             ),
             children: [
               TileLayer(
@@ -740,7 +817,8 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                     : null,
               ),
               // One wind clock for every pin on the map, never one per pin.
-              FlagMotionHost(child: MarkerLayer(markers: markers)),
+              // `rotate: true` keeps flags and labels upright when the map turns.
+              FlagMotionHost(child: MarkerLayer(markers: markers, rotate: true)),
             ],
           ),
 
@@ -985,7 +1063,7 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
           // ── Right Side Navigation Buttons ──
           Positioned(
             right: 16,
-            bottom: 252,
+            bottom: MediaQuery.of(context).padding.bottom + 236,
             child: Column(
               children: [
                 // Gear rental + nearby food (live /services endpoints)
@@ -1127,7 +1205,7 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
             Positioned(
               left: 0,
               right: 0,
-              bottom: MediaQuery.of(context).padding.bottom + 160,
+              bottom: MediaQuery.of(context).padding.bottom + 138,
               child: _buildLocationFlagsCarousel(
                 flags: visible,
                 center: center,
@@ -1140,7 +1218,7 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
             Positioned(
               left: 0,
               right: 0,
-              bottom: MediaQuery.of(context).padding.bottom + 160,
+              bottom: MediaQuery.of(context).padding.bottom + 138,
               child: _buildSubSpotsShelf(subSpotsAsync),
             ),
 
@@ -1148,7 +1226,7 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
           Positioned(
             left: 20,
             right: 20,
-            bottom: MediaQuery.of(context).padding.bottom + 92,
+            bottom: MediaQuery.of(context).padding.bottom + 76,
             child: SizedBox(
               height: 56,
               child: ElevatedButton(
@@ -1700,93 +1778,693 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
     );
   }
 
-  // Pin for User's own flagged locations
-  Widget _buildUserFlagPin(ApiFlag flag) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: flag.isMajorFlag
-                ? TeritoryColors.majorGoldDark
-                : TeritoryColors.primary,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.25),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
+  /// Shared layout for map flags: a separate classy floating badge (DP + name)
+  /// above a balanced waving flag with a medium-long pole staked into a
+  /// miniature terrain mound (or glowing lava volcano for Major Flags).
+  Widget _buildPlantedFlagPin({
+    required Widget badge,
+    required FlagStyle style,
+    required Color anchorColor,
+    bool isMajor = false,
+  }) {
+    final double flagWidth = isMajor ? 34 : 28;
+    final double flagHeight = isMajor ? 42 : 35;
+    final double baseWidth = isMajor ? 26 : 20;
+    // Offset the flag right so its pole (at 0.075 * width) aligns with the
+    // horizontal center of the marker and lands right in the terrain summit.
+    final double poleCenterOffset = flagWidth * (1 - 0.15);
+
+    return Transform.scale(
+      scale: _flagZoomScale,
+      alignment: Alignment.bottomCenter,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          badge,
+          const SizedBox(height: 2),
+          SizedBox(
+            height: flagHeight + (isMajor ? 9 : 6),
+            child: Stack(
+              alignment: Alignment.bottomCenter,
+              clipBehavior: Clip.none,
+              children: [
+                // Sculpted rocky hillock / glowing lava volcano basement.
+                FlagTerrainBase(
+                  accentColor: anchorColor,
+                  isMajor: isMajor,
+                  width: baseWidth,
+                ),
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: poleCenterOffset,
+                    bottom: isMajor ? 7.5 : 5,
+                  ),
+                  child: FlagPinFlag(
+                    style: style,
+                    width: flagWidth,
+                    height: flagHeight,
+                    showPole: true,
+                    isMajor: isMajor,
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: Row(
+        ],
+      ),
+    );
+  }
+
+  static const Distance _geoDistance = Distance();
+
+  /// Groups flags within ~35 meters of each other and sorts each group by
+  /// priority (own flags -> major wonders -> kudos/recency), then sorts groups
+  /// so lower-priority pins render first and higher-priority pins paint on top.
+  List<List<ApiFlag>> _groupOverlappingFlags(
+    List<ApiFlag> flags,
+    String currentUserId,
+  ) {
+    int priorityScore(ApiFlag f) {
+      var score = 0;
+      if (f.isOwnedBy(currentUserId)) score += 10000;
+      if (f.isMajorFlag) score += 1000;
+      score += f.kudos.clamp(0, 500);
+      return score;
+    }
+
+    final sorted = List<ApiFlag>.from(flags)
+      ..sort((a, b) => priorityScore(b).compareTo(priorityScore(a)));
+
+    final groups = <List<ApiFlag>>[];
+    for (final flag in sorted) {
+      List<ApiFlag>? target;
+      for (final group in groups) {
+        final meters = _geoDistance.as(
+          LengthUnit.Meter,
+          group.first.coordinates,
+          flag.coordinates,
+        );
+        if (meters <= 35) {
+          target = group;
+          break;
+        }
+      }
+      if (target != null) {
+        target.add(flag);
+      } else {
+        groups.add([flag]);
+      }
+    }
+
+    // Reverse group order so highest-priority groups render last (on top).
+    return groups.reversed.toList();
+  }
+
+  Offset _fanOffset(int index, int count) {
+    switch (count) {
+      case 2:
+        return index == 0 ? const Offset(-18, 0) : const Offset(18, 0);
+      case 3:
+        const offsets = [
+          Offset(-22, 6),
+          Offset(0, -10),
+          Offset(22, 6),
+        ];
+        return offsets[index];
+      case 4:
+      default:
+        const offsets = [
+          Offset(-24, 6),
+          Offset(-8, -10),
+          Offset(8, -10),
+          Offset(24, 6),
+        ];
+        return offsets[index % offsets.length];
+    }
+  }
+
+  /// Stacked multi-explorer pin shown when 2+ travelers share a spot while
+  /// zoomed out (or 5+ at any zoom). Shows overlapping DPs + count above the
+  /// lead flag on its terrain/volcano base.
+  Widget _buildClusterFlagPin(List<ApiFlag> group, String currentUserId) {
+    final lead = group.first;
+    final hasMajor = group.any((f) => f.isMajorFlag);
+    final leadStyle = lead.effectiveStyle(
+      currentUserId,
+      ref.watch(flagStyleProvider),
+    );
+    final themeColor = hasMajor
+        ? TeritoryColors.majorGold
+        : FlagStyleCatalog.primaryColor(leadStyle);
+    final compact = _currentZoom < 10.5;
+    final avatars = group.take(3).toList();
+
+    return _buildPlantedFlagPin(
+      style: leadStyle,
+      anchorColor: themeColor,
+      isMajor: hasMajor,
+      badge: Container(
+        constraints: BoxConstraints(maxWidth: hasMajor ? 172 : 150),
+        padding: hasMajor
+            ? const EdgeInsets.fromLTRB(8, 5, 8, 4)
+            : const EdgeInsets.fromLTRB(4, 3, 8, 3),
+        decoration: BoxDecoration(
+          gradient: hasMajor
+              ? const LinearGradient(
+                  colors: [Color(0xFF1C1917), Color(0xFF451A03)],
+                )
+              : LinearGradient(
+                  colors: _isDarkTheme
+                      ? const [Color(0xF50F172A), Color(0xF51E293B)]
+                      : const [Colors.white, Color(0xFFF8FAFC)],
+                ),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: hasMajor ? const Color(0xFFFBBF24) : themeColor,
+            width: hasMajor ? 1.5 : 1.3,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: hasMajor
+                  ? TeritoryColors.majorGold.withValues(alpha: 0.48)
+                  : Colors.black.withValues(alpha: 0.2),
+              blurRadius: hasMajor ? 10 : 7,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: hasMajor
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  if (!compact) ...[
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.auto_awesome_rounded,
+                          size: 11,
+                          color: Color(0xFFFEF08A),
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            lead.placeName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.plusJakartaSans(
+                              color: const Color(0xFFFEF3C7),
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                  ],
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 16.0 + (avatars.length - 1) * 9.0,
+                        height: 17,
+                        child: Stack(
+                          children: [
+                            for (var i = 0; i < avatars.length; i++)
+                              Positioned(
+                                left: i * 9.0,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: const Color(0xFFFBBF24),
+                                      width: 1.1,
+                                    ),
+                                  ),
+                                  child: CircleAvatar(
+                                    radius: 7,
+                                    backgroundColor:
+                                        themeColor.withValues(alpha: 0.25),
+                                    backgroundImage:
+                                        avatars[i].authorAvatar.isNotEmpty
+                                            ? NetworkImage(
+                                                avatars[i].authorAvatar,
+                                              )
+                                            : null,
+                                    child: avatars[i].authorAvatar.isEmpty
+                                        ? const Icon(
+                                            Icons.person_rounded,
+                                            size: 9,
+                                            color: Colors.white,
+                                          )
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 1.5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: TeritoryColors.majorGold.withValues(alpha: 0.24),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          compact ? '${group.length}' : '${group.length} Flags',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: const Color(0xFFFEF08A),
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 18.0 + (avatars.length - 1) * 10.0,
+                    height: 19,
+                    child: Stack(
+                      children: [
+                        for (var i = 0; i < avatars.length; i++)
+                          Positioned(
+                            left: i * 10.0,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 1.2,
+                                ),
+                              ),
+                              child: CircleAvatar(
+                                radius: 8,
+                                backgroundColor:
+                                    themeColor.withValues(alpha: 0.25),
+                                backgroundImage:
+                                    avatars[i].authorAvatar.isNotEmpty
+                                        ? NetworkImage(avatars[i].authorAvatar)
+                                        : null,
+                                child: avatars[i].authorAvatar.isEmpty
+                                    ? const Icon(
+                                        Icons.person_rounded,
+                                        size: 10,
+                                        color: Colors.white,
+                                      )
+                                    : null,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    compact ? '${group.length}' : '${group.length} Flags',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: _isDarkTheme
+                          ? Colors.white
+                          : TeritoryColors.textPrimary,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  /// Opens a clean bottom sheet listing every traveler who flagged a shared
+  /// spot, so the user can inspect any individual flag or open the nested
+  /// Constellation Map View.
+  Future<void> _showSpotExplorersSheet(
+    List<ApiFlag> group,
+    Set<String> friendIds,
+  ) async {
+    final lead = group.first;
+    final hasMajor = group.any((f) => f.isMajorFlag);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetCtx) {
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetCtx).size.height * 0.68,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                margin: const EdgeInsets.only(top: 10, bottom: 8),
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(5),
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: FlagPinFlag(style: flag.flagStyle, width: 26),
               ),
-              const SizedBox(width: 6),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: hasMajor
+                            ? TeritoryColors.majorGoldLight
+                            : TeritoryColors.primaryLight,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        hasMajor
+                            ? Icons.auto_awesome_rounded
+                            : Icons.flag_rounded,
+                        color: hasMajor
+                            ? TeritoryColors.majorGoldDark
+                            : TeritoryColors.primary,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            lead.placeName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: TeritoryColors.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            '${group.length} explorers staked flags here',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: TeritoryColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    FilledButton.icon(
+                      onPressed: () {
+                        Navigator.of(sheetCtx).pop();
+                        SpotConstellationScreen.open(
+                          context,
+                          flags: group,
+                          friendIds: friendIds,
+                        );
+                      },
+                      icon: const Icon(Icons.hub_rounded, size: 15),
+                      label: const Text('Constellation'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: hasMajor
+                            ? TeritoryColors.majorGoldDark
+                            : TeritoryColors.primary,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        textStyle: GoogleFonts.plusJakartaSans(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
+                  itemCount: group.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (_, idx) {
+                    final flag = group[idx];
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: () {
+                        Navigator.of(sheetCtx).pop();
+                        LiveFlagDetailSheet.show(context, flag: flag);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: TeritoryColors.background,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: TeritoryColors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 18,
+                              backgroundColor: TeritoryColors.border,
+                              backgroundImage: flag.authorAvatar.isNotEmpty
+                                  ? NetworkImage(flag.authorAvatar)
+                                  : null,
+                              child: flag.authorAvatar.isEmpty
+                                  ? const Icon(
+                                      Icons.person_rounded,
+                                      size: 18,
+                                      color: Colors.white,
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    flag.authorName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: TeritoryColors.textPrimary,
+                                    ),
+                                  ),
+                                  Text(
+                                    flag.isMajorFlag
+                                        ? 'Major Wonder · ${flag.kudos} kudos'
+                                        : '${flag.category} · ${flag.kudos} kudos',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 11.5,
+                                      color: flag.isMajorFlag
+                                          ? TeritoryColors.majorGoldDark
+                                          : TeritoryColors.textSecondary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            TeritoryFlag(
+                              style: flag.flagStyle,
+                              width: 32,
+                              isMajor: flag.isMajorFlag,
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(
+                              Icons.chevron_right_rounded,
+                              color: TeritoryColors.textMuted,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Pin for User's own flagged locations
+  Widget _buildUserFlagPin(ApiFlag flag) {
+    final myId = ref.watch(currentUserProvider).id;
+    final myStyle = ref.watch(flagStyleProvider);
+    final effectiveStyle = flag.effectiveStyle(myId, myStyle);
+    final themeColor = FlagStyleCatalog.primaryColor(effectiveStyle);
+    final accentColor = flag.isMajorFlag
+        ? TeritoryColors.majorGold
+        : themeColor;
+    final hideText = _currentZoom < 10.5;
+
+    return _buildPlantedFlagPin(
+      style: effectiveStyle,
+      anchorColor: accentColor,
+      isMajor: flag.isMajorFlag,
+      badge: Container(
+        padding: hideText
+            ? const EdgeInsets.all(2.5)
+            : const EdgeInsets.fromLTRB(3, 3, 9, 3),
+        decoration: BoxDecoration(
+          gradient: flag.isMajorFlag
+              ? const LinearGradient(
+                  colors: [Color(0xFF1C1917), Color(0xFF451A03)],
+                )
+              : LinearGradient(
+                  colors: _isDarkTheme
+                      ? const [Color(0xF50F172A), Color(0xF51E293B)]
+                      : const [Colors.white, Color(0xFFF8FAFC)],
+                ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: flag.isMajorFlag
+                ? const Color(0xFFFBBF24)
+                : accentColor.withValues(alpha: 0.7),
+            width: flag.isMajorFlag ? 1.5 : 1.3,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: flag.isMajorFlag
+                  ? TeritoryColors.majorGold.withValues(alpha: 0.48)
+                  : Colors.black.withValues(alpha: 0.18),
+              blurRadius: flag.isMajorFlag ? 10 : 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(1.3),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: accentColor, width: 1.4),
+              ),
+              child: CircleAvatar(
+                radius: 8.5,
+                backgroundColor: accentColor.withValues(alpha: 0.2),
+                backgroundImage: flag.authorAvatar.isNotEmpty
+                    ? NetworkImage(flag.authorAvatar)
+                    : null,
+                child: flag.authorAvatar.isEmpty
+                    ? Icon(
+                        Icons.person_rounded,
+                        size: 11,
+                        color: flag.isMajorFlag ? Colors.white : accentColor,
+                      )
+                    : null,
+              ),
+            ),
+            if (!hideText) ...[
+              const SizedBox(width: 5),
+              if (flag.isMajorFlag) ...[
+                const Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 11,
+                  color: Color(0xFFFEF08A),
+                ),
+                const SizedBox(width: 3),
+              ],
               Flexible(
                 child: Text(
                   flag.placeName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
+                    color: flag.isMajorFlag
+                        ? const Color(0xFFFEF3C7)
+                        : (_isDarkTheme
+                            ? Colors.white
+                            : TeritoryColors.textPrimary),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
             ],
-          ),
+          ],
         ),
-        Icon(
-          Icons.arrow_drop_down,
-          size: 18,
-          color: flag.isMajorFlag
-              ? TeritoryColors.majorGoldDark
-              : TeritoryColors.primary,
-        ),
-      ],
+      ),
     );
   }
 
   // Pin for Friend's Flagged locations
   Widget _buildFriendFlagPin(ApiFlag flag) {
-    final pinBg = _isDarkTheme ? const Color(0xF21E293B) : Colors.white;
-    final pinBorder = flag.isMajorFlag
-        ? TeritoryColors.majorGold
-        : TeritoryColors.sapphireBlue;
+    final pinBg = _isDarkTheme ? const Color(0xF51E293B) : Colors.white;
+    final themeColor = FlagStyleCatalog.primaryColor(flag.flagStyle);
+    final pinBorder = flag.isMajorFlag ? TeritoryColors.majorGold : themeColor;
+    final hideText = _currentZoom < 10.5;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            color: pinBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: pinBorder, width: 1.8),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.25),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
+    return _buildPlantedFlagPin(
+      style: flag.flagStyle,
+      anchorColor: pinBorder,
+      isMajor: flag.isMajorFlag,
+      badge: Container(
+        padding: hideText
+            ? const EdgeInsets.all(2.5)
+            : const EdgeInsets.fromLTRB(3, 3, 9, 3),
+        decoration: BoxDecoration(
+          gradient: flag.isMajorFlag
+              ? const LinearGradient(
+                  colors: [Color(0xFFFFFBEB), Color(0xFFFEF3C7)],
+                )
+              : null,
+          color: flag.isMajorFlag ? null : pinBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: pinBorder.withValues(alpha: flag.isMajorFlag ? 1.0 : 0.78),
+            width: flag.isMajorFlag ? 1.7 : 1.3,
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircleAvatar(
-                radius: 12,
+          boxShadow: [
+            BoxShadow(
+              color: flag.isMajorFlag
+                  ? TeritoryColors.majorGold.withValues(alpha: 0.42)
+                  : Colors.black.withValues(alpha: 0.18),
+              blurRadius: flag.isMajorFlag ? 10 : 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(1.3),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: pinBorder, width: 1.4),
+              ),
+              child: CircleAvatar(
+                radius: 8.5,
                 backgroundColor: TeritoryColors.surfaceContainer,
                 backgroundImage: flag.authorAvatar.isNotEmpty
                     ? NetworkImage(flag.authorAvatar)
@@ -1794,34 +2472,173 @@ class _HomeMapScreenState extends ConsumerState<HomeMapScreen>
                 child: flag.authorAvatar.isEmpty
                     ? const Icon(
                         Icons.person_rounded,
-                        size: 14,
+                        size: 11,
                         color: Colors.white,
                       )
                     : null,
               ),
-              const SizedBox(width: 6),
+            ),
+            if (!hideText) ...[
+              const SizedBox(width: 5),
+              if (flag.isMajorFlag) ...[
+                const Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 11,
+                  color: TeritoryColors.majorGoldDark,
+                ),
+                const SizedBox(width: 3),
+              ],
               Flexible(
                 child: Text(
                   flag.authorName.split(' ').first,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
+                    fontSize: 10.5,
                     fontWeight: FontWeight.w800,
-                    color: _isDarkTheme
-                        ? Colors.white
-                        : TeritoryColors.textPrimary,
+                    color: flag.isMajorFlag
+                        ? const Color(0xFF92400E)
+                        : (_isDarkTheme
+                            ? Colors.white
+                            : TeritoryColors.textPrimary),
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
-              FlagPinFlag(style: flag.flagStyle, width: 24),
-              const SizedBox(width: 2),
             ],
-          ),
+          ],
         ),
-        Icon(Icons.arrow_drop_down, size: 18, color: pinBorder),
-      ],
+      ),
+    );
+  }
+}
+
+/// Detects a quick tap vs a 2-second deep-hold press on a map marker, showing
+/// a subtle charging ring while holding and firing [onDeepHold] at 2 seconds.
+class _DeepHoldMarker extends StatefulWidget {
+  final VoidCallback onTap;
+  final VoidCallback onDeepHold;
+  final Widget child;
+
+  const _DeepHoldMarker({
+    required this.onTap,
+    required this.onDeepHold,
+    required this.child,
+  });
+
+  @override
+  State<_DeepHoldMarker> createState() => _DeepHoldMarkerState();
+}
+
+class _DeepHoldMarkerState extends State<_DeepHoldMarker>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _holdController;
+  Timer? _indicatorDelay;
+  Offset? _downPosition;
+  int? _activePointer;
+  bool _showRing = false;
+  bool _triggered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _holdController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..addStatusListener((status) {
+        if (status == AnimationStatus.completed && !_triggered) {
+          _triggered = true;
+          _cancelHold(resetTriggered: false);
+          HapticFeedback.mediumImpact();
+          widget.onDeepHold();
+        }
+      });
+  }
+
+  void _startHold(PointerDownEvent event) {
+    _activePointer = event.pointer;
+    _downPosition = event.position;
+    _triggered = false;
+    _holdController.forward(from: 0);
+    _indicatorDelay?.cancel();
+    _indicatorDelay = Timer(const Duration(milliseconds: 120), () {
+      if (mounted && _holdController.isAnimating) {
+        setState(() => _showRing = true);
+      }
+    });
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (event.pointer != _activePointer || _downPosition == null) return;
+    // Allow natural finger micro-drift (<= 18px) without cancelling the hold.
+    if ((event.position - _downPosition!).distance > 18.0) {
+      _cancelHold();
+    }
+  }
+
+  void _cancelHold({bool resetTriggered = true}) {
+    _indicatorDelay?.cancel();
+    _activePointer = null;
+    _downPosition = null;
+    _holdController.stop();
+    _holdController.value = 0;
+    if (resetTriggered) _triggered = false;
+    if (_showRing && mounted) setState(() => _showRing = false);
+  }
+
+  @override
+  void dispose() {
+    _indicatorDelay?.cancel();
+    _holdController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: _startHold,
+      onPointerMove: _onPointerMove,
+      onPointerUp: (e) {
+        if (e.pointer == _activePointer) _cancelHold();
+      },
+      onPointerCancel: (e) {
+        if (e.pointer == _activePointer) _cancelHold();
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          if (!_triggered) widget.onTap();
+        },
+        onLongPress: () {
+          if (!_triggered && _holdController.isAnimating) {
+            // Keep charging via Listener; don't let map steal long-press.
+          }
+        },
+        child: Stack(
+          alignment: Alignment.bottomCenter,
+          clipBehavior: Clip.none,
+          children: [
+            widget.child,
+            if (_showRing)
+              Positioned(
+                bottom: -2,
+                child: AnimatedBuilder(
+                  animation: _holdController,
+                  builder: (_, _) => SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: CircularProgressIndicator(
+                      value: _holdController.value,
+                      strokeWidth: 3.2,
+                      color: TeritoryColors.majorGold,
+                      backgroundColor: Colors.white.withValues(alpha: 0.55),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

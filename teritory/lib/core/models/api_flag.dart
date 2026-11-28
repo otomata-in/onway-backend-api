@@ -18,6 +18,7 @@ class ApiFlag {
   final double latitude;
   final double longitude;
   final bool isMajorFlag;
+  final bool isHidden;
   final String category;
   final String notes;
   final String photoUrl;
@@ -48,6 +49,7 @@ class ApiFlag {
     required this.latitude,
     required this.longitude,
     required this.isMajorFlag,
+    this.isHidden = false,
     required this.category,
     required this.notes,
     required this.photoUrl,
@@ -70,6 +72,11 @@ class ApiFlag {
       currentUserId != null &&
       currentUserId.isNotEmpty &&
       userId == currentUserId;
+
+  /// Returns the live customized [myStyle] for flags owned by [currentUserId]
+  /// so every map, list, and detail sheet reflects signature updates instantly.
+  FlagStyle effectiveStyle(String? currentUserId, FlagStyle myStyle) =>
+      isOwnedBy(currentUserId) ? myStyle : flagStyle;
 
   factory ApiFlag.fromJson(Map<String, dynamic> json) {
     final user = json['user'];
@@ -102,6 +109,7 @@ class ApiFlag {
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
       isMajorFlag: json['isMajorFlag'] as bool? ?? false,
+      isHidden: json['isHidden'] as bool? ?? false,
       category: json['category'] as String? ?? 'General',
       notes: json['notes'] as String? ?? '',
       photoUrl: AppConfig.resolveMediaUrl(json['photoUrl'] as String? ?? ''),

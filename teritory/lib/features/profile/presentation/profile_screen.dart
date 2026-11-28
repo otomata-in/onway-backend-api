@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -19,6 +23,9 @@ import '../../flag/presentation/live_flag_detail_sheet.dart';
 import '../../rankings/application/rankings_provider.dart';
 import '../application/profile_providers.dart';
 import 'edit_profile_sheet.dart';
+import 'flag_management_screen.dart';
+import 'map_animation_catalog.dart';
+import 'map_animation_settings_screen.dart';
 import 'worldwide_flag_map_screen.dart';
 import '../../notifications/presentation/notification_bell.dart';
 
@@ -271,6 +278,42 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           _StatsRow(profile: profile),
           const SizedBox(height: 12),
           _ProfileBadges(profile: profile),
+          if (profile.id == ref.watch(currentUserProvider).id) ...[
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: OutlinedButton.icon(
+                onPressed: () => FlagManagementScreen.open(
+                  context,
+                  initialFlags: allFlags,
+                ),
+                icon: const Icon(
+                  Icons.tune_rounded,
+                  size: 18,
+                  color: TeritoryColors.primary,
+                ),
+                label: Text(
+                  'Manage Territory Flags (Edit, Hide & Traverse)',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: TeritoryColors.textPrimary,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  side: const BorderSide(color: TeritoryColors.border),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -508,8 +551,16 @@ class _SignatureFlagCard extends ConsumerWidget {
                     height: 32,
                     child: FilledButton.icon(
                       onPressed: () async {
-                        final saved = await FlagStudioScreen.show(context);
+                        final saved = await FlagStudioScreen.show(
+                          context,
+                          initialStyle: style,
+                        );
                         if (saved != null && context.mounted) {
+                          ref.invalidate(myProfileProvider);
+                          final uid = ref.read(currentUserProvider).id;
+                          if (uid.isNotEmpty) {
+                            ref.invalidate(userFlagsProvider(uid));
+                          }
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Signature updated.')),
                           );
@@ -941,7 +992,7 @@ class _StatCard extends StatelessWidget {
 
 // ─── Map ────────────────────────────────────────────────────────────────────
 
-class _FootprintMap extends StatelessWidget {
+class _FootprintMap extends StatefulWidget {
   const _FootprintMap({
     required this.mapController,
     required this.flags,
@@ -959,7 +1010,154 @@ class _FootprintMap extends StatelessWidget {
   final VoidCallback onExpand;
 
   @override
+  State<_FootprintMap> createState() => _FootprintMapState();
+}
+
+class _FootprintMapState extends State<_FootprintMap>
+    with SingleTickerProviderStateMixin {
+  static const Duration _resumeDelay = Duration(seconds: 3);
+
+  late final Ticker _autoScrollTicker;
+  final ValueNotifier<double> _pulsePhase = ValueNotifier<double>(0.0);
+  final ValueNotifier<double> _cloudVeilOpacity = ValueNotifier<double>(0.0);
+  final MapTourEngine _tourEngine = MapTourEngine();
+  Duration _lastTick = Duration.zero;
+  bool _isMapReady = false;
+  bool _isTemporarilyPaused = false;
+  bool _isUserPlaying = true;
+  Timer? _resumeTimer;
+  String? _spotlightFlagId;
+
+  MapAnimationSettings _animSettings = const MapAnimationSettings();
+
+  @override
+  void initState() {
+    super.initState();
+    _autoScrollTicker = createTicker(_onTick)..start();
+    _loadAnimationSettings();
+  }
+
+  Future<void> _loadAnimationSettings() async {
+    final loaded = await MapAnimationSettings.load();
+    if (!mounted) return;
+    setState(() {
+      _animSettings = loaded;
+      _isUserPlaying = loaded.autoStart;
+    });
+  }
+
+  @override
+  void dispose() {
+    _resumeTimer?.cancel();
+    _autoScrollTicker.dispose();
+    _pulsePhase.dispose();
+    _cloudVeilOpacity.dispose();
+    super.dispose();
+  }
+
+  void _togglePlayPause() {
+    HapticFeedback.lightImpact();
+    _resumeTimer?.cancel();
+    setState(() {
+      _isUserPlaying = !_isUserPlaying;
+      _isTemporarilyPaused = false;
+      if (_isUserPlaying && _isMapReady) {
+        _tourEngine.resetFromCamera(widget.mapController.camera);
+      }
+    });
+  }
+
+  Future<void> _openAnimationStudio() async {
+    HapticFeedback.mediumImpact();
+    _pauseTemporarily();
+    final updated = await Navigator.of(context).push<MapAnimationSettings>(
+      MaterialPageRoute(
+        builder: (_) => MapAnimationSettingsScreen(
+          initialSettings: _animSettings,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (updated != null) {
+      setState(() {
+        _animSettings = updated;
+        _isUserPlaying = true;
+        _isTemporarilyPaused = false;
+        if (_isMapReady) {
+          _tourEngine.resetFromCamera(widget.mapController.camera);
+        }
+      });
+    } else {
+      _scheduleResume();
+    }
+  }
+
+  void _pauseTemporarily() {
+    _resumeTimer?.cancel();
+    _isTemporarilyPaused = true;
+  }
+
+  void _scheduleResume() {
+    _resumeTimer?.cancel();
+    _resumeTimer = Timer(_resumeDelay, () {
+      if (mounted) {
+        if (_isMapReady) {
+          _tourEngine.resetFromCamera(widget.mapController.camera);
+        }
+        _isTemporarilyPaused = false;
+      }
+    });
+  }
+
+  void _onTick(Duration elapsed) {
+    if (_lastTick == Duration.zero) {
+      _lastTick = elapsed;
+      return;
+    }
+    final dt = ((elapsed - _lastTick).inMicroseconds / 1000000.0)
+        .clamp(0.0, 0.1);
+    _lastTick = elapsed;
+
+    if (!mounted) return;
+
+    // Drive the spotlight beacon pulse & Odyssey ship bobbing on the same ticker.
+    _pulsePhase.value = (elapsed.inMilliseconds % 1400) / 1400.0;
+
+    if (!_isMapReady || !_isUserPlaying || _isTemporarilyPaused || dt <= 0) {
+      return;
+    }
+
+    final step = _tourEngine.tick(
+      camera: widget.mapController.camera,
+      flags: widget.flags,
+      settings: _animSettings,
+      dt: dt,
+    );
+
+    if (step.spotlightFlagId != _spotlightFlagId) {
+      setState(() => _spotlightFlagId = step.spotlightFlagId);
+    }
+    _cloudVeilOpacity.value = step.cloudVeilOpacity;
+
+    widget.mapController.moveAndRotate(
+      LatLng(step.lat, step.lng),
+      step.zoom,
+      step.rotation,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final trailColor = widget.isOceanicTheme
+        ? const Color(0xFF38BDF8)
+        : TeritoryColors.primary;
+    final spotlightFlag = _spotlightFlagId == null
+        ? null
+        : widget.flags.cast<ApiFlag?>().firstWhere(
+              (f) => f?.id == _spotlightFlagId,
+              orElse: () => null,
+            );
+
     return Container(
       height: 270,
       decoration: BoxDecoration(
@@ -977,79 +1175,239 @@ class _FootprintMap extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         child: Stack(
           children: [
-            FlutterMap(
-              mapController: mapController,
-              options: const MapOptions(
-                initialCenter: LatLng(30.0, 50.0),
-                initialZoom: 2.2,
-                minZoom: 1.5,
-                maxZoom: 15.0,
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.onway.teritory',
-                  tileBuilder: isOceanicTheme
-                      ? (context, tileWidget, tile) => ColorFiltered(
-                            colorFilter:
-                                const ColorFilter.matrix(<double>[
-                              -0.20, -0.15, -0.30, 0.0, 140,
-                              -0.45, 0.20, -0.35, 0.0, 165,
-                              -0.55, 0.05, -0.05, 0.0, 185,
-                              0.0, 0.0, 0.0, 1.0, 0,
-                            ]),
-                            child: tileWidget,
-                          )
-                      : null,
+            Listener(
+              onPointerDown: (_) => _pauseTemporarily(),
+              onPointerUp: (_) => _scheduleResume(),
+              onPointerCancel: (_) => _scheduleResume(),
+              child: FlutterMap(
+                mapController: widget.mapController,
+                options: MapOptions(
+                  initialCenter: const LatLng(30.0, 50.0),
+                  initialZoom: 2.2,
+                  minZoom: 1.5,
+                  maxZoom: 15.0,
+                  onMapReady: () => _isMapReady = true,
                 ),
-                MarkerLayer(
-                  markers: flags.map((flag) {
-                    return Marker(
-                      point: flag.coordinates,
-                      width: 44,
-                      height: 32,
-                      child: GestureDetector(
-                        onTap: () =>
-                            LiveFlagDetailSheet.show(context, flag: flag),
-                        child: Container(
-                          padding: const EdgeInsets.all(3),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(9),
-                            border: Border.all(
-                              color: flag.isMajorFlag
-                                  ? TeritoryColors.majorGold
-                                  : TeritoryColors.primary,
-                              width: 1.6,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.25),
-                                blurRadius: 4,
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.onway.teritory',
+                    tileBuilder: widget.isOceanicTheme
+                        ? (context, tileWidget, tile) => ColorFiltered(
+                              colorFilter:
+                                  const ColorFilter.matrix(<double>[
+                                -0.20, -0.15, -0.30, 0.0, 140,
+                                -0.45, 0.20, -0.35, 0.0, 165,
+                                -0.55, 0.05, -0.05, 0.0, 185,
+                                0.0, 0.0, 0.0, 1.0, 0,
+                              ]),
+                              child: tileWidget,
+                            )
+                        : null,
+                  ),
+                  MarkerLayer(
+                    markers: widget.flags.map((flag) {
+                      final isSpotlight = flag.id == _spotlightFlagId;
+                      final double w = flag.isMajorFlag ? 40 : 32;
+                      final double h = flag.isMajorFlag ? 50 : 40;
+                      final double poleOffset = w * (1 - 0.15);
+                      return Marker(
+                        point: flag.coordinates,
+                        width: w + poleOffset + (isSpotlight ? 18 : 0),
+                        height: h + 10,
+                        alignment: Alignment.topCenter,
+                        child: GestureDetector(
+                          onTap: () =>
+                              LiveFlagDetailSheet.show(context, flag: flag),
+                          child: Stack(
+                            alignment: Alignment.bottomCenter,
+                            clipBehavior: Clip.none,
+                            children: [
+                              if (isSpotlight)
+                                Positioned(
+                                  bottom: -4,
+                                  child: ValueListenableBuilder<double>(
+                                    valueListenable: _pulsePhase,
+                                    builder: (context, phase, _) {
+                                      final ringSize = 26.0 + (phase * 28.0);
+                                      final ringOpacity =
+                                          (1.0 - phase).clamp(0.0, 1.0) * 0.65;
+                                      final pulseColor = flag.isMajorFlag
+                                          ? TeritoryColors.majorGold
+                                          : trailColor;
+                                      return Container(
+                                        width: ringSize,
+                                        height: ringSize * 0.52,
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(ringSize),
+                                          border: Border.all(
+                                            color: pulseColor.withValues(
+                                                alpha: ringOpacity),
+                                            width: 2.2,
+                                          ),
+                                          color: pulseColor.withValues(
+                                              alpha: ringOpacity * 0.25),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              FlagTerrainBase(
+                                accentColor: flag.isMajorFlag
+                                    ? TeritoryColors.majorGold
+                                    : TeritoryColors.primary,
+                                isMajor: flag.isMajorFlag,
+                                width: flag.isMajorFlag ? 30 : 22,
+                              ),
+                              Padding(
+                                padding: EdgeInsets.only(
+                                  left: poleOffset,
+                                  bottom: flag.isMajorFlag ? 8 : 5.5,
+                                ),
+                                child: Consumer(
+                                  builder: (ctx, cRef, _) {
+                                    final myId = cRef.watch(currentUserProvider).id;
+                                    final myStyle = cRef.watch(flagStyleProvider);
+                                    return FlagPinFlag(
+                                      style: flag.effectiveStyle(myId, myStyle),
+                                      width: w,
+                                      height: h,
+                                      showPole: true,
+                                      isMajor: flag.isMajorFlag,
+                                    );
+                                  },
+                                ),
                               ),
                             ],
                           ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: TeritoryFlag(
-                              style: flag.flagStyle,
-                              width: 36,
-                              showPole: false,
-                              isMajor: flag.isMajorFlag,
-                            ),
-                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+            // Subtle cinematic edge vignette framing the scrolling globe.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        (widget.isOceanicTheme
+                                ? const Color(0xFF0B1120)
+                                : Colors.black)
+                            .withValues(alpha: 0.16),
+                        Colors.transparent,
+                        Colors.transparent,
+                        (widget.isOceanicTheme
+                                ? const Color(0xFF0B1120)
+                                : Colors.black)
+                            .withValues(alpha: 0.16),
+                      ],
+                      stops: const [0.0, 0.08, 0.92, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Clash-style white scouting cloud veil during zoom-out transitions.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ValueListenableBuilder<double>(
+                  valueListenable: _cloudVeilOpacity,
+                  builder: (context, opacity, _) {
+                    if (opacity <= 0.01) return const SizedBox.shrink();
+                    return DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          center: Alignment.center,
+                          radius: 1.05,
+                          colors: [
+                            Colors.white.withValues(alpha: (opacity * 0.92).clamp(0.0, 1.0)),
+                            Colors.white.withValues(alpha: opacity.clamp(0.0, 1.0)),
+                          ],
                         ),
                       ),
                     );
-                  }).toList(),
+                  },
                 ),
-              ],
+              ),
             ),
-            if (flags.isEmpty)
+            if (widget.flags.isEmpty)
               const Center(
                 child: Text(
                   'No flags on the map yet',
                   style: TextStyle(color: TeritoryColors.textSecondary),
+                ),
+              ),
+            if (spotlightFlag != null)
+              Positioned(
+                bottom: 54,
+                left: 12,
+                child: GestureDetector(
+                  onTap: () =>
+                      LiveFlagDetailSheet.show(context, flag: spotlightFlag),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 280),
+                    child: Container(
+                      key: ValueKey(spotlightFlag.id),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A).withValues(alpha: 0.84),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: (spotlightFlag.isMajorFlag
+                                  ? TeritoryColors.majorGold
+                                  : trailColor)
+                              .withValues(alpha: 0.55),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: spotlightFlag.isMajorFlag
+                                  ? TeritoryColors.majorGold
+                                  : trailColor,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 185),
+                            child: Text(
+                              spotlightFlag.country.isNotEmpty
+                                  ? '${spotlightFlag.placeName} • ${spotlightFlag.country}'
+                                  : spotlightFlag.placeName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             Positioned(
@@ -1058,7 +1416,7 @@ class _FootprintMap extends StatelessWidget {
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  onTap: onExpand,
+                  onTap: widget.onExpand,
                   borderRadius: BorderRadius.circular(20),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -1113,8 +1471,10 @@ class _FootprintMap extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _themePill('🌊 Oceanic', true, isOceanicTheme, onThemeChanged),
-                    _themePill('☀️ Daylight', false, isOceanicTheme, onThemeChanged),
+                    _themePill('🌊 Oceanic', true, widget.isOceanicTheme,
+                        widget.onThemeChanged),
+                    _themePill('☀️ Daylight', false, widget.isOceanicTheme,
+                        widget.onThemeChanged),
                   ],
                 ),
               ),
@@ -1123,32 +1483,61 @@ class _FootprintMap extends StatelessWidget {
               bottom: 10,
               left: 10,
               right: 10,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.92),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 8,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.92),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _presetChip('🌍 World', () {
+                              _pauseTemporarily();
+                              widget.onPreset(const LatLng(25, 40), 1.8);
+                              _scheduleResume();
+                            }),
+                            _presetChip('🇮🇳 India / Asia', () {
+                              _pauseTemporarily();
+                              widget.onPreset(const LatLng(20, 78), 4.2);
+                              _scheduleResume();
+                            }),
+                            _presetChip('🇪🇺 Europe', () {
+                              _pauseTemporarily();
+                              widget.onPreset(const LatLng(48, 12), 4.0);
+                              _scheduleResume();
+                            }),
+                            _presetChip('🇦🇪 Middle East', () {
+                              _pauseTemporarily();
+                              widget.onPreset(const LatLng(25, 55), 5.0);
+                              _scheduleResume();
+                            }),
+                          ],
+                        ),
+                      ),
                     ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _presetChip('🌍 World',
-                        () => onPreset(const LatLng(25, 40), 1.8)),
-                    _presetChip('🇮🇳 India / Asia',
-                        () => onPreset(const LatLng(20, 78), 4.2)),
-                    _presetChip('🇪🇺 Europe',
-                        () => onPreset(const LatLng(48, 12), 4.0)),
-                    _presetChip('🇦🇪 Middle East',
-                        () => onPreset(const LatLng(25, 55), 5.0)),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 8),
+                  OdysseyShipButton(
+                    size: 36,
+                    isPlaying: _isUserPlaying && !_isTemporarilyPaused,
+                    pulsePhase: _pulsePhase,
+                    accentColor: _animSettings.transition.accentColor,
+                    onTap: _togglePlayPause,
+                    onLongPress: _openAnimationStudio,
+                  ),
+                ],
               ),
             ),
           ],
@@ -1388,21 +1777,28 @@ class _FlagListCard extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-                                    child: flag.photoUrl.isEmpty
-                  ? Container(
-                      width: 72,
-                      height: 72,
-                      color: FlagStyleCatalog.themeFor(flag.flagStyle.theme)
-                          .primary
-                          .withValues(alpha: 0.12),
-                      child: Center(
-                        child: TeritoryFlag(
-                          style: flag.flagStyle,
-                          width: 62,
-                          showPole: false,
-                          isMajor: flag.isMajorFlag,
-                        ),
-                      ),
+              child: flag.photoUrl.isEmpty
+                  ? Consumer(
+                      builder: (ctx, cRef, _) {
+                        final myId = cRef.watch(currentUserProvider).id;
+                        final myStyle = cRef.watch(flagStyleProvider);
+                        final style = flag.effectiveStyle(myId, myStyle);
+                        return Container(
+                          width: 72,
+                          height: 72,
+                          color: FlagStyleCatalog.themeFor(style.theme)
+                              .primary
+                              .withValues(alpha: 0.12),
+                          child: Center(
+                            child: TeritoryFlag(
+                              style: style,
+                              width: 62,
+                              showPole: false,
+                              isMajor: flag.isMajorFlag,
+                            ),
+                          ),
+                        );
+                      },
                     )
                   : CachedNetworkImage(
                       imageUrl: flag.photoUrl,

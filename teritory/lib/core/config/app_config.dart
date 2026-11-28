@@ -34,7 +34,8 @@ class AppConfig {
     return '$mediaOrigin/$trimmed';
   }
 
-  static const Duration requestTimeout = Duration(seconds: 15);
+  // Generous timeout to accommodate Render free-tier cold starts.
+  static const Duration requestTimeout = Duration(seconds: 60);
 
   /// Keep in sync with `version:` in pubspec.yaml.
   static const String appVersion = '1.0.0+1';

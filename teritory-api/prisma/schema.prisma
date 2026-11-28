@@ -248,6 +248,7 @@ model Flag {
   latitude    Float
   longitude   Float
   isMajorFlag Boolean  @default(false)
+  isHidden    Boolean  @default(false)
   category    String   @default("General")
   notes       String   @default("")
   photoUrl    String?

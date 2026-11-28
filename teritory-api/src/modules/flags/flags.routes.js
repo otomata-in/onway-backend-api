@@ -12,6 +12,7 @@ router.get('/saved', authenticate, flagsController.getSavedFlags);
 router.post('/', authenticate, flagsController.dropFlag);
 
 router.get('/:id', optionalAuthenticate, flagsController.getFlagById);
+router.patch('/:id', authenticate, flagsController.updateFlag);
 router.delete('/:id', authenticate, flagsController.deleteFlag);
 router.post('/:id/save', authenticate, flagsController.toggleSaveFlag);
 router.post('/:id/reactions', authenticate, flagsController.toggleReaction);

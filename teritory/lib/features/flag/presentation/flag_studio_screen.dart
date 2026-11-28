@@ -3,11 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/models/flag_style.dart';
+import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/flag_style_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/theme/flag_style_catalog.dart';
 import '../../../core/theme/teritory_theme.dart';
 import '../../../core/widgets/flag/teritory_flag.dart';
+import '../../explore/application/explore_flags_provider.dart';
+import '../../profile/application/profile_providers.dart';
+import '../../trips/application/trips_provider.dart';
 
 const _studioBg = Color(0xFF080F1C);
 const _studioCard = Color(0xFF101A2E);
@@ -90,9 +94,16 @@ class _FlagStudioScreenState extends ConsumerState<FlagStudioScreen> {
           .read(flagStyleProvider.notifier)
           .saveSignature(_draft);
       if (!mounted) return;
+      final uid = ref.read(currentUserProvider).id;
+      ref.invalidate(exploreFlagsProvider);
+      ref.invalidate(myProfileProvider);
+      if (uid.isNotEmpty) {
+        ref.invalidate(userFlagsProvider(uid));
+      }
+      ref.invalidate(savedFlagsLiveProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Signature saved. Flags you stake from now fly it.'),
+          content: Text('Signature saved across your profile and staked flags.'),
         ),
       );
       Navigator.of(context).pop(saved);

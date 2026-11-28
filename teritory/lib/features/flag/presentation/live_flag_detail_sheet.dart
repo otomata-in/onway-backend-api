@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/models/api_flag.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/flag_style_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/flag_style_catalog.dart';
@@ -929,14 +930,16 @@ class _InlineError extends StatelessWidget {
 
 /// The staked flag's own identity, drawn by the shared painter at its snapshot
 /// style — the same cloth the map pin and profile show, at reading size.
-class _FlagIdentityBanner extends StatelessWidget {
+class _FlagIdentityBanner extends ConsumerWidget {
   const _FlagIdentityBanner({required this.flag});
 
   final ApiFlag flag;
 
   @override
-  Widget build(BuildContext context) {
-    final style = flag.flagStyle;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final myId = ref.watch(currentUserProvider).id;
+    final myStyle = ref.watch(flagStyleProvider);
+    final style = flag.effectiveStyle(myId, myStyle);
     final theme = FlagStyleCatalog.themeFor(style.theme);
     final pattern = FlagStyleCatalog.patternFor(style.pattern);
     final emblem = FlagStyleCatalog.emblemFor(style.emblem);

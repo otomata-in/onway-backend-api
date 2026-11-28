@@ -97,15 +97,22 @@ class FlagClothPainter extends CustomPainter {
     double top,
     double tip,
   ) {
-    final shaftWidth = math.max(1.6, size.width * 0.018);
+    final shaftWidth = math.max(isMajor ? 2.8 : 2.2, size.width * (isMajor ? 0.024 : 0.018));
     final rect = Rect.fromLTRB(x - shaftWidth / 2, top, x + shaftWidth / 2, tip);
+    final basePole = isMajor ? const Color(0xFFD97706) : theme.pole;
     final polePaint = Paint()
       ..shader = LinearGradient(
-        colors: [
-          Color.lerp(theme.pole, Colors.white, 0.55)!,
-          theme.pole,
-          Color.lerp(theme.pole, Colors.black, 0.35)!,
-        ],
+        colors: isMajor
+            ? const [
+                Color(0xFFFEF08A),
+                Color(0xFFF59E0B),
+                Color(0xFF92400E),
+              ]
+            : [
+                Color.lerp(basePole, Colors.white, 0.55)!,
+                basePole,
+                Color.lerp(basePole, Colors.black, 0.35)!,
+              ],
         stops: const [0.0, 0.5, 1.0],
       ).createShader(rect);
     canvas.drawRRect(
@@ -119,7 +126,10 @@ class FlagClothPainter extends CustomPainter {
       ..lineTo(x + shaftWidth / 2, tip - shaftWidth * 1.6)
       ..lineTo(x, tip)
       ..close();
-    canvas.drawPath(spike, Paint()..color = Color.lerp(theme.pole, Colors.black, 0.2)!);
+    canvas.drawPath(
+      spike,
+      Paint()..color = isMajor ? const Color(0xFF92400E) : Color.lerp(basePole, Colors.black, 0.2)!,
+    );
 
     // Grip rings only where they can actually be seen.
     if (size.width >= 64) {
@@ -145,12 +155,20 @@ class FlagClothPainter extends CustomPainter {
     final center = Offset(x, top);
 
     if (isMajor) {
-      // A major wonder gets a star above the orb, independent of the theme.
+      // A major wonder gets a radiant golden halo + star crown above the pole.
+      final starCenter = center.translate(0, -radius * 0.85);
+      canvas.drawCircle(
+        starCenter,
+        radius * 2.3,
+        Paint()
+          ..color = const Color(0xFFF59E0B).withValues(alpha: 0.32)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+      );
       _paintStar(
         canvas,
-        center.translate(0, -radius * 0.9),
-        radius * 1.15,
-        const Color(0xFFF59E0B),
+        starCenter,
+        radius * 1.65,
+        const Color(0xFFFBBF24),
         stroke: Colors.white,
       );
       return;
@@ -183,8 +201,15 @@ class FlagClothPainter extends CustomPainter {
     final motion = style.motion;
 
     // A hairline shadow separates the cloth from bright map tiles without an
-    // expensive blur.
-    if (showPole) {
+    // expensive blur. Major flags get an extra legendary golden aura.
+    if (isMajor) {
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = const Color(0xFFF59E0B).withValues(alpha: 0.42)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      );
+    } else if (showPole) {
       canvas.drawPath(
         path.shift(const Offset(0.8, 1.2)),
         Paint()..color = Colors.black.withValues(alpha: 0.18),
@@ -202,10 +227,61 @@ class FlagClothPainter extends CustomPainter {
 
     _paintEmblem(canvas, rect, theme, primary);
     _paintBorder(canvas, path, rect, primary);
+    // Crisp luminous rim makes every custom flag pop cleanly off bright map tiles.
+    if (!isMajor) {
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(0.9, rect.height * 0.032)
+          ..color = Colors.white.withValues(alpha: 0.38),
+      );
+    }
+    if (isMajor) {
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(1.2, rect.height * 0.05)
+          ..color = const Color(0xFFFEF08A).withValues(alpha: 0.92),
+      );
+      _paintMajorSparkles(canvas, rect);
+    }
     if (style.motion == 'neon_pulse') {
       _paintNeonEdge(canvas, path, theme, rect);
     }
     _paintTassels(canvas, rect, theme);
+
+    // Metallic hoist grommet rings where the cloth attaches to the pole.
+    if (showPole) {
+      final ringPaint = Paint()
+        ..color = isMajor ? const Color(0xFFFEF08A) : Colors.white.withValues(alpha: 0.85)
+        ..strokeWidth = math.max(1.3, rect.height * 0.05)
+        ..strokeCap = StrokeCap.round;
+      final rLeft = rect.left - math.max(1.8, rect.width * 0.04);
+      final rRight = rect.left + math.max(1.0, rect.width * 0.02);
+      canvas.drawLine(Offset(rLeft, rect.top + rect.height * 0.14), Offset(rRight, rect.top + rect.height * 0.14), ringPaint);
+      canvas.drawLine(Offset(rLeft, rect.bottom - rect.height * 0.14), Offset(rRight, rect.bottom - rect.height * 0.14), ringPaint);
+    }
+  }
+
+  void _paintMajorSparkles(Canvas canvas, Rect rect) {
+    final sparklePositions = [
+      Offset(rect.right - rect.width * 0.14, rect.top + rect.height * 0.18),
+      Offset(rect.left + rect.width * 0.25, rect.bottom - rect.height * 0.16),
+      Offset(rect.right + rect.width * 0.06, rect.center.dy),
+    ];
+    for (var i = 0; i < sparklePositions.length; i++) {
+      final pulse = 0.55 + 0.45 * math.sin((phase * math.pi * 2) + i * 2.1);
+      final p = sparklePositions[i];
+      final r = math.max(2.0, rect.height * 0.12) * (0.7 + 0.45 * pulse);
+      final paint = Paint()
+        ..color = const Color(0xFFFEF08A).withValues(alpha: 0.45 + 0.55 * pulse)
+        ..strokeWidth = math.max(1.0, r * 0.34)
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(Offset(p.dx - r, p.dy), Offset(p.dx + r, p.dy), paint);
+      canvas.drawLine(Offset(p.dx, p.dy - r), Offset(p.dx, p.dy + r), paint);
+    }
   }
 
   void _paintClothGradient(
@@ -239,6 +315,43 @@ class FlagClothPainter extends CustomPainter {
     ).createShader(rect);
 
     canvas.drawRect(rect, Paint()..shader = shader);
+
+    // Silk wave fold creases give the cloth a tactile, rippling fabric look.
+    final foldCount = 3;
+    for (var i = 0; i < foldCount; i++) {
+      final center = ((i + 0.5) / foldCount + phase * 0.35) % 1.0;
+      final foldRect = Rect.fromLTWH(
+        rect.left + (center - 0.14) * rect.width,
+        rect.top,
+        rect.width * 0.28,
+        rect.height,
+      );
+      final foldPaint = Paint()
+        ..shader = LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.0),
+            Colors.white.withValues(alpha: i.isEven ? 0.16 : 0.10),
+            Colors.black.withValues(alpha: 0.12),
+            Colors.black.withValues(alpha: 0.0),
+          ],
+          stops: const [0.0, 0.35, 0.7, 1.0],
+        ).createShader(foldRect);
+      canvas.drawRect(foldRect, foldPaint);
+    }
+
+    // Diagonal silk sheen + bottom depth fold give every flag crisp 3D depth,
+    // even at compact map pin sizes.
+    final sheen = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        Colors.white.withValues(alpha: 0.24),
+        Colors.white.withValues(alpha: 0.0),
+        Colors.black.withValues(alpha: 0.16),
+      ],
+      stops: const [0.0, 0.45, 1.0],
+    ).createShader(rect);
+    canvas.drawRect(rect, Paint()..shader = sheen);
 
     // Hoist-side shading makes the cloth read as fabric rather than a rectangle.
     final shade = LinearGradient(

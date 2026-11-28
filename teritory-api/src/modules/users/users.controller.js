@@ -93,11 +93,17 @@ const updateMyFlagStyle = async (req, res, next) => {
     }
 
     const normalized = normalizeFlagStyle(style);
-    const updated = await prisma.user.update({
-      where: { id: req.user.id },
-      data: { flagStyle: normalized },
-      select: { flagStyle: true },
-    });
+    const [updated] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: req.user.id },
+        data: { flagStyle: normalized },
+        select: { flagStyle: true },
+      }),
+      prisma.flag.updateMany({
+        where: { userId: req.user.id },
+        data: { flagStyle: normalized },
+      }),
+    ]);
 
     return ApiResponse.success(
       res,

@@ -19,6 +19,7 @@ class TeritoryFlag extends StatelessWidget {
   final bool showPole;
   final bool isMajor;
   final double unfurl;
+  final double? heightOverride;
   final String? semanticLabel;
 
   const TeritoryFlag({
@@ -29,10 +30,11 @@ class TeritoryFlag extends StatelessWidget {
     this.showPole = true,
     this.isMajor = false,
     this.unfurl = 1.0,
+    this.heightOverride,
     this.semanticLabel,
   });
 
-  double get height => width * (showPole ? 0.78 : 0.62);
+  double get height => heightOverride ?? width * (showPole ? 0.78 : 0.62);
 
   String get _label {
     if (semanticLabel != null) return semanticLabel!;
@@ -64,30 +66,210 @@ class TeritoryFlag extends StatelessWidget {
   }
 }
 
-/// A cloth-only flag for dense surfaces such as map pins.
+/// A flag widget for dense surfaces such as map pins.
 ///
-/// It follows the nearest [FlagMotionScope], so one shared wind clock animates
-/// every pin on a map without giving each pin its own ticker. With no scope, or
-/// with reduced motion enabled on the platform, it rests at phase 0.
+/// By default it renders the complete flag with a medium-long pole planted into
+/// the map ([showPole] = true). It follows the nearest [FlagMotionScope], so
+/// one shared wind clock animates every pin on a map without giving each pin
+/// its own ticker. With no scope, or with reduced motion enabled on the
+/// platform, it rests at phase 0.
 class FlagPinFlag extends StatelessWidget {
   final FlagStyle style;
   final double width;
+  final double? height;
+  final bool showPole;
+  final bool isMajor;
 
-  const FlagPinFlag({super.key, required this.style, this.width = 26});
+  const FlagPinFlag({
+    super.key,
+    required this.style,
+    this.width = 38,
+    this.height,
+    this.showPole = true,
+    this.isMajor = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final resolvedHeight =
+        height ?? (showPole ? width * 1.26 : null);
     return FlagMotionScope.animatedBuilder(
       context: context,
       speed: style.speed,
       builder: (context, phase) => TeritoryFlag(
         style: style,
         width: width,
-        showPole: false,
+        heightOverride: resolvedHeight,
+        showPole: showPole,
+        isMajor: isMajor,
         phase: phase,
       ),
     );
   }
+}
+
+/// Sculpted miniature terrain mound / volcano hill basement where a map flag's
+/// pole is staked into the map.
+///
+/// Standard flags sit on a crisp, layered rocky/emerald hillock; Major flags
+/// sit on a glowing obsidian lava volcano summit.
+class FlagTerrainBase extends StatelessWidget {
+  final Color accentColor;
+  final bool isMajor;
+  final double width;
+
+  const FlagTerrainBase({
+    super.key,
+    required this.accentColor,
+    this.isMajor = false,
+    this.width = 26,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final height = isMajor ? width * 0.56 : width * 0.48;
+    return SizedBox(
+      width: width,
+      height: height,
+      child: CustomPaint(
+        painter: _FlagTerrainBasePainter(
+          accentColor: accentColor,
+          isMajor: isMajor,
+        ),
+      ),
+    );
+  }
+}
+
+class _FlagTerrainBasePainter extends CustomPainter {
+  final Color accentColor;
+  final bool isMajor;
+
+  const _FlagTerrainBasePainter({
+    required this.accentColor,
+    required this.isMajor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    // Ground contact shadow ellipse.
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(w * 0.5, h * 0.86),
+        width: w * 0.96,
+        height: h * 0.28,
+      ),
+      Paint()
+        ..color = (isMajor ? const Color(0xFFFF5330) : Colors.black)
+            .withValues(alpha: isMajor ? 0.34 : 0.28)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+    );
+
+    if (isMajor) {
+      // Sculpted obsidian lava volcano cone.
+      final volcano = Path()
+        ..moveTo(w * 0.06, h * 0.86)
+        ..quadraticBezierTo(w * 0.26, h * 0.62, w * 0.37, h * 0.22)
+        ..lineTo(w * 0.63, h * 0.22)
+        ..quadraticBezierTo(w * 0.74, h * 0.62, w * 0.94, h * 0.86)
+        ..quadraticBezierTo(w * 0.5, h * 0.96, w * 0.06, h * 0.86)
+        ..close();
+
+      final rockPaint = Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF44403C),
+            Color(0xFF1C1917),
+            Color(0xFF0C0A09),
+          ],
+        ).createShader(Rect.fromLTWH(0, 0, w, h));
+      canvas.drawPath(volcano, rockPaint);
+
+      // Glowing lava crater rim & molten magma veins.
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(w * 0.5, h * 0.23),
+          width: w * 0.30,
+          height: h * 0.14,
+        ),
+        Paint()..color = const Color(0xFFFEF08A),
+      );
+      final lavaVein = Path()
+        ..moveTo(w * 0.48, h * 0.25)
+        ..quadraticBezierTo(w * 0.42, h * 0.52, w * 0.34, h * 0.80)
+        ..moveTo(w * 0.53, h * 0.25)
+        ..quadraticBezierTo(w * 0.62, h * 0.48, w * 0.68, h * 0.78);
+      canvas.drawPath(
+        lavaVein,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(1.3, w * 0.06)
+          ..strokeCap = StrokeCap.round
+          ..shader = const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFFEF08A), Color(0xFFF59E0B), Color(0xFFFF5330)],
+          ).createShader(Rect.fromLTWH(0, 0, w, h)),
+      );
+
+      // Crisp warm ridge outline.
+      canvas.drawPath(
+        volcano,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.9
+          ..color = const Color(0xFFFBBF24).withValues(alpha: 0.75),
+      );
+    } else {
+      // Classy layered rocky mountain hillock matching the flag's accent.
+      final hill = Path()
+        ..moveTo(w * 0.08, h * 0.85)
+        ..quadraticBezierTo(w * 0.28, h * 0.35, w * 0.50, h * 0.20)
+        ..quadraticBezierTo(w * 0.72, h * 0.35, w * 0.92, h * 0.85)
+        ..quadraticBezierTo(w * 0.50, h * 0.95, w * 0.08, h * 0.85)
+        ..close();
+
+      final hillPaint = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.lerp(accentColor, Colors.white, 0.35)!,
+            Color.lerp(accentColor, const Color(0xFF1E293B), 0.35)!,
+            const Color(0xFF0F172A),
+          ],
+        ).createShader(Rect.fromLTWH(0, 0, w, h));
+      canvas.drawPath(hill, hillPaint);
+
+      // Sunlit summit ridge highlight.
+      final ridge = Path()
+        ..moveTo(w * 0.50, h * 0.20)
+        ..quadraticBezierTo(w * 0.38, h * 0.46, w * 0.26, h * 0.76)
+        ..lineTo(w * 0.50, h * 0.52)
+        ..close();
+      canvas.drawPath(
+        ridge,
+        Paint()..color = Colors.white.withValues(alpha: 0.28),
+      );
+
+      canvas.drawPath(
+        hill,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.85
+          ..color = Colors.white.withValues(alpha: 0.65),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _FlagTerrainBasePainter oldDelegate) =>
+      oldDelegate.accentColor != accentColor || oldDelegate.isMajor != isMajor;
 }
 
 /// A flag that waves on its own ticker, for a hero surface (studio, detail

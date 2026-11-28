@@ -11,6 +11,7 @@ import '../../../core/providers/flag_style_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/teritory_repository.dart';
 import '../../../core/theme/teritory_theme.dart';
+import '../../explore/application/explore_flags_provider.dart';
 import '../../rally/presentation/legendary_rally_sheet.dart';
 import '../application/flag_queue_provider.dart';
 import 'epic_flag_staking_ceremony.dart';
@@ -327,6 +328,34 @@ class _DropFlagModalState extends ConsumerState<DropFlagModal> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final exploreFlags =
+        ref.watch(exploreFlagsProvider).valueOrNull?.flags ?? const [];
+
+    String? majorBlockReason;
+    double? nearestMajorMeters;
+    String? nearestMajorName;
+    int spotFlagsCount = 0;
+    for (final f in exploreFlags) {
+      final d = distanceMeters(widget.initialCoordinates, f.coordinates);
+      if (d <= 150) {
+        spotFlagsCount++;
+      }
+      if (f.isMajorFlag && d < 5000) {
+        if (nearestMajorMeters == null || d < nearestMajorMeters) {
+          nearestMajorMeters = d;
+          nearestMajorName = f.placeName;
+        }
+      }
+    }
+    if (nearestMajorMeters != null && spotFlagsCount <= 50) {
+      final distKm = (nearestMajorMeters / 1000).toStringAsFixed(1);
+      majorBlockReason =
+          'Major Wonder "$nearestMajorName" is $distKm km away (min 5 km required, or 50+ flags at this spot). You can still stake a standard flag here.';
+      if (_isMajorFlag) {
+        _isMajorFlag = false;
+      }
+    }
+    final canSuggestMajor = majorBlockReason == null;
 
     return Container(
       padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + bottomInset),
@@ -436,24 +465,30 @@ class _DropFlagModalState extends ConsumerState<DropFlagModal> {
                           ),
                         ),
                         Text(
-                          'Featured in global wonder counters & trophy shelf',
+                          canSuggestMajor
+                              ? 'Featured in global wonder counters & trophy shelf'
+                              : majorBlockReason,
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 11,
-                            color: TeritoryColors.textSecondary,
+                            color: canSuggestMajor
+                                ? TeritoryColors.textSecondary
+                                : TeritoryColors.expiredRed,
                           ),
                         ),
                       ],
                     ),
                   ),
                   Switch.adaptive(
-                    value: _isMajorFlag,
+                    value: canSuggestMajor && _isMajorFlag,
                     activeThumbColor: TeritoryColors.majorGoldDark,
                     activeTrackColor: TeritoryColors.majorGold,
-                    onChanged: (val) {
-                      setState(() {
-                        _isMajorFlag = val;
-                      });
-                    },
+                    onChanged: canSuggestMajor
+                        ? (val) {
+                            setState(() {
+                              _isMajorFlag = val;
+                            });
+                          }
+                        : null,
                   ),
                 ],
               ),
